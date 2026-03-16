@@ -188,14 +188,23 @@ export default function Ideas() {
 
   const handleCapture = async () => {
     if (!inputText.trim()) return;
-    const { error } = await supabase.from('mkt_ideas_bucket').insert({
+    const now = new Date().toISOString();
+    const newIdea = {
       inbox_type: inboxType,
       raw_idea: inputText.trim(),
       status: 'raw',
-      created_at: new Date().toISOString(),
-    });
+      created_at: now,
+    };
 
-    if (!error) {
+    const { data, error } = await supabase
+      .from('mkt_ideas_bucket')
+      .insert(newIdea)
+      .select()
+      .single();
+
+    if (!error && data) {
+      // Optimistically add to state so it appears instantly
+      setIdeas((prev) => [data, ...prev.filter((i) => i.id !== data.id)]);
       setInputText('');
       toast({
         title: 'Captured.',
