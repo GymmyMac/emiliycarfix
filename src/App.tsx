@@ -11,6 +11,7 @@ import Ideas from "./pages/Ideas";
 import Analytics from "./pages/Analytics";
 import Emily from "./pages/Emily";
 import CalendarPage from "./pages/Calendar";
+import ContentQueue from "./pages/ContentQueue";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
@@ -26,7 +27,8 @@ const App = () => (
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route element={<AdminLayout />}>
-            <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/content-queue" element={<ContentQueue />} />
               <Route path="/ideas" element={<Ideas />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/emily" element={<Emily />} />
