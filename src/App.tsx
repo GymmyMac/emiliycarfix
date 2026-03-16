@@ -9,6 +9,7 @@ import AdminLayout from "./components/AdminLayout";
 import Dashboard from "./pages/Dashboard";
 import Ideas from "./pages/Ideas";
 import Analytics from "./pages/Analytics";
+import Emily from "./pages/Emily";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +27,7 @@ const App = () => (
             <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/ideas" element={<Ideas />} />
               <Route path="/analytics" element={<Analytics />} />
+              <Route path="/emily" element={<Emily />} />
             </Route>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />
