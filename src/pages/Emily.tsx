@@ -94,7 +94,7 @@ export default function Emily() {
 
       if (jwt) {
         const res = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/emily-chat`,
+          `https://flpzjbasdsfwoeruyxgp.supabase.co/functions/v1/emily-chat`,
           {
             method: 'POST',
             headers: {
