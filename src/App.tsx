@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import AdminLayout from "./components/AdminLayout";
 import Dashboard from "./pages/Dashboard";
 import Ideas from "./pages/Ideas";
+import Analytics from "./pages/Analytics";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ const App = () => (
             <Route element={<AdminLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/ideas" element={<Ideas />} />
+              <Route path="/analytics" element={<Analytics />} />
             </Route>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />
