@@ -9,6 +9,7 @@ import AdminLayout from "./components/AdminLayout";
 import Dashboard from "./pages/Dashboard";
 import Ideas from "./pages/Ideas";
 import Analytics from "./pages/Analytics";
+import Emily from "./pages/Emily";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
