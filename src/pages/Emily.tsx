@@ -34,12 +34,24 @@ const PLACEHOLDER_RESPONSE =
 
 export default function Emily() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const promptHandled = useRef(false);
+
+  // Auto-send prompt from query param (e.g. from calendar empty cell)
+  useEffect(() => {
+    const prompt = searchParams.get('prompt');
+    if (prompt && !promptHandled.current) {
+      promptHandled.current = true;
+      setSearchParams({}, { replace: true });
+      sendMessage(prompt);
+    }
+  }, [searchParams]);
 
   const userInitial = user?.email?.charAt(0).toUpperCase() || 'U';
 
