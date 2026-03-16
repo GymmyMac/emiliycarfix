@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import Ideas from "./pages/Ideas";
 import Analytics from "./pages/Analytics";
 import Emily from "./pages/Emily";
+import CalendarPage from "./pages/Calendar";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
               <Route path="/ideas" element={<Ideas />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/emily" element={<Emily />} />
+              <Route path="/calendar" element={<CalendarPage />} />
             </Route>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />
