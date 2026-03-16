@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import Ideas from "./pages/Ideas";
 import Analytics from "./pages/Analytics";
 import Emily from "./pages/Emily";
+import CalendarPage from "./pages/Calendar";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
