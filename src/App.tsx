@@ -11,6 +11,7 @@ import Ideas from "./pages/Ideas";
 import Analytics from "./pages/Analytics";
 import Emily from "./pages/Emily";
 import CalendarPage from "./pages/Calendar";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -30,6 +31,7 @@ const App = () => (
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/emily" element={<Emily />} />
               <Route path="/calendar" element={<CalendarPage />} />
+              <Route path="/settings" element={<Settings />} />
             </Route>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />
