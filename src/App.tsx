@@ -11,6 +11,7 @@ import Ideas from "./pages/Ideas";
 import Analytics from "./pages/Analytics";
 import Emily from "./pages/Emily";
 import CalendarPage from "./pages/Calendar";
+import ContentQueue from "./pages/ContentQueue";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
