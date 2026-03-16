@@ -25,6 +25,7 @@ const App = () => (
             <Route element={<AdminLayout />}>
             <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/ideas" element={<Ideas />} />
+              <Route path="/analytics" element={<Analytics />} />
             </Route>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />
