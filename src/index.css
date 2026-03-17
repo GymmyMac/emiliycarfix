@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,47 +6,49 @@
 
 @layer base {
   :root {
-    /* CARFIX Dark Theme — single theme, no light mode */
-    --background: 0 0% 10.2%;          /* #1A1A1A */
-    --foreground: 0 0% 90%;
+    /* CARFIX Light Theme */
+    --background: 210 20% 98%;           /* #FAFAFA */
+    --foreground: 222 47% 11%;           /* #0F172A */
 
-    --card: 0 0% 14.5%;                /* #252525 */
-    --card-foreground: 0 0% 90%;
+    --card: 0 0% 100%;                   /* #FFFFFF */
+    --card-foreground: 222 47% 11%;
 
-    --popover: 0 0% 14.5%;
-    --popover-foreground: 0 0% 90%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 7 100% 40%;             /* #CC2200 */
+    --primary: 214 100% 40%;             /* #0052CC */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 160 75% 24.5%;        /* #0F6E56 teal */
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 199 89% 60%;            /* #38BDF8 */
+    --secondary-foreground: 222 47% 11%;
 
-    --muted: 0 0% 18%;
-    --muted-foreground: 0 0% 55%;
+    --muted: 215 16% 47%;               /* #64748B as bg reference */
+    --muted-foreground: 215 16% 47%;     /* #64748B */
 
-    --accent: 0 0% 16.5%;              /* #2A2A2A */
-    --accent-foreground: 0 0% 90%;
+    --accent: 210 20% 98%;              /* #FAFAFA */
+    --accent-foreground: 222 47% 11%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 0 84% 60%;           /* #EF4444 */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 16.5%;              /* #2A2A2A */
-    --input: 0 0% 16.5%;
-    --ring: 7 100% 40%;
+    --border: 214 32% 91%;              /* #E2E8F0 */
+    --input: 214 32% 91%;
+    --ring: 214 100% 40%;
 
-    --radius: 0.375rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 12%;
-    --sidebar-foreground: 0 0% 75%;
-    --sidebar-primary: 7 100% 40%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 215 16% 47%;
+    --sidebar-primary: 214 100% 40%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 16.5%;
-    --sidebar-accent-foreground: 0 0% 90%;
-    --sidebar-border: 0 0% 16.5%;
-    --sidebar-ring: 7 100% 40%;
+    --sidebar-accent: 214 100% 97%;
+    --sidebar-accent-foreground: 214 100% 40%;
+    --sidebar-border: 214 32% 91%;
+    --sidebar-ring: 214 100% 40%;
 
-    --emily: 160 75% 24.5%;            /* teal for Emily */
+    --emily: 199 89% 60%;               /* #38BDF8 Sky Blue */
+    --orange: 30 100% 50%;              /* #FF8C00 */
+    --success: 142 71% 45%;             /* #22C55E */
   }
 }
 
@@ -56,6 +58,12 @@
   }
 
   body {
-    @apply bg-background text-foreground font-sans;
+    @apply bg-background text-foreground;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: 'Oswald', system-ui, sans-serif;
+    font-weight: 700;
   }
 }
