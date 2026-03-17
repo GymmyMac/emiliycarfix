@@ -304,7 +304,7 @@ export default function Dashboard() {
             <PhaseBadge phase={`Today: ${todayPhase}`} size="md" />
           </div>
         )}
-        <Button className="w-full h-11 font-semibold text-sm" disabled>
+        <Button className="w-full h-11 font-semibold text-sm bg-primary text-primary-foreground disabled:opacity-80" disabled>
           Generate Brief
         </Button>
       </div>
