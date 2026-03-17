@@ -1,10 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
 import {
@@ -42,19 +40,19 @@ interface ContentItem {
 }
 
 const PHASE_COLORS: Record<string, string> = {
-  expose: '#CC2200',
-  amplify: '#7A5500',
-  position: '#1A7A40',
-  tribe: '#1A3A8A',
+  expose: '#EF4444',
+  amplify: '#FF8C00',
+  position: '#22C55E',
+  tribe: '#0052CC',
 };
 
 const PLATFORM_CONFIG: Record<string, { icon: React.ReactNode; color: string }> = {
   facebook: { icon: <Facebook size={16} />, color: '#1877F2' },
-  instagram: { icon: <Instagram size={16} />, color: '#E4405F' },
+  instagram: { icon: <Instagram size={16} />, color: '#E1306C' },
   tiktok: { icon: <Music2 size={16} />, color: '#333333' },
   linkedin: { icon: <Linkedin size={16} />, color: '#0A66C2' },
-  email: { icon: <Mail size={16} />, color: '#CC2200' },
-  sms: { icon: <MessageSquare size={16} />, color: '#1A7A40' },
+  email: { icon: <Mail size={16} />, color: '#0052CC' },
+  sms: { icon: <MessageSquare size={16} />, color: '#22C55E' },
 };
 
 const REJECT_REASONS = ['Off-brand', 'Factual error', 'Wrong timing', 'Too long', 'Other'];
@@ -77,142 +75,76 @@ export default function Dashboard() {
   const [editText, setEditText] = useState('');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [collapsedRejected, setCollapsedRejected] = useState<Record<string, boolean>>({});
 
   const fetchData = useCallback(async () => {
     const today = new Date().toISOString().split('T')[0];
-
     const [pendingRes, approvedRes, phaseRes] = await Promise.all([
-      supabase
-        .from('mkt_content_queue')
-        .select('*')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('mkt_content_queue')
-        .select('*')
-        .eq('status', 'approved')
-        .gte('approved_at', `${today}T00:00:00`)
-        .lte('approved_at', `${today}T23:59:59`)
-        .order('approved_at', { ascending: false }),
-      supabase
-        .from('mkt_content_queue')
-        .select('psyops_phase')
-        .gte('created_at', `${today}T00:00:00`)
-        .lte('created_at', `${today}T23:59:59`)
-        .order('created_at', { ascending: false })
-        .limit(1),
+      supabase.from('mkt_content_queue').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
+      supabase.from('mkt_content_queue').select('*').eq('status', 'approved').gte('approved_at', `${today}T00:00:00`).lte('approved_at', `${today}T23:59:59`).order('approved_at', { ascending: false }),
+      supabase.from('mkt_content_queue').select('psyops_phase').gte('created_at', `${today}T00:00:00`).lte('created_at', `${today}T23:59:59`).order('created_at', { ascending: false }).limit(1),
     ]);
-
     if (pendingRes.data) setPending(pendingRes.data);
     if (approvedRes.data) setApproved(approvedRes.data);
-    if (phaseRes.data && phaseRes.data.length > 0) {
-      setTodayPhase(phaseRes.data[0].psyops_phase);
-    } else {
-      setTodayPhase(null);
-    }
+    if (phaseRes.data && phaseRes.data.length > 0) setTodayPhase(phaseRes.data[0].psyops_phase);
+    else setTodayPhase(null);
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Realtime subscription
   useEffect(() => {
     const channel = supabase
       .channel('content-queue-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'mkt_content_queue' },
-        (payload) => {
-          const newRow = payload.new as ContentItem;
-          const oldRow = payload.old as ContentItem;
-
-          if (payload.eventType === 'INSERT' && newRow.status === 'pending') {
-            setPending((prev) => [newRow, ...prev]);
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mkt_content_queue' }, (payload) => {
+        const newRow = payload.new as ContentItem;
+        const oldRow = payload.old as ContentItem;
+        if (payload.eventType === 'INSERT' && newRow.status === 'pending') setPending((prev) => [newRow, ...prev]);
+        if (payload.eventType === 'UPDATE') {
+          setPending((prev) => prev.filter((item) => item.id !== newRow.id));
+          if (newRow.status === 'approved') {
+            const today = new Date().toISOString().split('T')[0];
+            if (newRow.approved_at?.startsWith(today)) setApproved((prev) => [newRow, ...prev]);
           }
-
-          if (payload.eventType === 'UPDATE') {
-            // Remove from pending
-            setPending((prev) => prev.filter((item) => item.id !== newRow.id));
-
-            if (newRow.status === 'approved') {
-              const today = new Date().toISOString().split('T')[0];
-              if (newRow.approved_at?.startsWith(today)) {
-                setApproved((prev) => [newRow, ...prev]);
-              }
-            }
-
-            if (newRow.status === 'pending') {
-              setPending((prev) => [newRow, ...prev.filter((i) => i.id !== newRow.id)]);
-            }
-          }
-
-          if (payload.eventType === 'DELETE') {
-            setPending((prev) => prev.filter((item) => item.id !== oldRow.id));
-            setApproved((prev) => prev.filter((item) => item.id !== oldRow.id));
-          }
+          if (newRow.status === 'pending') setPending((prev) => [newRow, ...prev.filter((i) => i.id !== newRow.id)]);
         }
-      )
+        if (payload.eventType === 'DELETE') {
+          setPending((prev) => prev.filter((item) => item.id !== oldRow.id));
+          setApproved((prev) => prev.filter((item) => item.id !== oldRow.id));
+        }
+      })
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const handleApprove = async (id: string) => {
-    const { error } = await supabase
-      .from('mkt_content_queue')
-      .update({ status: 'approved', approved_at: new Date().toISOString() })
-      .eq('id', id);
-
+    const { error } = await supabase.from('mkt_content_queue').update({ status: 'approved', approved_at: new Date().toISOString() }).eq('id', id);
     if (!error) {
       const item = pending.find((i) => i.id === id);
       setPending((prev) => prev.filter((i) => i.id !== id));
-      if (item) {
-        setApproved((prev) => [{ ...item, status: 'approved', approved_at: new Date().toISOString() }, ...prev]);
-      }
-      toast({ title: 'Approved', description: 'Content approved successfully.', className: 'border-[#1A7A40] bg-[#1A7A40]/20 text-foreground' });
+      if (item) setApproved((prev) => [{ ...item, status: 'approved', approved_at: new Date().toISOString() }, ...prev]);
+      toast({ title: 'Approved', description: 'Content approved successfully.' });
     }
   };
 
-  const handleStartEdit = (item: ContentItem) => {
-    setEditingId(item.id);
-    setEditText(item.draft_copy);
-  };
+  const handleStartEdit = (item: ContentItem) => { setEditingId(item.id); setEditText(item.draft_copy); };
 
   const handleSaveEdit = async (id: string) => {
-    const { error } = await supabase
-      .from('mkt_content_queue')
-      .update({ draft_copy: editText })
-      .eq('id', id);
-
+    const { error } = await supabase.from('mkt_content_queue').update({ draft_copy: editText }).eq('id', id);
     if (!error) {
-      setPending((prev) =>
-        prev.map((i) => (i.id === id ? { ...i, draft_copy: editText } : i))
-      );
+      setPending((prev) => prev.map((i) => (i.id === id ? { ...i, draft_copy: editText } : i)));
       setEditingId(null);
       toast({ title: 'Saved', description: 'Draft updated.' });
     }
   };
 
-  const handleCancelEdit = () => {
-    setEditingId(null);
-    setEditText('');
-  };
+  const handleCancelEdit = () => { setEditingId(null); setEditText(''); };
 
   const handleReject = async (id: string) => {
     if (!rejectReason) return;
-    const { error } = await supabase
-      .from('mkt_content_queue')
-      .update({ status: 'rejected', notes: rejectReason })
-      .eq('id', id);
-
+    const { error } = await supabase.from('mkt_content_queue').update({ status: 'rejected', notes: rejectReason }).eq('id', id);
     if (!error) {
-      setPending((prev) =>
-        prev.map((i) => (i.id === id ? { ...i, status: 'rejected', notes: rejectReason } : i))
-      );
+      setPending((prev) => prev.map((i) => (i.id === id ? { ...i, status: 'rejected', notes: rejectReason } : i)));
       setRejectingId(null);
       setRejectReason('');
       toast({ title: 'Rejected', description: 'Content rejected.', variant: 'destructive' });
@@ -224,7 +156,7 @@ export default function Dashboard() {
   const rejectedPending = pending.filter((i) => i.status === 'rejected');
 
   const PlatformIcon = ({ platform }: { platform: string }) => {
-    const config = PLATFORM_CONFIG[platform?.toLowerCase()] || { icon: <Mail size={16} />, color: 'hsl(var(--muted-foreground))' };
+    const config = PLATFORM_CONFIG[platform?.toLowerCase()] || { icon: <Mail size={16} />, color: '#64748B' };
     return (
       <span className="inline-flex items-center gap-1.5 text-sm font-medium" style={{ color: config.color }}>
         {config.icon}
@@ -234,11 +166,11 @@ export default function Dashboard() {
   };
 
   const PhaseBadge = ({ phase, size = 'sm' }: { phase: string; size?: 'sm' | 'md' }) => {
-    const color = PHASE_COLORS[phase?.toLowerCase()] || '#666';
+    const color = PHASE_COLORS[phase?.toLowerCase()] || '#64748B';
     return (
       <span
         className={`inline-flex items-center rounded-full font-semibold uppercase tracking-wide ${size === 'md' ? 'px-3 py-1 text-xs' : 'px-2 py-0.5 text-[10px]'}`}
-        style={{ backgroundColor: `${color}22`, color, border: `1px solid ${color}44` }}
+        style={{ backgroundColor: `${color}18`, color, border: `1px solid ${color}30` }}
       >
         {phase}
       </span>
@@ -247,91 +179,76 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-12 w-full rounded-lg" />
-        <Skeleton className="h-48 w-full rounded-lg" />
-        <Skeleton className="h-48 w-full rounded-lg" />
-        <Skeleton className="h-48 w-full rounded-lg" />
+      <div className="space-y-4">
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-48 w-full rounded-xl" />
+        <Skeleton className="h-48 w-full rounded-xl" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* TOP BAR */}
-      <div className="flex items-center justify-between rounded-lg border border-border bg-card px-5 py-3">
-        <span className="text-sm font-medium text-muted-foreground">{formatDate()}</span>
-
-        <div>
-          {todayPhase ? (
-            <PhaseBadge phase={`Today: ${todayPhase}`} size="md" />
-          ) : (
-            <span className="text-xs text-muted-foreground">No brief yet</span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-3">
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-sm font-semibold text-foreground">{formatDate()}</span>
           {pendingCount > 0 && (
-            <span className="inline-flex items-center rounded-full bg-primary/20 px-2.5 py-0.5 text-xs font-semibold text-primary">
+            <span className="inline-flex items-center rounded-full bg-orange/10 px-2.5 py-0.5 text-xs font-semibold text-orange">
               {pendingCount} pending
             </span>
           )}
-          <Button variant="outline" size="sm" disabled className="text-muted-foreground">
-            Generate Brief
-          </Button>
-          <Button variant="ghost" size="icon" className="text-muted-foreground">
-            <Bell size={18} />
-          </Button>
         </div>
+        {todayPhase && (
+          <div className="flex justify-center">
+            <PhaseBadge phase={`Today: ${todayPhase}`} size="md" />
+          </div>
+        )}
+        <Button className="w-full h-11 font-semibold text-sm" disabled>
+          Generate Brief
+        </Button>
       </div>
 
       {/* PENDING CONTENT CARDS */}
       {activePending.length === 0 && rejectedPending.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
-          <p className="text-lg text-muted-foreground">Queue is clear.</p>
+          <h2 className="font-display text-lg text-foreground">Queue is clear.</h2>
           <p className="text-sm text-muted-foreground mt-1">Emily is working on tomorrow's brief.</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {activePending.map((item) => (
-            <Card key={item.id} className="border-border bg-card">
-              <CardContent className="p-5 space-y-4">
-                {/* TOP ROW */}
+            <Card key={item.id} className="rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-all duration-300 hover:scale-[1.01]">
+              <CardContent className="p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <PlatformIcon platform={item.platform} />
                   <PhaseBadge phase={item.psyops_phase} />
                 </div>
 
-                {/* BODY */}
                 {editingId === item.id ? (
                   <div className="space-y-3">
                     <Textarea
                       value={editText}
                       onChange={(e) => setEditText(e.target.value)}
-                      className="min-h-[120px] bg-accent border-border text-foreground"
+                      className="min-h-[120px] text-base"
                     />
                     <p className="text-xs text-muted-foreground">{editText.length} characters</p>
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={() => handleSaveEdit(item.id)} className="bg-[#7A5500] hover:bg-[#7A5500]/80 text-white">
-                        Save
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={handleCancelEdit}>
-                        Cancel
-                      </Button>
+                      <Button size="sm" onClick={() => handleSaveEdit(item.id)} className="h-11 flex-1">Save</Button>
+                      <Button size="sm" variant="outline" onClick={handleCancelEdit} className="h-11 flex-1">Cancel</Button>
                     </div>
                   </div>
                 ) : (
                   <div>
-                    <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{item.draft_copy}</p>
+                    <p className="text-base leading-relaxed text-foreground whitespace-pre-wrap line-clamp-4">{item.draft_copy}</p>
                     <p className="text-xs text-muted-foreground mt-2">{item.draft_copy?.length || 0} characters</p>
                   </div>
                 )}
 
-                {/* REJECT REASON DROPDOWN */}
                 {rejectingId === item.id && (
-                  <div className="flex items-center gap-2 pt-1">
+                  <div className="space-y-2">
                     <Select value={rejectReason} onValueChange={setRejectReason}>
-                      <SelectTrigger className="w-48 h-8 text-xs bg-accent border-border">
+                      <SelectTrigger className="h-11 text-sm">
                         <SelectValue placeholder="Select reason" />
                       </SelectTrigger>
                       <SelectContent>
@@ -340,95 +257,80 @@ export default function Dashboard() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button size="sm" variant="destructive" onClick={() => handleReject(item.id)} disabled={!rejectReason} className="h-8 text-xs">
-                      Confirm
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => { setRejectingId(null); setRejectReason(''); }} className="h-8 text-xs">
-                      Cancel
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button variant="destructive" onClick={() => handleReject(item.id)} disabled={!rejectReason} className="h-11 flex-1 font-semibold">Confirm Reject</Button>
+                      <Button variant="outline" onClick={() => { setRejectingId(null); setRejectReason(''); }} className="h-11 flex-1">Cancel</Button>
+                    </div>
                   </div>
                 )}
 
-                {/* FOOTER ROW */}
-                {editingId !== item.id && (
-                  <div className="flex items-center justify-between pt-1 border-t border-border">
-                    <span className="text-xs text-muted-foreground capitalize">{item.content_type}</span>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleApprove(item.id)}
-                        className="h-8 bg-[#1A7A40] hover:bg-[#1A7A40]/80 text-white text-xs"
-                      >
-                        <Check size={14} className="mr-1" /> Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        onClick={() => handleStartEdit(item)}
-                        className="h-8 bg-[#7A5500] hover:bg-[#7A5500]/80 text-white text-xs"
-                      >
-                        <Pencil size={14} className="mr-1" /> Edit
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => setRejectingId(item.id)}
-                        className="h-8 text-xs"
-                      >
-                        <X size={14} className="mr-1" /> Reject
-                      </Button>
-                    </div>
+                {editingId !== item.id && rejectingId !== item.id && (
+                  <div className="flex flex-col md:flex-row gap-2 pt-2 border-t border-border">
+                    <Button onClick={() => handleApprove(item.id)} className="h-12 md:h-11 flex-1 font-semibold text-sm">
+                      <Check size={16} className="mr-1.5" /> Approve
+                    </Button>
+                    <Button variant="outline" onClick={() => handleStartEdit(item)} className="h-12 md:h-11 flex-1 font-semibold text-sm">
+                      <Pencil size={16} className="mr-1.5" /> Edit
+                    </Button>
+                    <Button variant="destructive" onClick={() => setRejectingId(item.id)} className="h-12 md:h-11 flex-1 font-semibold text-sm">
+                      <X size={16} className="mr-1.5" /> Reject
+                    </Button>
                   </div>
                 )}
               </CardContent>
             </Card>
           ))}
 
-          {/* Rejected cards at bottom, dimmed */}
+          {/* Rejected cards — collapsed on mobile */}
           {rejectedPending.map((item) => (
-            <Card key={item.id} className="border-border bg-card opacity-40">
-              <CardContent className="p-5 space-y-3">
+            <Card
+              key={item.id}
+              className="rounded-xl border border-border bg-card shadow-sm opacity-50 border-l-4 border-l-destructive cursor-pointer md:cursor-default"
+              onClick={() => setCollapsedRejected((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
+            >
+              <CardContent className="p-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <PlatformIcon platform={item.platform} />
-                  <PhaseBadge phase={item.psyops_phase} />
+                  <span className="inline-flex items-center rounded-full bg-destructive/10 text-destructive px-2 py-0.5 text-[10px] font-semibold uppercase">Rejected</span>
                 </div>
-                <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{item.draft_copy}</p>
-                <p className="text-xs text-muted-foreground">Rejected: {item.notes}</p>
+                <div className={`md:block ${collapsedRejected[item.id] ? 'block' : 'hidden'}`}>
+                  <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{item.draft_copy}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Reason: {item.notes}</p>
+                </div>
+                <p className="text-xs text-muted-foreground md:hidden">
+                  {collapsedRejected[item.id] ? 'Tap to collapse' : 'Tap to expand'}
+                </p>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
 
-      {/* APPROVED SECTION */}
+      {/* APPROVED TODAY */}
       {approved.length > 0 && (
-        <>
-          <Separator />
-          <div className="space-y-3">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Approved Today</h2>
-            {approved.map((item) => (
-              <Card key={item.id} className="border-border bg-card/60">
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <PlatformIcon platform={item.platform} />
-                    <span className="text-sm text-foreground">
-                      {item.draft_copy?.length > 80
-                        ? item.draft_copy.slice(0, 80) + '…'
-                        : item.draft_copy}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
-                    {item.scheduled_for ? (
-                      <span className="flex items-center gap-1"><Clock size={12} /> {new Date(item.scheduled_for).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>
-                    ) : (
-                      <span>Scheduling…</span>
-                    )}
-                    <Check size={16} className="text-[#1A7A40]" />
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </>
+        <div className="space-y-3 pt-4 border-t border-border">
+          <h2 className="font-display text-sm uppercase tracking-widest text-muted-foreground">Approved Today</h2>
+          {approved.map((item) => (
+            <Card key={item.id} className="rounded-xl border border-border bg-card shadow-sm border-l-4 border-l-success opacity-90">
+              <CardContent className="p-4 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <PlatformIcon platform={item.platform} />
+                  <span className="text-sm text-foreground truncate">
+                    {item.draft_copy?.length > 80 ? item.draft_copy.slice(0, 80) + '…' : item.draft_copy}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
+                  {item.scheduled_for ? (
+                    <span className="flex items-center gap-1"><Clock size={12} /> {new Date(item.scheduled_for).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>
+                  ) : (
+                    <span>Scheduling…</span>
+                  )}
+                  <span className="inline-flex items-center rounded-full bg-success/10 text-success px-2 py-0.5 text-[10px] font-semibold uppercase">Approved</span>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       )}
     </div>
   );

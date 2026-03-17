@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import SparklesText from '@/components/SparklesText';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -43,14 +44,14 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm space-y-8">
         <div className="text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-primary">CARFIX</h1>
+          <SparklesText text="CARFIX" className="text-4xl" />
           <p className="mt-2 text-sm text-muted-foreground">Sign in to Emily</p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4 rounded-lg border border-border bg-card p-6">
+        <form onSubmit={handleLogin} className="space-y-4 rounded-xl border border-border bg-card p-6 shadow-sm">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
@@ -60,6 +61,7 @@ export default function Login() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@carfix.co.nz"
               required
+              className="h-11 text-base"
             />
           </div>
           <div className="space-y-2">
@@ -70,6 +72,7 @@ export default function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              className="h-11 text-base"
             />
           </div>
           <div className="flex items-center space-x-2">
@@ -83,7 +86,7 @@ export default function Login() {
             </Label>
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full h-11 text-sm font-semibold" disabled={loading}>
             {loading ? 'Signing in…' : 'Sign in'}
           </Button>
         </form>

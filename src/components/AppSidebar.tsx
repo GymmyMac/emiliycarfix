@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import SparklesText from './SparklesText';
 import {
   LayoutGrid,
   Inbox,
@@ -27,10 +28,10 @@ export default function AppSidebar() {
   const location = useLocation();
 
   return (
-    <aside className="fixed left-0 top-0 z-30 flex h-screen w-[220px] flex-col border-r border-border bg-sidebar">
+    <aside className="fixed left-0 top-0 z-30 hidden md:flex h-screen w-[220px] flex-col border-r border-border bg-card">
       {/* Logo */}
       <div className="flex h-14 items-center px-5">
-        <span className="text-xl font-bold tracking-tight text-primary">CARFIX</span>
+        <SparklesText text="CARFIX" className="text-xl" />
         <span className="ml-1.5 text-xs font-medium text-muted-foreground">NZ</span>
       </div>
 
@@ -42,10 +43,10 @@ export default function AppSidebar() {
             <button
               key={item.path}
               onClick={() => navigate(item.path)}
-              className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
+              className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-all duration-300 ${
                 active
-                  ? 'bg-accent text-foreground'
-                  : 'text-sidebar-foreground hover:bg-accent hover:text-foreground'
+                  ? 'bg-primary/10 text-primary font-medium'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
               }`}
             >
               <item.icon
@@ -64,7 +65,7 @@ export default function AppSidebar() {
       <div className="border-t border-border p-3">
         <button
           onClick={signOut}
-          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground hover:bg-accent hover:text-foreground transition-colors"
+          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-all duration-300"
         >
           <LogOut size={18} />
           <span>Logout</span>

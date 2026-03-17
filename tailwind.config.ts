@@ -14,8 +14,9 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
-        mono: ['"IBM Plex Mono"', 'monospace'],
+        display: ['"Oswald"', 'system-ui', 'sans-serif'],
+        sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'monospace'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -62,6 +63,8 @@ export default {
           ring: "hsl(var(--sidebar-ring))",
         },
         emily: "hsl(var(--emily))",
+        orange: "hsl(var(--orange))",
+        success: "hsl(var(--success))",
       },
       borderRadius: {
         lg: "var(--radius)",
