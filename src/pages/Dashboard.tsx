@@ -101,35 +101,67 @@ function CharWarning({ text, platform }: { text: string; platform: string }) {
   );
 }
 
+/** Parse email draft_copy into structured sections */
+function parseEmailContent(text: string): { subject: string; preview: string; body: string } | null {
+  if (!text) return null;
+  const previewMatch = text.match(/PREVIEW:\s*([\s\S]*?)(?=BODY:|$)/i);
+  const bodyMatch = text.match(/BODY:\s*([\s\S]*)/i);
+  
+  if (!previewMatch && !bodyMatch) return null;
+  
+  // Subject is everything before PREVIEW: (or first line)
+  const previewIdx = text.search(/PREVIEW:/i);
+  const subject = previewIdx > 0
+    ? stripMarkdown(text.slice(0, previewIdx).trim())
+    : '';
+  const preview = previewMatch ? stripMarkdown(previewMatch[1].trim()) : '';
+  const body = bodyMatch ? stripMarkdown(bodyMatch[1].trim()) : stripMarkdown(text);
+  
+  return { subject, preview, body };
+}
+
 function DraftText({ text, platform, id }: { text: string; platform: string; id: string }) {
   const [expanded, setExpanded] = useState(false);
-  const clean = stripMarkdown(text);
   const isEmail = platform?.toLowerCase() === 'email';
-  const shouldTruncate = isEmail && clean.length > 200;
 
-  const display = shouldTruncate && !expanded ? clean.slice(0, 200) : clean;
+  // Email: structured display
+  if (isEmail) {
+    const parsed = parseEmailContent(text);
+    if (parsed) {
+      const bodyPreview = parsed.body.length > 150 && !expanded
+        ? parsed.body.slice(0, 150)
+        : parsed.body;
+      return (
+        <div className="space-y-1.5">
+          {parsed.subject && (
+            <p className="text-base font-bold text-foreground break-words">{parsed.subject}</p>
+          )}
+          {parsed.preview && (
+            <p className="text-sm italic text-muted-foreground break-words">{parsed.preview}</p>
+          )}
+          <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap break-words">
+            {bodyPreview}
+            {parsed.body.length > 150 && !expanded && (
+              <button onClick={() => setExpanded(true)} className="text-primary font-medium ml-1 inline">
+                ... tap to read more
+              </button>
+            )}
+          </p>
+          {expanded && parsed.body.length > 150 && (
+            <button onClick={() => setExpanded(false)} className="text-primary text-sm font-medium">
+              Show less
+            </button>
+          )}
+        </div>
+      );
+    }
+  }
 
+  // Social / fallback: plain text
+  const clean = stripMarkdown(text);
   return (
     <div>
-      <p className="text-base leading-relaxed text-foreground whitespace-pre-wrap break-words">
-        {display}
-        {shouldTruncate && !expanded && (
-          <button
-            onClick={() => setExpanded(true)}
-            className="text-primary font-medium ml-1 inline"
-          >
-            ... tap to read more
-          </button>
-        )}
-      </p>
-      {shouldTruncate && expanded && (
-        <button
-          onClick={() => setExpanded(false)}
-          className="text-primary text-sm font-medium mt-1"
-        >
-          Show less
-        </button>
-      )}
+      <p className="text-base leading-relaxed text-foreground whitespace-pre-wrap break-words">{clean}</p>
     </div>
   );
 }

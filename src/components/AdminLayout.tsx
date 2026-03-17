@@ -29,7 +29,7 @@ export default function AdminLayout() {
 
       {/* Mobile header */}
       <header className="fixed top-0 left-0 right-0 z-40 flex h-14 items-center justify-between border-b border-border bg-card px-4 md:hidden">
-        <SparklesText text="CARFIX" className="text-lg" />
+        <SparklesText text="CARFIX" className="text-2xl font-bold tracking-tight" />
         <div className="flex items-center gap-2">
           <Avatar className="h-8 w-8">
             <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">{initial}</AvatarFallback>
