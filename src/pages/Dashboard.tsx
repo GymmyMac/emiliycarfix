@@ -57,6 +57,23 @@ const PLATFORM_CONFIG: Record<string, { icon: React.ReactNode; color: string }> 
 
 const REJECT_REASONS = ['Off-brand', 'Factual error', 'Wrong timing', 'Too long', 'Other'];
 
+/** Strip markdown formatting for clean display */
+function stripMarkdown(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/#{1,6}\s?/g, '')       // ## headers
+    .replace(/\*\*(.+?)\*\*/g, '$1') // **bold**
+    .replace(/\*(.+?)\*/g, '$1')     // *italic*
+    .replace(/__(.+?)__/g, '$1')     // __bold__
+    .replace(/_(.+?)_/g, '$1')       // _italic_
+    .replace(/~~(.+?)~~/g, '$1')     // ~~strike~~
+    .replace(/`(.+?)`/g, '$1')       // `code`
+    .replace(/^\s*[-*+]\s+/gm, '')   // bullet points
+    .replace(/^\s*\d+\.\s+/gm, '')   // numbered lists
+    .replace(/\[(.+?)\]\(.+?\)/g, '$1') // [links](url)
+    .trim();
+}
+
 function formatDate() {
   return new Date().toLocaleDateString('en-GB', {
     weekday: 'long',
@@ -64,6 +81,57 @@ function formatDate() {
     month: 'long',
     year: 'numeric',
   });
+}
+
+function CharWarning({ text, platform }: { text: string; platform: string }) {
+  const len = text?.length || 0;
+  const isEmail = platform?.toLowerCase() === 'email';
+  const isSocial = ['facebook', 'instagram', 'tiktok', 'linkedin'].includes(platform?.toLowerCase());
+  const warn = (isEmail && len > 500) || (isSocial && len > 150);
+  const hint = isEmail && len > 500
+    ? 'consider shortening for email'
+    : isSocial && len > 150
+      ? 'consider shortening for social'
+      : '';
+
+  return (
+    <p className={`text-xs mt-1 ${warn ? 'text-orange font-medium' : 'text-muted-foreground'}`}>
+      {len} chars{hint ? ` — ${hint}` : ''}
+    </p>
+  );
+}
+
+function DraftText({ text, platform, id }: { text: string; platform: string; id: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const clean = stripMarkdown(text);
+  const isEmail = platform?.toLowerCase() === 'email';
+  const shouldTruncate = isEmail && clean.length > 200;
+
+  const display = shouldTruncate && !expanded ? clean.slice(0, 200) : clean;
+
+  return (
+    <div>
+      <p className="text-base leading-relaxed text-foreground whitespace-pre-wrap break-words">
+        {display}
+        {shouldTruncate && !expanded && (
+          <button
+            onClick={() => setExpanded(true)}
+            className="text-primary font-medium ml-1 inline"
+          >
+            ... tap to read more
+          </button>
+        )}
+      </p>
+      {shouldTruncate && expanded && (
+        <button
+          onClick={() => setExpanded(false)}
+          className="text-primary text-sm font-medium mt-1"
+        >
+          Show less
+        </button>
+      )}
+    </div>
+  );
 }
 
 export default function Dashboard() {
@@ -158,7 +226,7 @@ export default function Dashboard() {
   const PlatformIcon = ({ platform }: { platform: string }) => {
     const config = PLATFORM_CONFIG[platform?.toLowerCase()] || { icon: <Mail size={16} />, color: '#64748B' };
     return (
-      <span className="inline-flex items-center gap-1.5 text-sm font-medium" style={{ color: config.color }}>
+      <span className="inline-flex items-center gap-1.5 text-sm font-bold" style={{ color: config.color }}>
         {config.icon}
         <span className="capitalize">{platform}</span>
       </span>
@@ -169,7 +237,7 @@ export default function Dashboard() {
     const color = PHASE_COLORS[phase?.toLowerCase()] || '#64748B';
     return (
       <span
-        className={`inline-flex items-center rounded-full font-semibold uppercase tracking-wide ${size === 'md' ? 'px-3 py-1 text-xs' : 'px-2 py-0.5 text-[10px]'}`}
+        className={`inline-flex items-center rounded-full font-semibold uppercase tracking-wide shrink-0 ${size === 'md' ? 'px-3 py-1 text-xs' : 'px-2 py-0.5 text-[10px]'}`}
         style={{ backgroundColor: `${color}18`, color, border: `1px solid ${color}30` }}
       >
         {phase}
@@ -179,7 +247,7 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 px-0">
         <Skeleton className="h-12 w-full rounded-xl" />
         <Skeleton className="h-48 w-full rounded-xl" />
         <Skeleton className="h-48 w-full rounded-xl" />
@@ -188,13 +256,13 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 w-full max-w-full overflow-x-hidden">
       {/* TOP BAR */}
-      <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3">
+      <div className="rounded-xl border border-border bg-card p-4 shadow-sm space-y-3 w-full">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold text-foreground">{formatDate()}</span>
           {pendingCount > 0 && (
-            <span className="inline-flex items-center rounded-full bg-orange/10 px-2.5 py-0.5 text-xs font-semibold text-orange">
+            <span className="inline-flex items-center rounded-full bg-orange/10 px-2.5 py-0.5 text-xs font-semibold text-orange shrink-0">
               {pendingCount} pending
             </span>
           )}
@@ -216,11 +284,11 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground mt-1">Emily is working on tomorrow's brief.</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-3 w-full">
           {activePending.map((item) => (
-            <Card key={item.id} className="rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-all duration-300 hover:scale-[1.01]">
+            <Card key={item.id} className="rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-all duration-300 hover:scale-[1.01] w-full overflow-hidden">
               <CardContent className="p-4 space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <PlatformIcon platform={item.platform} />
                   <PhaseBadge phase={item.psyops_phase} />
                 </div>
@@ -239,10 +307,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                 ) : (
-                  <div>
-                    <p className="text-base leading-relaxed text-foreground whitespace-pre-wrap line-clamp-4">{item.draft_copy}</p>
-                    <p className="text-xs text-muted-foreground mt-2">{item.draft_copy?.length || 0} characters</p>
-                  </div>
+                  <DraftText text={item.draft_copy} platform={item.platform} id={item.id} />
                 )}
 
                 {rejectingId === item.id && (
@@ -266,16 +331,21 @@ export default function Dashboard() {
 
                 {editingId !== item.id && rejectingId !== item.id && (
                   <div className="flex flex-col md:flex-row gap-2 pt-2 border-t border-border">
-                    <Button onClick={() => handleApprove(item.id)} className="h-12 md:h-11 flex-1 font-semibold text-sm">
-                      <Check size={16} className="mr-1.5" /> Approve
+                    <Button onClick={() => handleApprove(item.id)} className="h-12 md:h-11 flex-1 font-semibold text-[16px] md:text-sm">
+                      <Check size={16} className="mr-1.5 shrink-0" /> Approve
                     </Button>
-                    <Button variant="outline" onClick={() => handleStartEdit(item)} className="h-12 md:h-11 flex-1 font-semibold text-sm">
-                      <Pencil size={16} className="mr-1.5" /> Edit
+                    <Button variant="outline" onClick={() => handleStartEdit(item)} className="h-12 md:h-11 flex-1 font-semibold text-[16px] md:text-sm">
+                      <Pencil size={16} className="mr-1.5 shrink-0" /> Edit
                     </Button>
-                    <Button variant="destructive" onClick={() => setRejectingId(item.id)} className="h-12 md:h-11 flex-1 font-semibold text-sm">
-                      <X size={16} className="mr-1.5" /> Reject
+                    <Button variant="destructive" onClick={() => setRejectingId(item.id)} className="h-12 md:h-11 flex-1 font-semibold text-[16px] md:text-sm">
+                      <X size={16} className="mr-1.5 shrink-0" /> Reject
                     </Button>
                   </div>
+                )}
+
+                {/* Character count below action buttons */}
+                {editingId !== item.id && (
+                  <CharWarning text={item.draft_copy} platform={item.platform} />
                 )}
               </CardContent>
             </Card>
@@ -285,16 +355,16 @@ export default function Dashboard() {
           {rejectedPending.map((item) => (
             <Card
               key={item.id}
-              className="rounded-xl border border-border bg-card shadow-sm opacity-50 border-l-4 border-l-destructive cursor-pointer md:cursor-default"
+              className="rounded-xl border border-border bg-card shadow-sm opacity-50 border-l-4 border-l-destructive cursor-pointer md:cursor-default w-full overflow-hidden"
               onClick={() => setCollapsedRejected((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
             >
               <CardContent className="p-4 space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-2">
                   <PlatformIcon platform={item.platform} />
-                  <span className="inline-flex items-center rounded-full bg-destructive/10 text-destructive px-2 py-0.5 text-[10px] font-semibold uppercase">Rejected</span>
+                  <span className="inline-flex items-center rounded-full bg-destructive/10 text-destructive px-2 py-0.5 text-[10px] font-semibold uppercase shrink-0">Rejected</span>
                 </div>
                 <div className={`md:block ${collapsedRejected[item.id] ? 'block' : 'hidden'}`}>
-                  <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{item.draft_copy}</p>
+                  <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap break-words">{stripMarkdown(item.draft_copy)}</p>
                   <p className="text-xs text-muted-foreground mt-1">Reason: {item.notes}</p>
                 </div>
                 <p className="text-xs text-muted-foreground md:hidden">
@@ -308,15 +378,15 @@ export default function Dashboard() {
 
       {/* APPROVED TODAY */}
       {approved.length > 0 && (
-        <div className="space-y-3 pt-4 border-t border-border">
+        <div className="space-y-3 pt-4 border-t border-border w-full">
           <h2 className="font-display text-sm uppercase tracking-widest text-muted-foreground">Approved Today</h2>
           {approved.map((item) => (
-            <Card key={item.id} className="rounded-xl border border-border bg-card shadow-sm border-l-4 border-l-success opacity-90">
+            <Card key={item.id} className="rounded-xl border border-border bg-card shadow-sm border-l-4 border-l-success opacity-90 w-full overflow-hidden">
               <CardContent className="p-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <PlatformIcon platform={item.platform} />
                   <span className="text-sm text-foreground truncate">
-                    {item.draft_copy?.length > 80 ? item.draft_copy.slice(0, 80) + '…' : item.draft_copy}
+                    {stripMarkdown(item.draft_copy)?.length > 80 ? stripMarkdown(item.draft_copy).slice(0, 80) + '…' : stripMarkdown(item.draft_copy)}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
