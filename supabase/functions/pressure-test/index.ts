@@ -44,14 +44,16 @@ Respond with ONLY valid JSON in this exact format:
   "recommendation": "<one of: accelerate|maintain|review>"
 }`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        Authorization: `Bearer ${EMILY_OPENROUTER_KEY}`,
         "Content-Type": "application/json",
+        "HTTP-Referer": supabaseUrl,
+        "X-Title": "CARFIX Emily",
       },
       body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Pressure test this initiative: ${raw_idea}` },
