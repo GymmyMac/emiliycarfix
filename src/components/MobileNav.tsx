@@ -6,6 +6,7 @@ import {
   Lightbulb,
   MessageCircle,
   MoreHorizontal,
+  Rocket,
   BarChart3,
   Calendar,
   Settings,
@@ -20,6 +21,7 @@ const mainItems = [
 ];
 
 const moreItems = [
+  { label: 'Initiatives', icon: Rocket, path: '/initiatives' },
   { label: 'Analytics', icon: BarChart3, path: '/analytics' },
   { label: 'Calendar', icon: Calendar, path: '/calendar' },
   { label: 'Settings', icon: Settings, path: '/settings' },

@@ -10,12 +10,14 @@ import {
   MessageCircle,
   Settings,
   LogOut,
+  Rocket,
 } from 'lucide-react';
 
 const navItems = [
   { label: 'Dashboard', icon: LayoutGrid, path: '/dashboard' },
   { label: 'Content Queue', icon: Inbox, path: '/content-queue' },
   { label: 'Ideas Bucket', icon: Lightbulb, path: '/ideas' },
+  { label: 'Initiatives', icon: Rocket, path: '/initiatives' },
   { label: 'Analytics', icon: BarChart3, path: '/analytics' },
   { label: 'Calendar', icon: Calendar, path: '/calendar' },
   { label: 'Emily', icon: MessageCircle, path: '/emily', isEmily: true },

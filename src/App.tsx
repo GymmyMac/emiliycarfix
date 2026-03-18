@@ -13,6 +13,7 @@ import Emily from "./pages/Emily";
 import CalendarPage from "./pages/Calendar";
 import ContentQueue from "./pages/ContentQueue";
 import Settings from "./pages/Settings";
+import Initiatives from "./pages/Initiatives";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -34,6 +35,7 @@ const App = () => (
               <Route path="/emily" element={<Emily />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/initiatives" element={<Initiatives />} />
             </Route>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />
