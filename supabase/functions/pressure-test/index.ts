@@ -69,7 +69,7 @@ Respond with ONLY valid JSON in this exact format:
         });
       }
       if (status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Top up in workspace settings." }), {
+        return new Response(JSON.stringify({ error: "OpenRouter credits exhausted." }), {
           status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
