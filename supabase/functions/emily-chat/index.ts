@@ -7,6 +7,22 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+/** Generate a 1536-dim embedding via OpenAI text-embedding-3-small */
+async function embed(text: string, apiKey: string): Promise<number[]> {
+  const res = await fetch("https://api.openai.com/v1/embeddings", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "text-embedding-3-small", input: text }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    console.error("OpenAI embedding error:", res.status, err);
+    throw new Error(`Embedding error: ${res.status}`);
+  }
+  const data = await res.json();
+  return data.data[0].embedding;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -22,11 +38,39 @@ serve(async (req) => {
     const EMILY_OPENROUTER_KEY = Deno.env.get("EMILY_OPENROUTER_KEY");
     if (!EMILY_OPENROUTER_KEY) throw new Error("EMILY_OPENROUTER_KEY is not configured");
 
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is not configured");
+
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Fetch recent conversation history for context
+    // --- 1. VECTOR MEMORY: Retrieve relevant docs ---
+    let contextChunks: { title: string; content: string; similarity: number }[] = [];
+    let contextDocs: string[] = [];
+    try {
+      const queryEmbedding = await embed(message, OPENAI_API_KEY);
+      const { data: matches, error: matchError } = await supabase.rpc("match_mkt_documents", {
+        query_embedding: JSON.stringify(queryEmbedding),
+        match_threshold: 0.72,
+        match_count: 5,
+      });
+      if (matchError) {
+        console.error("Vector search error:", matchError);
+      } else if (matches && matches.length > 0) {
+        contextChunks = matches.map((m: any) => ({
+          title: m.title,
+          content: m.content,
+          similarity: m.similarity,
+        }));
+        // Deduplicate titles for the UI pills
+        contextDocs = [...new Set(contextChunks.map((c) => c.title))];
+      }
+    } catch (vecErr) {
+      console.error("Vector retrieval failed (non-blocking):", vecErr);
+    }
+
+    // --- 2. CONVERSATION HISTORY ---
     let conversationHistory: { role: string; content: string }[] = [];
     if (session_id) {
       const { data: history } = await supabase
@@ -45,7 +89,8 @@ serve(async (req) => {
       }
     }
 
-    const systemPrompt = `You are Emily, the AI marketing strategist for CARFIX automotive. You have deep knowledge of automotive aftermarket marketing, customer psychology, and the PSYOPS content framework.
+    // --- 3. BUILD SYSTEM PROMPT WITH CONTEXT ---
+    let systemPrompt = `You are Emily, the AI marketing strategist for CARFIX automotive. You have deep knowledge of automotive aftermarket marketing, customer psychology, and the PSYOPS content framework.
 
 Your role:
 - Advise on marketing strategy, content creation, and campaign planning
@@ -56,6 +101,14 @@ Your role:
 
 Tone: Direct, strategic, data-informed. You're a trusted CMO-level advisor, not a generic chatbot.`;
 
+    if (contextChunks.length > 0) {
+      const contextBlock = contextChunks
+        .map((c, i) => `[${i + 1}] ${c.title} (relevance: ${(c.similarity * 100).toFixed(0)}%)\n${c.content}`)
+        .join("\n\n---\n\n");
+      systemPrompt += `\n\n## Retrieved Knowledge\nThe following documents from your CARFIX knowledge base are relevant to this query. Use them to inform your response. Reference specific documents when applicable.\n\n${contextBlock}`;
+    }
+
+    // --- 4. CALL OPENROUTER ---
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -93,7 +146,6 @@ Tone: Direct, strategic, data-informed. You're a trusted CMO-level advisor, not 
 
     const aiData = await response.json();
     const content = aiData.choices?.[0]?.message?.content || "";
-    const contextDocs: string[] = [];
 
     return new Response(JSON.stringify({ response: content, context_docs: contextDocs }), {
       status: 200,
