@@ -65,7 +65,7 @@ Tone: Direct, strategic, data-informed. You're a trusted CMO-level advisor, not 
         "X-Title": "CARFIX Emily",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "openrouter/auto",
         messages: [
           { role: "system", content: systemPrompt },
           ...conversationHistory,

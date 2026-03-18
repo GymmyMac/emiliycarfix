@@ -53,7 +53,7 @@ Respond with ONLY valid JSON in this exact format:
         "X-Title": "CARFIX Emily",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "openrouter/auto",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Pressure test this initiative: ${raw_idea}` },
