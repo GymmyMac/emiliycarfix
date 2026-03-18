@@ -1,0 +1,5 @@
+[project]
+id = "flpzjbasdsfwoeruyxgp"
+
+[functions.pressure-test]
+verify_jwt = false
