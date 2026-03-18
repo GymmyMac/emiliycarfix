@@ -1,9 +1,9 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
@@ -20,7 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Mic, MicOff, MoreVertical, Loader2, Sparkles } from 'lucide-react';
+import { Mic, MicOff, MoreVertical, Loader2, Sparkles, ShieldCheck, Archive, Rocket, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   DndContext,
   DragOverlay,
@@ -41,6 +41,8 @@ interface Idea {
   raw_idea: string;
   status: string;
   created_at: string;
+  pressure_test_score?: number | null;
+  pressure_test_summary?: string | null;
 }
 
 type InboxType = 'instant' | 'weekly' | 'parking_lot';
@@ -77,6 +79,20 @@ function isOverdue(createdAt: string) {
   return new Date(createdAt) <= sevenDaysAgo;
 }
 
+function scoreColor(score: number) {
+  if (score >= 80) return 'bg-[#16A34A]';
+  if (score >= 60) return 'bg-primary';
+  if (score >= 40) return 'bg-[#D97706]';
+  return 'bg-destructive';
+}
+
+function scoreTextColor(score: number) {
+  if (score >= 80) return 'text-[#16A34A]';
+  if (score >= 60) return 'text-primary';
+  if (score >= 40) return 'text-[#D97706]';
+  return 'text-destructive';
+}
+
 function DroppableColumn({ id, children }: { id: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
@@ -107,18 +123,21 @@ function DraggableCard({ id, children }: { id: string; children: React.ReactNode
 
 export default function Ideas() {
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [loading, setLoading] = useState(true);
   const [inputText, setInputText] = useState('');
   const [inboxType, setInboxType] = useState<InboxType>('instant');
   const [mondayMode, setMondayMode] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [testingId, setTestingId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mobileTab, setMobileTab] = useState<InboxType>('instant');
   const recognitionRef = useRef<any>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+
+  const overdueCount = ideas.filter((i) => i.status === 'raw' && isOverdue(i.created_at)).length;
 
   const fetchIdeas = useCallback(async () => {
     const { data } = await supabase.from('mkt_ideas_bucket').select('*').neq('status', 'archived').order('created_at', { ascending: false });
@@ -168,9 +187,46 @@ export default function Ideas() {
   const handleArchive = async (id: string) => {
     await supabase.from('mkt_ideas_bucket').update({ status: 'archived' }).eq('id', id);
     setIdeas((prev) => prev.filter((i) => i.id !== id));
+    toast({ title: 'Archived. Learnings stored.' });
   };
 
-  const handleProcessEmily = (id: string) => { setProcessingId(id); setTimeout(() => setProcessingId(null), 1000); };
+  const handlePressureTest = async (idea: Idea) => {
+    setTestingId(idea.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('pressure-test', {
+        body: { idea_id: idea.id, raw_idea: idea.raw_idea },
+      });
+      if (error) throw error;
+      setIdeas((prev) => prev.map((i) =>
+        i.id === idea.id ? { ...i, pressure_test_score: data.score, pressure_test_summary: data.summary, status: 'processed' } : i
+      ));
+      toast({ title: `Pressure Test: ${data.score}/100` });
+    } catch (e: any) {
+      console.error('Pressure test failed:', e);
+      toast({ title: 'Pressure test failed.', description: e.message || 'Try again.', variant: 'destructive' });
+    } finally {
+      setTestingId(null);
+    }
+  };
+
+  const handleEnterPipeline = async (idea: Idea) => {
+    const { error } = await supabase.from('mkt_initiatives').insert({
+      title: idea.raw_idea.slice(0, 100),
+      initiative_type: 'content',
+      status: 'planning',
+      pressure_test_score: idea.pressure_test_score,
+      pressure_test_summary: idea.pressure_test_summary,
+      created_at: new Date().toISOString(),
+    });
+    if (!error) {
+      await supabase.from('mkt_ideas_bucket').update({ status: 'archived' }).eq('id', idea.id);
+      setIdeas((prev) => prev.filter((i) => i.id !== idea.id));
+      toast({ title: 'Initiative created! Redirecting...' });
+      navigate('/initiatives');
+    } else {
+      toast({ title: 'Failed to create initiative.', variant: 'destructive' });
+    }
+  };
 
   const handleDragStart = (event: DragStartEvent) => { setActiveId(event.active.id as string); };
   const handleDragEnd = (event: DragEndEvent) => {
@@ -232,11 +288,18 @@ export default function Ideas() {
       </div>
 
       {/* HEADER + MONDAY MODE */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="font-display text-xl text-foreground">Ideas Bucket</h1>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Monday Mode</span>
-          <Switch checked={mondayMode} onCheckedChange={setMondayMode} />
+        <div className="flex items-center gap-3">
+          {mondayMode && overdueCount > 0 && (
+            <span className="text-xs font-semibold text-[#D97706] bg-[#D97706]/10 px-2.5 py-1 rounded-full">
+              {overdueCount} idea{overdueCount !== 1 ? 's' : ''} need processing
+            </span>
+          )}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Monday Mode</span>
+            <Switch checked={mondayMode} onCheckedChange={setMondayMode} />
+          </div>
         </div>
       </div>
 
@@ -261,7 +324,7 @@ export default function Ideas() {
       {isMobile ? (
         <div className="space-y-3">
           {getColumnIdeas(mobileTab).map((idea) => (
-            <IdeaCard key={idea.id} idea={idea} mondayMode={mondayMode} processingId={processingId} onMove={handleMove} onArchive={handleArchive} onProcess={handleProcessEmily} />
+            <IdeaCard key={idea.id} idea={idea} mondayMode={mondayMode} testingId={testingId} onMove={handleMove} onArchive={handleArchive} onPressureTest={handlePressureTest} onEnterPipeline={handleEnterPipeline} />
           ))}
           {getColumnIdeas(mobileTab).length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-8">No ideas here yet.</p>
@@ -280,7 +343,7 @@ export default function Ideas() {
                   <div className="space-y-3">
                     {colIdeas.map((idea) => (
                       <DraggableCard key={idea.id} id={idea.id}>
-                        <IdeaCard idea={idea} mondayMode={mondayMode} processingId={processingId} onMove={handleMove} onArchive={handleArchive} onProcess={handleProcessEmily} />
+                        <IdeaCard idea={idea} mondayMode={mondayMode} testingId={testingId} onMove={handleMove} onArchive={handleArchive} onPressureTest={handlePressureTest} onEnterPipeline={handleEnterPipeline} />
                       </DraggableCard>
                     ))}
                   </div>
@@ -291,7 +354,7 @@ export default function Ideas() {
           <DragOverlay>
             {activeCard ? (
               <div className="opacity-90 rotate-2">
-                <IdeaCard idea={activeCard} mondayMode={mondayMode} processingId={null} onMove={() => {}} onArchive={() => {}} onProcess={() => {}} />
+                <IdeaCard idea={activeCard} mondayMode={mondayMode} testingId={null} onMove={() => {}} onArchive={() => {}} onPressureTest={() => {}} onEnterPipeline={() => {}} />
               </div>
             ) : null}
           </DragOverlay>
@@ -301,17 +364,24 @@ export default function Ideas() {
   );
 }
 
-function IdeaCard({ idea, mondayMode, processingId, onMove, onArchive, onProcess }: {
-  idea: Idea; mondayMode: boolean; processingId: string | null;
-  onMove: (id: string, target: InboxType) => void; onArchive: (id: string) => void; onProcess: (id: string) => void;
+function IdeaCard({ idea, mondayMode, testingId, onMove, onArchive, onPressureTest, onEnterPipeline }: {
+  idea: Idea; mondayMode: boolean; testingId: string | null;
+  onMove: (id: string, target: InboxType) => void;
+  onArchive: (id: string) => void;
+  onPressureTest: (idea: Idea) => void;
+  onEnterPipeline: (idea: Idea) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const overdue = mondayMode && idea.status === 'raw' && isOverdue(idea.created_at);
   const statusStyle = STATUS_COLORS[idea.status] || STATUS_COLORS.raw;
-  const isProcessing = processingId === idea.id;
+  const isTesting = testingId === idea.id;
+  const hasScore = idea.pressure_test_score != null;
+  const score = idea.pressure_test_score ?? 0;
 
   return (
-    <Card className={`rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-all duration-300 ${overdue ? 'border-l-4 border-l-orange' : ''}`}>
+    <Card className={`rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-all duration-300 ${overdue ? 'border-l-4 border-l-[#D97706]' : ''}`}>
       <CardContent className="p-4 space-y-3">
+        {/* Idea text + menu */}
         <div className="flex items-start justify-between gap-2">
           <p className="text-sm leading-relaxed text-foreground flex-1">{idea.raw_idea}</p>
           <DropdownMenu>
@@ -326,16 +396,67 @@ function IdeaCard({ idea, mondayMode, processingId, onMove, onArchive, onProcess
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+
+        {/* Time + status */}
         <div className="flex items-center justify-between">
           <span className="text-[11px] text-muted-foreground">{timeAgo(idea.created_at)}</span>
           <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${statusStyle.bg} ${statusStyle.text}`}>{idea.status}</span>
         </div>
-        {isProcessing ? (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1"><Loader2 size={14} className="animate-spin" />Emily will process this in Session 8.</div>
-        ) : (
-          <Button variant="ghost" size="sm" onClick={() => onProcess(idea.id)} className="h-9 text-xs text-emily hover:text-emily hover:bg-emily/10 w-full justify-start px-2">
-            <Sparkles size={13} className="mr-1.5" /> Process with Emily
+
+        {/* Pressure Test Section */}
+        {!hasScore ? (
+          <Button
+            onClick={() => onPressureTest(idea)}
+            disabled={isTesting}
+            className="w-full h-9 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground"
+          >
+            {isTesting ? (
+              <><Loader2 size={13} className="mr-1.5 animate-spin" /> Testing...</>
+            ) : (
+              <><ShieldCheck size={13} className="mr-1.5" /> Pressure Test</>
+            )}
           </Button>
+        ) : (
+          <div className="space-y-2">
+            {/* Score circle */}
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex items-center justify-center h-8 w-8 rounded-full text-xs font-bold text-white ${scoreColor(score)}`}>
+                {score}
+              </span>
+              <span className={`text-xs font-semibold ${scoreTextColor(score)}`}>
+                {score >= 80 ? 'Strong' : score >= 60 ? 'Viable' : score >= 40 ? 'Weak' : 'Poor'}
+              </span>
+            </div>
+
+            {/* Summary */}
+            {idea.pressure_test_summary && (
+              <div>
+                <p className={`text-xs text-muted-foreground leading-relaxed ${!expanded ? 'line-clamp-2' : ''}`}>
+                  {idea.pressure_test_summary}
+                </p>
+                <button onClick={() => setExpanded(!expanded)} className="text-[11px] text-primary font-medium mt-0.5 flex items-center gap-0.5">
+                  {expanded ? <><ChevronUp size={12} /> Less</> : <><ChevronDown size={12} /> More</>}
+                </button>
+              </div>
+            )}
+
+            {/* Post-score actions */}
+            {score >= 60 ? (
+              <Button
+                onClick={() => onEnterPipeline(idea)}
+                className="w-full h-9 text-xs font-semibold bg-[#16A34A] hover:bg-[#16A34A]/90 text-white"
+              >
+                <Rocket size={13} className="mr-1.5" /> Enter Pipeline
+              </Button>
+            ) : (
+              <Button
+                onClick={() => onArchive(idea.id)}
+                className="w-full h-9 text-xs font-semibold bg-[#D97706] hover:bg-[#D97706]/90 text-white"
+              >
+                <Archive size={13} className="mr-1.5" /> Archive with Learnings
+              </Button>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>
