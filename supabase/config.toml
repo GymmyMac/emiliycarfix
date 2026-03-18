@@ -3,3 +3,6 @@ id = "flpzjbasdsfwoeruyxgp"
 
 [functions.pressure-test]
 verify_jwt = false
+
+[functions.emily-chat]
+verify_jwt = false
