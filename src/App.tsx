@@ -13,6 +13,7 @@ import Emily from "./pages/Emily";
 import CalendarPage from "./pages/Calendar";
 import ContentQueue from "./pages/ContentQueue";
 import Settings from "./pages/Settings";
+import Initiatives from "./pages/Initiatives";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
