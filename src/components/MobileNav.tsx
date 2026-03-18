@@ -6,6 +6,7 @@ import {
   Lightbulb,
   MessageCircle,
   MoreHorizontal,
+  Rocket,
   BarChart3,
   Calendar,
   Settings,
