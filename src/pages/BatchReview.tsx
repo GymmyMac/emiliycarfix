@@ -30,6 +30,7 @@ export default function BatchReview() {
   const [rejectReason, setRejectReason] = useState('');
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [approvingAll, setApprovingAll] = useState(false);
+  const [selectedSkus, setSelectedSkus] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!batchId) return;
