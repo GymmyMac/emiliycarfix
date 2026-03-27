@@ -209,11 +209,11 @@ export default function BatchReview() {
                   <Button
                     size="sm"
                     disabled={busy}
-                    onClick={() => approve(rec.sku)}
+                    onClick={() => approveAndPublish(rec.sku)}
                     className="bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-white"
                   >
                     {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                    Approve
+                    Approve &amp; Publish
                   </Button>
 
                   {rejectingId === rec.sku ? (
