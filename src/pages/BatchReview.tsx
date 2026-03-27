@@ -125,13 +125,13 @@ export default function BatchReview() {
 
       {/* Cards */}
       {records.map((rec) => {
-        const status = cardStatuses[rec.id];
+        const status = cardStatuses[rec.sku];
         const aeo = rec.aeo_json ?? {};
         const confidence = aeo.confidence_score as number | undefined;
         const answerText = aeo.answer_first?.text as string | undefined;
         const fitment = aeo.vehicle_fitment as any;
         const markdown = aeo.markdown_version as string | undefined;
-        const busy = busyIds.has(rec.id);
+        const busy = busyIds.has(rec.sku);
 
         const confPct = confidence != null ? Math.round(confidence * (confidence <= 1 ? 100 : 1)) : null;
         const confColor =
