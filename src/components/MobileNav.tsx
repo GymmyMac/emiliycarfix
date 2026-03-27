@@ -7,6 +7,7 @@ import {
   MessageCircle,
   MoreHorizontal,
   Rocket,
+  ClipboardCheck,
   BarChart3,
   Calendar,
   Settings,
