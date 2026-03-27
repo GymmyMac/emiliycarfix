@@ -184,7 +184,7 @@ export default function BatchReview() {
                     Approve
                   </Button>
 
-                  {rejectingId === rec.id ? (
+                  {rejectingId === rec.sku ? (
                     <div className="flex flex-1 items-center gap-2">
                       <Input
                         placeholder="Reason (optional)"
@@ -196,7 +196,7 @@ export default function BatchReview() {
                         size="sm"
                         variant="destructive"
                         disabled={busy}
-                        onClick={() => reject(rec.id, rejectReason)}
+                        onClick={() => reject(rec.sku, rejectReason)}
                       >
                         Confirm
                       </Button>
