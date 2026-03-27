@@ -49,7 +49,7 @@ export default function BatchReview() {
       setLoading(true);
       const { data, error } = await supabase
         .from('part_enrichment_staging')
-        .select('sku, brand, aeo_json')
+        .select('sku, part_number, brand, aeo_json')
         .eq('batch_id', String(batchId))
         .eq('status', 'pending_review');
       console.log('[BatchReview] query result:', { data, error, batchId });
