@@ -214,9 +214,18 @@ export default function BatchReview() {
             className={`transition-opacity duration-300 ${status !== 'pending' ? 'opacity-40 pointer-events-none' : ''}`}
           >
             <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-              <div className="min-w-0">
-                <p className="font-mono text-sm font-bold text-foreground truncate">{rec.sku}</p>
-                <p className="text-xs text-muted-foreground">{rec.brand}</p>
+              <div className="flex items-center gap-3 min-w-0">
+                {status === 'pending' && (
+                  <Checkbox
+                    checked={selectedSkus.has(rec.sku)}
+                    onCheckedChange={() => toggleSelect(rec.sku)}
+                    className="shrink-0"
+                  />
+                )}
+                <div className="min-w-0">
+                  <p className="font-mono text-sm font-bold text-foreground truncate">{rec.sku}</p>
+                  <p className="text-xs text-muted-foreground">{rec.brand}</p>
+                </div>
               </div>
               {confPct != null && (
                 <Badge className={`shrink-0 ${confColor}`}>{confPct}%</Badge>
