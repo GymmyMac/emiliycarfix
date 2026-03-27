@@ -39,6 +39,7 @@ const App = () => (
               <Route path="/settings" element={<Settings />} />
               <Route path="/initiatives" element={<Initiatives />} />
               <Route path="/batch/:batchId" element={<BatchReview />} />
+              <Route path="/review" element={<Review />} />
             </Route>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />
