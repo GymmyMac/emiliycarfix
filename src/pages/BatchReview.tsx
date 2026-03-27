@@ -167,6 +167,26 @@ export default function BatchReview() {
         </p>
       </div>
 
+      {/* Bulk actions */}
+      {pendingCount > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button size="sm" variant="outline" onClick={selectAll}>
+            <CheckSquare className="h-4 w-4" /> Select All ({pendingCount})
+          </Button>
+          {selectedCount > 0 && (
+            <Button
+              size="sm"
+              disabled={approvingAll}
+              onClick={approveSelected}
+              className="bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-white"
+            >
+              {approvingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+              Approve &amp; Publish Selected ({selectedCount})
+            </Button>
+          )}
+        </div>
+      )}
+
       {records.length === 0 && (
         <p className="text-muted-foreground">No pending items in this batch.</p>
       )}
