@@ -37,6 +37,7 @@ const App = () => (
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/initiatives" element={<Initiatives />} />
+              <Route path="/batch/:batchId" element={<BatchReview />} />
             </Route>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />
