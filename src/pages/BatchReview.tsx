@@ -85,7 +85,7 @@ export default function BatchReview() {
   }, []);
 
   const approveAll = async () => {
-    const pending = records.filter((r) => cardStatuses[r.id] === 'pending');
+    const pending = records.filter((r) => cardStatuses[r.sku] === 'pending');
     if (!pending.length) return;
     setApprovingAll(true);
     for (const r of pending) {
