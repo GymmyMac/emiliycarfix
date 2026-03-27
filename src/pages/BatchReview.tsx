@@ -118,15 +118,29 @@ export default function BatchReview() {
     }
   }, []);
 
-  const approveAll = async () => {
-    const pending = records.filter((r) => cardStatuses[r.sku] === 'pending');
-    if (!pending.length) return;
+  const approveSelected = async () => {
+    const skus = Array.from(selectedSkus).filter((sku) => cardStatuses[sku] === 'pending');
+    if (!skus.length) return;
     setApprovingAll(true);
-    for (const r of pending) {
-      await approveAndPublish(r.sku);
+    for (const sku of skus) {
+      await approveAndPublish(sku);
     }
+    setSelectedSkus(new Set());
     setApprovingAll(false);
-    toast({ title: `All ${pending.length} items published ✓` });
+    toast({ title: `${skus.length} items published to CARFIX ✓` });
+  };
+
+  const selectAll = () => {
+    const pendingSkus = records.filter((r) => cardStatuses[r.sku] === 'pending').map((r) => r.sku);
+    setSelectedSkus(new Set(pendingSkus));
+  };
+
+  const toggleSelect = (sku: string) => {
+    setSelectedSkus((prev) => {
+      const next = new Set(prev);
+      if (next.has(sku)) next.delete(sku); else next.add(sku);
+      return next;
+    });
   };
 
   const pendingCount = Object.values(cardStatuses).filter((s) => s === 'pending').length;
