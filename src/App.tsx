@@ -15,6 +15,7 @@ import ContentQueue from "./pages/ContentQueue";
 import Settings from "./pages/Settings";
 import Initiatives from "./pages/Initiatives";
 import NotFound from "./pages/NotFound";
+import BatchReview from "./pages/BatchReview";
 
 const queryClient = new QueryClient();
 
