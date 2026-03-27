@@ -209,7 +209,7 @@ export default function BatchReview() {
                       size="sm"
                       variant="destructive"
                       disabled={busy}
-                      onClick={() => setRejectingId(rec.id)}
+                      onClick={() => setRejectingId(rec.sku)}
                     >
                       <XCircle className="h-4 w-4" /> Reject
                     </Button>
