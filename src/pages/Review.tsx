@@ -22,7 +22,7 @@ export default function Review() {
     (async () => {
       const { data, error } = await supabase
         .from('part_enrichment_staging')
-        .select('id, sku, brand, batch_id, updated_at, aeo_json')
+        .select('sku, brand, batch_id, updated_at, aeo_json')
         .eq('status', 'pending_review')
         .order('updated_at', { ascending: false });
       if (!error) setItems(data ?? []);
