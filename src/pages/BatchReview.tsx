@@ -15,8 +15,19 @@ import { CheckCircle, XCircle, Loader2, CheckSquare } from 'lucide-react';
 
 interface StagingRecord {
   sku: string;
+  part_number: string | null;
   brand: string;
   aeo_json: Record<string, any>;
+}
+
+/** Replace any occurrence of the internal SKU in text with the part number */
+function sanitiseContent(text: string, sku: string, partNumber: string): string {
+  if (!text || !sku || !partNumber || sku === partNumber) return text;
+  // Replace patterns like "SKU: A6082634", "SKU A6082634", or bare SKU code
+  const escaped = sku.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text
+    .replace(new RegExp(`SKU[:\\s]*${escaped}`, 'gi'), partNumber)
+    .replace(new RegExp(escaped, 'g'), partNumber);
 }
 
 type CardStatus = 'pending' | 'approved' | 'rejected';
