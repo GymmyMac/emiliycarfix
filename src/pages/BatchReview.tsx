@@ -142,7 +142,7 @@ export default function BatchReview() {
 
         return (
           <Card
-            key={rec.id}
+            key={rec.sku}
             className={`transition-opacity duration-300 ${status !== 'pending' ? 'opacity-40 pointer-events-none' : ''}`}
           >
             <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
