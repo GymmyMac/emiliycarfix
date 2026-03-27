@@ -121,10 +121,10 @@ export default function BatchReview() {
     if (!pending.length) return;
     setApprovingAll(true);
     for (const r of pending) {
-      await approve(r.sku);
+      await approveAndPublish(r.sku);
     }
     setApprovingAll(false);
-    toast({ title: `All ${pending.length} items approved ✓` });
+    toast({ title: `All ${pending.length} items published ✓` });
   };
 
   const pendingCount = Object.values(cardStatuses).filter((s) => s === 'pending').length;
