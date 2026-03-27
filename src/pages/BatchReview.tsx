@@ -249,7 +249,7 @@ export default function BatchReview() {
                 </div>
               )}
 
-              {status === 'approved' && <p className="text-sm font-medium text-[hsl(var(--success))]">✓ Approved</p>}
+              {status === 'approved' && <p className="text-sm font-medium text-[hsl(var(--success))]">✓ Published to CARFIX</p>}
               {status === 'rejected' && <p className="text-sm font-medium text-destructive">✗ Rejected</p>}
             </CardContent>
           </Card>
