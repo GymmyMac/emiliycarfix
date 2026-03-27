@@ -206,10 +206,13 @@ export default function BatchReview() {
       {records.map((rec) => {
         const status = cardStatuses[rec.sku];
         const aeo = rec.aeo_json ?? {};
+        const partNumber = rec.part_number || aeo.schema?.sku || rec.sku;
         const confidence = aeo.confidence_score as number | undefined;
-        const answerText = aeo.answer_first?.text as string | undefined;
+        const rawAnswerText = aeo.answer_first?.text as string | undefined;
+        const answerText = rawAnswerText ? sanitiseContent(rawAnswerText, rec.sku, partNumber) : undefined;
         const fitment = aeo.vehicle_fitment as any;
-        const markdown = aeo.markdown_version as string | undefined;
+        const rawMarkdown = aeo.markdown_version as string | undefined;
+        const markdown = rawMarkdown ? sanitiseContent(rawMarkdown, rec.sku, partNumber) : undefined;
         const busy = busyIds.has(rec.sku);
 
         const confPct = confidence != null ? Math.round(confidence * (confidence <= 1 ? 100 : 1)) : null;
