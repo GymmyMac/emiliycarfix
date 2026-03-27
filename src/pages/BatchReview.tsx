@@ -301,17 +301,17 @@ export default function BatchReview() {
         );
       })}
 
-      {/* Approve All */}
-      {pendingCount > 0 && (
+      {/* Sticky bottom bar */}
+      {selectedCount > 0 && (
         <div className="sticky bottom-4 flex justify-center">
           <Button
             size="lg"
             disabled={approvingAll}
-            onClick={approveAll}
+            onClick={approveSelected}
             className="bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-white shadow-lg"
           >
             {approvingAll && <Loader2 className="h-4 w-4 animate-spin" />}
-            Approve &amp; Publish All ({pendingCount})
+            Approve &amp; Publish Selected ({selectedCount})
           </Button>
         </div>
       )}
