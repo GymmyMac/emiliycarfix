@@ -13,7 +13,6 @@ import ReactMarkdown from 'react-markdown';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 
 interface StagingRecord {
-  id: string;
   sku: string;
   brand: string;
   aeo_json: Record<string, any>;
