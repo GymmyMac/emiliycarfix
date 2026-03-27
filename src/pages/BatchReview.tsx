@@ -67,17 +67,17 @@ export default function BatchReview() {
     }
   }, []);
 
-  const reject = useCallback(async (id: string, reason: string) => {
-    setBusyIds((s) => new Set(s).add(id));
+  const reject = useCallback(async (sku: string, reason: string) => {
+    setBusyIds((s) => new Set(s).add(sku));
     const { error } = await supabase
       .from('part_enrichment_staging')
       .update({ status: 'rejected', rejected_at: new Date().toISOString(), approval_notes: reason })
-      .eq('id', id);
-    setBusyIds((s) => { const n = new Set(s); n.delete(id); return n; });
+      .eq('sku', sku);
+    setBusyIds((s) => { const n = new Set(s); n.delete(sku); return n; });
     if (error) {
       toast({ title: 'Reject failed', description: error.message, variant: 'destructive' });
     } else {
-      setCardStatuses((p) => ({ ...p, [id]: 'rejected' }));
+      setCardStatuses((p) => ({ ...p, [sku]: 'rejected' }));
       setRejectingId(null);
       setRejectReason('');
       toast({ title: 'Rejected' });
