@@ -80,7 +80,7 @@ export default function Review() {
 
                 return (
                   <tr
-                    key={item.id}
+                    key={item.sku}
                     onClick={() => navigate(`/batch/${item.batch_id}`)}
                     className="cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-accent/60"
                   >
