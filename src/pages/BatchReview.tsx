@@ -52,17 +52,17 @@ export default function BatchReview() {
     })();
   }, [batchId]);
 
-  const approve = useCallback(async (id: string) => {
-    setBusyIds((s) => new Set(s).add(id));
+  const approve = useCallback(async (sku: string) => {
+    setBusyIds((s) => new Set(s).add(sku));
     const { error } = await supabase
       .from('part_enrichment_staging')
       .update({ james_approved: true, approved_at: new Date().toISOString(), status: 'approved' })
-      .eq('id', id);
-    setBusyIds((s) => { const n = new Set(s); n.delete(id); return n; });
+      .eq('sku', sku);
+    setBusyIds((s) => { const n = new Set(s); n.delete(sku); return n; });
     if (error) {
       toast({ title: 'Approve failed', description: error.message, variant: 'destructive' });
     } else {
-      setCardStatuses((p) => ({ ...p, [id]: 'approved' }));
+      setCardStatuses((p) => ({ ...p, [sku]: 'approved' }));
       toast({ title: 'Approved ✓' });
     }
   }, []);
