@@ -52,20 +52,52 @@ export default function BatchReview() {
     })();
   }, [batchId]);
 
-  const approve = useCallback(async (sku: string) => {
+  const approveAndPublish = useCallback(async (sku: string) => {
+    const rec = records.find((r) => r.sku === sku);
+    if (!rec) return;
+    const aeo = rec.aeo_json ?? {};
+    const now = new Date().toISOString();
+
     setBusyIds((s) => new Set(s).add(sku));
-    const { error } = await supabase
+
+    // 1. Update staging record
+    const { error: stagingErr } = await supabase
       .from('part_enrichment_staging')
-      .update({ james_approved: true, approved_at: new Date().toISOString(), status: 'approved' })
+      .update({ james_approved: true, approved_at: now, status: 'published' })
       .eq('sku', sku);
+
+    if (stagingErr) {
+      setBusyIds((s) => { const n = new Set(s); n.delete(sku); return n; });
+      toast({ title: 'Publish failed', description: stagingErr.message, variant: 'destructive' });
+      return;
+    }
+
+    // 2. Update part_detail with enriched content
+    const { error: detailErr } = await supabase
+      .from('part_detail')
+      .update({
+        aeo_answer_first: aeo.answer_first?.text ?? null,
+        aeo_markdown: aeo.markdown_version ?? null,
+        aeo_faq: aeo.faq ?? null,
+        aeo_vehicle_fitment: aeo.vehicle_fitment ?? null,
+        aeo_schema_product: aeo.schema ?? null,
+        aeo_confidence_score: aeo.confidence_score ?? null,
+        aeo_generated_at: aeo.generated_at ?? null,
+        aeo_approved_at: now,
+        aeo_approved_by: 'james',
+        aeo_live: true,
+      })
+      .eq('SKU', sku);
+
     setBusyIds((s) => { const n = new Set(s); n.delete(sku); return n; });
-    if (error) {
-      toast({ title: 'Approve failed', description: error.message, variant: 'destructive' });
+
+    if (detailErr) {
+      toast({ title: 'Staging approved but publish failed', description: detailErr.message, variant: 'destructive' });
     } else {
       setCardStatuses((p) => ({ ...p, [sku]: 'approved' }));
-      toast({ title: 'Approved ✓' });
+      toast({ title: 'Published to CARFIX ✓' });
     }
-  }, []);
+  }, [records]);
 
   const reject = useCallback(async (sku: string, reason: string) => {
     setBusyIds((s) => new Set(s).add(sku));
