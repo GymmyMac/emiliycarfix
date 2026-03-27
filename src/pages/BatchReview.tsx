@@ -144,7 +144,7 @@ export default function BatchReview() {
   };
 
   const pendingCount = Object.values(cardStatuses).filter((s) => s === 'pending').length;
-
+  const selectedCount = Array.from(selectedSkus).filter((sku) => cardStatuses[sku] === 'pending').length;
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
