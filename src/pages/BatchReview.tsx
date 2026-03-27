@@ -5,12 +5,13 @@ import { Card, CardHeader, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from '@/components/ui/table';
 import { toast } from '@/hooks/use-toast';
 import ReactMarkdown from 'react-markdown';
-import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2, CheckSquare } from 'lucide-react';
 
 interface StagingRecord {
   sku: string;
@@ -29,6 +30,7 @@ export default function BatchReview() {
   const [rejectReason, setRejectReason] = useState('');
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [approvingAll, setApprovingAll] = useState(false);
+  const [selectedSkus, setSelectedSkus] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!batchId) return;
@@ -116,19 +118,33 @@ export default function BatchReview() {
     }
   }, []);
 
-  const approveAll = async () => {
-    const pending = records.filter((r) => cardStatuses[r.sku] === 'pending');
-    if (!pending.length) return;
+  const approveSelected = async () => {
+    const skus = Array.from(selectedSkus).filter((sku) => cardStatuses[sku] === 'pending');
+    if (!skus.length) return;
     setApprovingAll(true);
-    for (const r of pending) {
-      await approveAndPublish(r.sku);
+    for (const sku of skus) {
+      await approveAndPublish(sku);
     }
+    setSelectedSkus(new Set());
     setApprovingAll(false);
-    toast({ title: `All ${pending.length} items published ✓` });
+    toast({ title: `${skus.length} items published to CARFIX ✓` });
+  };
+
+  const selectAll = () => {
+    const pendingSkus = records.filter((r) => cardStatuses[r.sku] === 'pending').map((r) => r.sku);
+    setSelectedSkus(new Set(pendingSkus));
+  };
+
+  const toggleSelect = (sku: string) => {
+    setSelectedSkus((prev) => {
+      const next = new Set(prev);
+      if (next.has(sku)) next.delete(sku); else next.add(sku);
+      return next;
+    });
   };
 
   const pendingCount = Object.values(cardStatuses).filter((s) => s === 'pending').length;
-
+  const selectedCount = Array.from(selectedSkus).filter((sku) => cardStatuses[sku] === 'pending').length;
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -150,6 +166,26 @@ export default function BatchReview() {
           <span className="font-semibold">{pendingCount}</span> pending review
         </p>
       </div>
+
+      {/* Bulk actions */}
+      {pendingCount > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button size="sm" variant="outline" onClick={selectAll}>
+            <CheckSquare className="h-4 w-4" /> Select All ({pendingCount})
+          </Button>
+          {selectedCount > 0 && (
+            <Button
+              size="sm"
+              disabled={approvingAll}
+              onClick={approveSelected}
+              className="bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-white"
+            >
+              {approvingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
+              Approve &amp; Publish Selected ({selectedCount})
+            </Button>
+          )}
+        </div>
+      )}
 
       {records.length === 0 && (
         <p className="text-muted-foreground">No pending items in this batch.</p>
@@ -178,9 +214,18 @@ export default function BatchReview() {
             className={`transition-opacity duration-300 ${status !== 'pending' ? 'opacity-40 pointer-events-none' : ''}`}
           >
             <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-              <div className="min-w-0">
-                <p className="font-mono text-sm font-bold text-foreground truncate">{rec.sku}</p>
-                <p className="text-xs text-muted-foreground">{rec.brand}</p>
+              <div className="flex items-center gap-3 min-w-0">
+                {status === 'pending' && (
+                  <Checkbox
+                    checked={selectedSkus.has(rec.sku)}
+                    onCheckedChange={() => toggleSelect(rec.sku)}
+                    className="shrink-0"
+                  />
+                )}
+                <div className="min-w-0">
+                  <p className="font-mono text-sm font-bold text-foreground truncate">{rec.sku}</p>
+                  <p className="text-xs text-muted-foreground">{rec.brand}</p>
+                </div>
               </div>
               {confPct != null && (
                 <Badge className={`shrink-0 ${confColor}`}>{confPct}%</Badge>
@@ -256,17 +301,17 @@ export default function BatchReview() {
         );
       })}
 
-      {/* Approve All */}
-      {pendingCount > 0 && (
+      {/* Sticky bottom bar */}
+      {selectedCount > 0 && (
         <div className="sticky bottom-4 flex justify-center">
           <Button
             size="lg"
             disabled={approvingAll}
-            onClick={approveAll}
+            onClick={approveSelected}
             className="bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-white shadow-lg"
           >
             {approvingAll && <Loader2 className="h-4 w-4 animate-spin" />}
-            Approve &amp; Publish All ({pendingCount})
+            Approve &amp; Publish Selected ({selectedCount})
           </Button>
         </div>
       )}
