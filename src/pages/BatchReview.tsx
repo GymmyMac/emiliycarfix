@@ -15,8 +15,19 @@ import { CheckCircle, XCircle, Loader2, CheckSquare } from 'lucide-react';
 
 interface StagingRecord {
   sku: string;
+  part_number: string | null;
   brand: string;
   aeo_json: Record<string, any>;
+}
+
+/** Replace any occurrence of the internal SKU in text with the part number */
+function sanitiseContent(text: string, sku: string, partNumber: string): string {
+  if (!text || !sku || !partNumber || sku === partNumber) return text;
+  // Replace patterns like "SKU: A6082634", "SKU A6082634", or bare SKU code
+  const escaped = sku.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return text
+    .replace(new RegExp(`SKU[:\\s]*${escaped}`, 'gi'), partNumber)
+    .replace(new RegExp(escaped, 'g'), partNumber);
 }
 
 type CardStatus = 'pending' | 'approved' | 'rejected';
@@ -38,7 +49,7 @@ export default function BatchReview() {
       setLoading(true);
       const { data, error } = await supabase
         .from('part_enrichment_staging')
-        .select('sku, brand, aeo_json')
+        .select('sku, part_number, brand, aeo_json')
         .eq('batch_id', String(batchId))
         .eq('status', 'pending_review');
       console.log('[BatchReview] query result:', { data, error, batchId });
@@ -195,10 +206,13 @@ export default function BatchReview() {
       {records.map((rec) => {
         const status = cardStatuses[rec.sku];
         const aeo = rec.aeo_json ?? {};
+        const partNumber = rec.part_number || aeo.schema?.sku || rec.sku;
         const confidence = aeo.confidence_score as number | undefined;
-        const answerText = aeo.answer_first?.text as string | undefined;
+        const rawAnswerText = aeo.answer_first?.text as string | undefined;
+        const answerText = rawAnswerText ? sanitiseContent(rawAnswerText, rec.sku, partNumber) : undefined;
         const fitment = aeo.vehicle_fitment as any;
-        const markdown = aeo.markdown_version as string | undefined;
+        const rawMarkdown = aeo.markdown_version as string | undefined;
+        const markdown = rawMarkdown ? sanitiseContent(rawMarkdown, rec.sku, partNumber) : undefined;
         const busy = busyIds.has(rec.sku);
 
         const confPct = confidence != null ? Math.round(confidence * (confidence <= 1 ? 100 : 1)) : null;
@@ -223,8 +237,9 @@ export default function BatchReview() {
                   />
                 )}
                 <div className="min-w-0">
-                  <p className="font-mono text-sm font-bold text-foreground truncate">{rec.sku}</p>
+                  <p className="text-sm font-bold text-foreground truncate">{partNumber}</p>
                   <p className="text-xs text-muted-foreground">{rec.brand}</p>
+                  <p className="text-[10px] text-muted-foreground/60">Internal SKU: {rec.sku}</p>
                 </div>
               </div>
               {confPct != null && (
