@@ -6,7 +6,6 @@ import { Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface ReviewItem {
-  id: string;
   sku: string;
   brand: string;
   batch_id: string;
