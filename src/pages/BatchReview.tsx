@@ -36,15 +36,16 @@ export default function BatchReview() {
       setLoading(true);
       const { data, error } = await supabase
         .from('part_enrichment_staging')
-        .select('id, sku, brand, aeo_json')
-        .eq('batch_id', batchId)
+        .select('sku, brand, aeo_json')
+        .eq('batch_id', String(batchId))
         .eq('status', 'pending_review');
+      console.log('[BatchReview] query result:', { data, error, batchId });
       if (error) {
         toast({ title: 'Error loading batch', description: error.message, variant: 'destructive' });
       } else {
         setRecords(data ?? []);
         const statuses: Record<string, CardStatus> = {};
-        (data ?? []).forEach((r) => (statuses[r.id] = 'pending'));
+        (data ?? []).forEach((r) => (statuses[r.sku] = 'pending'));
         setCardStatuses(statuses);
       }
       setLoading(false);
