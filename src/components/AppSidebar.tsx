@@ -11,11 +11,13 @@ import {
   Settings,
   LogOut,
   Rocket,
+  ClipboardCheck,
 } from 'lucide-react';
 
 const navItems = [
   { label: 'Dashboard', icon: LayoutGrid, path: '/dashboard' },
   { label: 'Content Queue', icon: Inbox, path: '/content-queue' },
+  { label: 'Review Queue', icon: ClipboardCheck, path: '/review' },
   { label: 'Ideas Bucket', icon: Lightbulb, path: '/ideas' },
   { label: 'Initiatives', icon: Rocket, path: '/initiatives' },
   { label: 'Analytics', icon: BarChart3, path: '/analytics' },
