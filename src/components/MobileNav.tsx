@@ -22,6 +22,7 @@ const mainItems = [
 ];
 
 const moreItems = [
+  { label: 'Review Queue', icon: ClipboardCheck, path: '/review' },
   { label: 'Initiatives', icon: Rocket, path: '/initiatives' },
   { label: 'Analytics', icon: BarChart3, path: '/analytics' },
   { label: 'Calendar', icon: Calendar, path: '/calendar' },
