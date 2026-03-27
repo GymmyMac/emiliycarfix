@@ -16,6 +16,7 @@ import Settings from "./pages/Settings";
 import Initiatives from "./pages/Initiatives";
 import NotFound from "./pages/NotFound";
 import BatchReview from "./pages/BatchReview";
+import Review from "./pages/Review";
 
 const queryClient = new QueryClient();
 
