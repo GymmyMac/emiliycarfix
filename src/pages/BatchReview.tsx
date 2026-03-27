@@ -89,7 +89,7 @@ export default function BatchReview() {
     if (!pending.length) return;
     setApprovingAll(true);
     for (const r of pending) {
-      await approve(r.id);
+      await approve(r.sku);
     }
     setApprovingAll(false);
     toast({ title: `All ${pending.length} items approved ✓` });
