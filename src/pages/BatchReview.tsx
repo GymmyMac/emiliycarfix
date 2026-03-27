@@ -266,7 +266,7 @@ export default function BatchReview() {
             className="bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-white shadow-lg"
           >
             {approvingAll && <Loader2 className="h-4 w-4 animate-spin" />}
-            Approve All Remaining ({pendingCount})
+            Approve &amp; Publish All ({pendingCount})
           </Button>
         </div>
       )}
