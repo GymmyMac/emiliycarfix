@@ -6,7 +6,6 @@ import { Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface ReviewItem {
-  id: string;
   sku: string;
   brand: string;
   batch_id: string;
@@ -23,7 +22,7 @@ export default function Review() {
     (async () => {
       const { data, error } = await supabase
         .from('part_enrichment_staging')
-        .select('id, sku, brand, batch_id, updated_at, aeo_json')
+        .select('sku, brand, batch_id, updated_at, aeo_json')
         .eq('status', 'pending_review')
         .order('updated_at', { ascending: false });
       if (!error) setItems(data ?? []);
@@ -81,7 +80,7 @@ export default function Review() {
 
                 return (
                   <tr
-                    key={item.id}
+                    key={item.sku}
                     onClick={() => navigate(`/batch/${item.batch_id}`)}
                     className="cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-accent/60"
                   >

@@ -13,7 +13,6 @@ import ReactMarkdown from 'react-markdown';
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 
 interface StagingRecord {
-  id: string;
   sku: string;
   brand: string;
   aeo_json: Record<string, any>;
@@ -37,47 +36,48 @@ export default function BatchReview() {
       setLoading(true);
       const { data, error } = await supabase
         .from('part_enrichment_staging')
-        .select('id, sku, brand, aeo_json')
-        .eq('batch_id', batchId)
+        .select('sku, brand, aeo_json')
+        .eq('batch_id', String(batchId))
         .eq('status', 'pending_review');
+      console.log('[BatchReview] query result:', { data, error, batchId });
       if (error) {
         toast({ title: 'Error loading batch', description: error.message, variant: 'destructive' });
       } else {
         setRecords(data ?? []);
         const statuses: Record<string, CardStatus> = {};
-        (data ?? []).forEach((r) => (statuses[r.id] = 'pending'));
+        (data ?? []).forEach((r) => (statuses[r.sku] = 'pending'));
         setCardStatuses(statuses);
       }
       setLoading(false);
     })();
   }, [batchId]);
 
-  const approve = useCallback(async (id: string) => {
-    setBusyIds((s) => new Set(s).add(id));
+  const approve = useCallback(async (sku: string) => {
+    setBusyIds((s) => new Set(s).add(sku));
     const { error } = await supabase
       .from('part_enrichment_staging')
       .update({ james_approved: true, approved_at: new Date().toISOString(), status: 'approved' })
-      .eq('id', id);
-    setBusyIds((s) => { const n = new Set(s); n.delete(id); return n; });
+      .eq('sku', sku);
+    setBusyIds((s) => { const n = new Set(s); n.delete(sku); return n; });
     if (error) {
       toast({ title: 'Approve failed', description: error.message, variant: 'destructive' });
     } else {
-      setCardStatuses((p) => ({ ...p, [id]: 'approved' }));
+      setCardStatuses((p) => ({ ...p, [sku]: 'approved' }));
       toast({ title: 'Approved ✓' });
     }
   }, []);
 
-  const reject = useCallback(async (id: string, reason: string) => {
-    setBusyIds((s) => new Set(s).add(id));
+  const reject = useCallback(async (sku: string, reason: string) => {
+    setBusyIds((s) => new Set(s).add(sku));
     const { error } = await supabase
       .from('part_enrichment_staging')
       .update({ status: 'rejected', rejected_at: new Date().toISOString(), approval_notes: reason })
-      .eq('id', id);
-    setBusyIds((s) => { const n = new Set(s); n.delete(id); return n; });
+      .eq('sku', sku);
+    setBusyIds((s) => { const n = new Set(s); n.delete(sku); return n; });
     if (error) {
       toast({ title: 'Reject failed', description: error.message, variant: 'destructive' });
     } else {
-      setCardStatuses((p) => ({ ...p, [id]: 'rejected' }));
+      setCardStatuses((p) => ({ ...p, [sku]: 'rejected' }));
       setRejectingId(null);
       setRejectReason('');
       toast({ title: 'Rejected' });
@@ -85,11 +85,11 @@ export default function BatchReview() {
   }, []);
 
   const approveAll = async () => {
-    const pending = records.filter((r) => cardStatuses[r.id] === 'pending');
+    const pending = records.filter((r) => cardStatuses[r.sku] === 'pending');
     if (!pending.length) return;
     setApprovingAll(true);
     for (const r of pending) {
-      await approve(r.id);
+      await approve(r.sku);
     }
     setApprovingAll(false);
     toast({ title: `All ${pending.length} items approved ✓` });
@@ -125,13 +125,13 @@ export default function BatchReview() {
 
       {/* Cards */}
       {records.map((rec) => {
-        const status = cardStatuses[rec.id];
+        const status = cardStatuses[rec.sku];
         const aeo = rec.aeo_json ?? {};
         const confidence = aeo.confidence_score as number | undefined;
         const answerText = aeo.answer_first?.text as string | undefined;
         const fitment = aeo.vehicle_fitment as any;
         const markdown = aeo.markdown_version as string | undefined;
-        const busy = busyIds.has(rec.id);
+        const busy = busyIds.has(rec.sku);
 
         const confPct = confidence != null ? Math.round(confidence * (confidence <= 1 ? 100 : 1)) : null;
         const confColor =
@@ -142,7 +142,7 @@ export default function BatchReview() {
 
         return (
           <Card
-            key={rec.id}
+            key={rec.sku}
             className={`transition-opacity duration-300 ${status !== 'pending' ? 'opacity-40 pointer-events-none' : ''}`}
           >
             <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
@@ -177,14 +177,14 @@ export default function BatchReview() {
                   <Button
                     size="sm"
                     disabled={busy}
-                    onClick={() => approve(rec.id)}
+                    onClick={() => approve(rec.sku)}
                     className="bg-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/90 text-white"
                   >
                     {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
                     Approve
                   </Button>
 
-                  {rejectingId === rec.id ? (
+                  {rejectingId === rec.sku ? (
                     <div className="flex flex-1 items-center gap-2">
                       <Input
                         placeholder="Reason (optional)"
@@ -196,7 +196,7 @@ export default function BatchReview() {
                         size="sm"
                         variant="destructive"
                         disabled={busy}
-                        onClick={() => reject(rec.id, rejectReason)}
+                        onClick={() => reject(rec.sku, rejectReason)}
                       >
                         Confirm
                       </Button>
@@ -209,7 +209,7 @@ export default function BatchReview() {
                       size="sm"
                       variant="destructive"
                       disabled={busy}
-                      onClick={() => setRejectingId(rec.id)}
+                      onClick={() => setRejectingId(rec.sku)}
                     >
                       <XCircle className="h-4 w-4" /> Reject
                     </Button>
