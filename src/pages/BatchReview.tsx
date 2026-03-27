@@ -237,8 +237,9 @@ export default function BatchReview() {
                   />
                 )}
                 <div className="min-w-0">
-                  <p className="font-mono text-sm font-bold text-foreground truncate">{rec.sku}</p>
+                  <p className="text-sm font-bold text-foreground truncate">{partNumber}</p>
                   <p className="text-xs text-muted-foreground">{rec.brand}</p>
+                  <p className="text-[10px] text-muted-foreground/60">Internal SKU: {rec.sku}</p>
                 </div>
               </div>
               {confPct != null && (
