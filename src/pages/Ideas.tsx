@@ -1,19 +1,40 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { Mic, MicOff, MoreVertical, Loader2, ShieldCheck, Archive, Rocket, ChevronDown, ChevronUp, Send, Tag, Filter, Sparkles, Megaphone, Cog, Users, Package } from 'lucide-react';
+import {
+  Mic, MicOff, MoreVertical, Loader2, Plus, Filter,
+  Code2, Cog, TrendingUp, ArrowRight, Link2, MessageSquare,
+  ChevronDown, ChevronUp, AlertCircle,
+} from 'lucide-react';
 import {
   DndContext,
   DragOverlay,
@@ -28,42 +49,67 @@ import { useDroppable } from '@dnd-kit/core';
 import { useDraggable } from '@dnd-kit/core';
 import { useIsMobile } from '@/hooks/use-mobile';
 
+/* ─── TYPES ─── */
+
 interface Idea {
   id: string;
-  inbox_type: string;
-  raw_idea: string;
-  status: string;
+  title: string;
+  category: 'development' | 'operations' | 'marketing_growth';
+  description: string | null;
+  priority: 'low' | 'medium' | 'high';
+  status: 'raw' | 'reviewing' | 'actioned' | 'parked';
+  submitted_by: string | null;
+  submitted_by_email: string | null;
   created_at: string;
+  updated_at: string;
   pressure_test_score?: number | null;
   pressure_test_summary?: string | null;
-  category?: string | null;
 }
 
-type InboxType = 'instant' | 'weekly' | 'parking_lot';
+interface IdeaNote {
+  id: string;
+  note: string;
+  user_email: string | null;
+  created_at: string;
+}
 
-const COLUMNS: { key: InboxType; label: string }[] = [
-  { key: 'instant', label: 'INSTANT INBOX' },
-  { key: 'weekly', label: 'WEEKLY INBOX' },
-  { key: 'parking_lot', label: 'PARKING LOT' },
+interface IdeaLink {
+  id: string;
+  title: string | null;
+  similarity_score: number | null;
+  link_type: string;
+}
+
+type StatusKey = Idea['status'];
+type CategoryKey = Idea['category'];
+type PriorityKey = Idea['priority'];
+
+/* ─── CONSTANTS ─── */
+
+const STATUSES: { key: StatusKey; label: string }[] = [
+  { key: 'raw', label: 'Raw' },
+  { key: 'reviewing', label: 'Reviewing' },
+  { key: 'actioned', label: 'Actioned' },
+  { key: 'parked', label: 'Parked' },
 ];
 
-const CATEGORIES = [
-  { key: 'marketing', label: 'Marketing', icon: Megaphone, color: 'bg-primary/10 text-primary border-primary/20' },
-  { key: 'operations', label: 'Operations', icon: Cog, color: 'bg-orange/10 text-orange border-orange/20' },
-  { key: 'customer_experience', label: 'Customer XP', icon: Users, color: 'bg-success/10 text-success border-success/20' },
-  { key: 'product', label: 'Product', icon: Package, color: 'bg-secondary/10 text-secondary border-secondary/20' },
-] as const;
+const CATEGORIES: { key: CategoryKey; label: string; icon: typeof Code2 }[] = [
+  { key: 'development', label: 'Development', icon: Code2 },
+  { key: 'operations', label: 'Operations', icon: Cog },
+  { key: 'marketing_growth', label: 'Marketing & Growth', icon: TrendingUp },
+];
 
-type CategoryKey = typeof CATEGORIES[number]['key'] | null;
+const PRIORITIES: { key: PriorityKey; label: string; color: string }[] = [
+  { key: 'high', label: 'High', color: 'bg-destructive/10 text-destructive border-destructive/20' },
+  { key: 'medium', label: 'Medium', color: 'bg-orange/10 text-orange border-orange/20' },
+  { key: 'low', label: 'Low', color: 'bg-muted text-muted-foreground border-border' },
+];
 
-const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  raw: { bg: 'bg-border', text: 'text-muted-foreground' },
-  processed: { bg: 'bg-success/10', text: 'text-success' },
-  parked: { bg: 'bg-orange/10', text: 'text-orange' },
-};
-
-function getCategoryConfig(key: string | null | undefined) {
-  return CATEGORIES.find((c) => c.key === key) || null;
+function getCategoryConfig(key: string) {
+  return CATEGORIES.find((c) => c.key === key);
+}
+function getPriorityConfig(key: string) {
+  return PRIORITIES.find((p) => p.key === key);
 }
 
 function timeAgo(dateStr: string) {
@@ -80,25 +126,7 @@ function timeAgo(dateStr: string) {
   return `${diffDays} days ago`;
 }
 
-function isOverdue(createdAt: string) {
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  return new Date(createdAt) <= sevenDaysAgo;
-}
-
-function scoreColor(score: number) {
-  if (score >= 80) return 'bg-success';
-  if (score >= 60) return 'bg-primary';
-  if (score >= 40) return 'bg-orange';
-  return 'bg-destructive';
-}
-
-function scoreTextColor(score: number) {
-  if (score >= 80) return 'text-success';
-  if (score >= 60) return 'text-primary';
-  if (score >= 40) return 'text-orange';
-  return 'text-destructive';
-}
+/* ─── DnD HELPERS ─── */
 
 function DroppableColumn({ id, children }: { id: string; children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
@@ -128,69 +156,148 @@ function DraggableCard({ id, children }: { id: string; children: React.ReactNode
   );
 }
 
+/* ─── MAIN COMPONENT ─── */
+
 export default function Ideas() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [loading, setLoading] = useState(true);
-  const [inputText, setInputText] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<CategoryKey>(null);
+  const [showCaptureForm, setShowCaptureForm] = useState(false);
   const [filterCategory, setFilterCategory] = useState<CategoryKey | 'all'>('all');
-  const [mondayMode, setMondayMode] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const [testingId, setTestingId] = useState<string | null>(null);
+  const [filterPriority, setFilterPriority] = useState<PriorityKey | 'all'>('all');
+  const [mobileTab, setMobileTab] = useState<StatusKey>('raw');
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [mobileTab, setMobileTab] = useState<InboxType>('instant');
-  const [captureExpanded, setCaptureExpanded] = useState(false);
+
+  // Capture form state
+  const [formTitle, setFormTitle] = useState('');
+  const [formCategory, setFormCategory] = useState<CategoryKey>('development');
+  const [formDescription, setFormDescription] = useState('');
+  const [formPriority, setFormPriority] = useState<PriorityKey>('medium');
+  const [submitting, setSubmitting] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Status move dialog
+  const [moveDialogIdea, setMoveDialogIdea] = useState<Idea | null>(null);
+  const [moveTarget, setMoveTarget] = useState<StatusKey>('raw');
+  const [moveNote, setMoveNote] = useState('');
+  const [moving, setMoving] = useState(false);
+
+  // Related context
+  const [relatedLinks, setRelatedLinks] = useState<Record<string, IdeaLink[]>>({});
+  const [ideaNotes, setIdeaNotes] = useState<Record<string, IdeaNote[]>>({});
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
-  const filteredIdeas = filterCategory === 'all' ? ideas : ideas.filter((i) => i.category === filterCategory);
-  const overdueCount = ideas.filter((i) => i.status === 'raw' && isOverdue(i.created_at)).length;
+  const filteredIdeas = ideas.filter((i) => {
+    if (filterCategory !== 'all' && i.category !== filterCategory) return false;
+    if (filterPriority !== 'all' && i.priority !== filterPriority) return false;
+    return true;
+  });
+
+  /* ─── DATA FETCHING ─── */
 
   const fetchIdeas = useCallback(async () => {
-    const { data } = await supabase.from('mkt_ideas_bucket').select('*').neq('status', 'archived').order('created_at', { ascending: false });
+    const { data } = await supabase
+      .from('mkt_ideas')
+      .select('*')
+      .order('created_at', { ascending: false });
     if (data) setIdeas(data);
     setLoading(false);
   }, []);
 
+  const fetchLinksForIdea = async (ideaId: string) => {
+    const { data } = await supabase
+      .from('mkt_idea_links')
+      .select('id, title, similarity_score, link_type')
+      .eq('idea_id', ideaId);
+    if (data) setRelatedLinks((prev) => ({ ...prev, [ideaId]: data }));
+  };
+
+  const fetchNotesForIdea = async (ideaId: string) => {
+    const { data } = await supabase
+      .from('mkt_idea_notes')
+      .select('id, note, user_email, created_at')
+      .eq('idea_id', ideaId)
+      .order('created_at', { ascending: true });
+    if (data) setIdeaNotes((prev) => ({ ...prev, [ideaId]: data }));
+  };
+
   useEffect(() => { fetchIdeas(); }, [fetchIdeas]);
 
   useEffect(() => {
-    const channel = supabase.channel('ideas-bucket-changes').on('postgres_changes', { event: '*', schema: 'public', table: 'mkt_ideas_bucket' }, (payload) => {
-      const newRow = payload.new as Idea;
-      const oldRow = payload.old as Idea;
-      if (payload.eventType === 'INSERT') setIdeas((prev) => [newRow, ...prev.filter((i) => i.id !== newRow.id)]);
-      if (payload.eventType === 'UPDATE') {
-        if (newRow.status === 'archived') setIdeas((prev) => prev.filter((i) => i.id !== newRow.id));
-        else setIdeas((prev) => prev.map((i) => (i.id === newRow.id ? newRow : i)));
-      }
-      if (payload.eventType === 'DELETE') setIdeas((prev) => prev.filter((i) => i.id !== oldRow.id));
-    }).subscribe();
+    const channel = supabase
+      .channel('mkt-ideas-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'mkt_ideas' }, () => {
+        fetchIdeas();
+      })
+      .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, []);
+  }, [fetchIdeas]);
+
+  // Fetch links for all ideas on load
+  useEffect(() => {
+    ideas.forEach((idea) => {
+      if (!relatedLinks[idea.id]) fetchLinksForIdea(idea.id);
+    });
+  }, [ideas]);
+
+  /* ─── CAPTURE ─── */
 
   const handleCapture = async () => {
-    if (!inputText.trim()) return;
-    const insertData: any = {
-      inbox_type: isMobile ? mobileTab : 'instant',
-      raw_idea: inputText.trim(),
-      status: 'raw',
-      created_at: new Date().toISOString(),
-    };
-    if (selectedCategory) insertData.category = selectedCategory;
+    if (!formTitle.trim()) return;
+    setSubmitting(true);
 
-    const { data, error } = await supabase.from('mkt_ideas_bucket').insert(insertData).select().single();
-    if (!error && data) {
-      setIdeas((prev) => [data, ...prev.filter((i) => i.id !== data.id)]);
-      setInputText('');
-      setSelectedCategory(null);
-      setCaptureExpanded(false);
-      toast({ title: 'Idea captured ✓' });
+    const insertData = {
+      title: formTitle.trim(),
+      category: formCategory,
+      description: formDescription.trim() || null,
+      priority: formPriority,
+      status: 'raw' as const,
+      submitted_by: user?.id || null,
+      submitted_by_email: user?.email || null,
+    };
+
+    const { data, error } = await supabase.from('mkt_ideas').insert(insertData).select().single();
+    if (error) {
+      toast({ title: 'Failed to save idea', description: error.message, variant: 'destructive' });
+      setSubmitting(false);
+      return;
     }
+
+    // Embed in Emily's vector brain (async, non-blocking)
+    supabase.functions.invoke('idea-embed', {
+      body: {
+        idea_id: data.id,
+        title: data.title,
+        description: data.description,
+        category: data.category,
+        priority: data.priority,
+        submitted_by_email: data.submitted_by_email,
+      },
+    }).then(({ data: embedData }) => {
+      if (embedData?.related_count > 0) {
+        fetchLinksForIdea(data.id);
+        toast({
+          title: `Emily found ${embedData.related_count} related item${embedData.related_count > 1 ? 's' : ''}`,
+          description: 'Check the idea card for context links.',
+        });
+      }
+    }).catch((e) => console.error('Embedding failed (non-blocking):', e));
+
+    setIdeas((prev) => [data, ...prev]);
+    setFormTitle('');
+    setFormDescription('');
+    setFormPriority('medium');
+    setFormCategory('development');
+    setShowCaptureForm(false);
+    setSubmitting(false);
+    toast({ title: 'Idea captured ✓' });
   };
+
+  /* ─── VOICE ─── */
 
   const handleVoice = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -199,69 +306,51 @@ export default function Ideas() {
     const recognition = new SpeechRecognition();
     recognition.continuous = false; recognition.interimResults = false; recognition.lang = 'en-NZ';
     recognition.onresult = (event: any) => {
-      setInputText((prev) => (prev ? prev + ' ' + event.results[0][0].transcript : event.results[0][0].transcript));
+      const transcript = event.results[0][0].transcript;
+      if (!showCaptureForm) {
+        setShowCaptureForm(true);
+        setFormTitle(transcript);
+      } else {
+        setFormTitle((prev) => prev ? prev + ' ' + transcript : transcript);
+      }
       setIsListening(false);
-      setCaptureExpanded(true);
     };
     recognition.onerror = () => setIsListening(false);
     recognition.onend = () => setIsListening(false);
     recognitionRef.current = recognition; recognition.start(); setIsListening(true);
   };
 
-  const handleMove = async (id: string, target: InboxType) => {
-    await supabase.from('mkt_ideas_bucket').update({ inbox_type: target }).eq('id', id);
-    setIdeas((prev) => prev.map((i) => (i.id === id ? { ...i, inbox_type: target } : i)));
+  /* ─── STATUS MOVE WITH NOTE ─── */
+
+  const openMoveDialog = (idea: Idea, target: StatusKey) => {
+    setMoveDialogIdea(idea);
+    setMoveTarget(target);
+    setMoveNote('');
   };
 
-  const handleSetCategory = async (id: string, category: string) => {
-    await supabase.from('mkt_ideas_bucket').update({ category }).eq('id', id);
-    setIdeas((prev) => prev.map((i) => (i.id === id ? { ...i, category } : i)));
-    toast({ title: `Tagged: ${getCategoryConfig(category)?.label}` });
-  };
+  const confirmMove = async () => {
+    if (!moveDialogIdea) return;
+    setMoving(true);
 
-  const handleArchive = async (id: string) => {
-    await supabase.from('mkt_ideas_bucket').update({ status: 'archived' }).eq('id', id);
-    setIdeas((prev) => prev.filter((i) => i.id !== id));
-    toast({ title: 'Archived. Learnings stored.' });
-  };
+    await supabase.from('mkt_ideas').update({ status: moveTarget }).eq('id', moveDialogIdea.id);
 
-  const handlePressureTest = async (idea: Idea) => {
-    setTestingId(idea.id);
-    try {
-      const { data, error } = await supabase.functions.invoke('pressure-test', {
-        body: { idea_id: idea.id, raw_idea: idea.raw_idea },
+    if (moveNote.trim()) {
+      await supabase.from('mkt_idea_notes').insert({
+        idea_id: moveDialogIdea.id,
+        note: moveNote.trim(),
+        user_id: user?.id || null,
+        user_email: user?.email || null,
       });
-      if (error) throw error;
-      setIdeas((prev) => prev.map((i) =>
-        i.id === idea.id ? { ...i, pressure_test_score: data.score, pressure_test_summary: data.summary, status: 'processed' } : i
-      ));
-      toast({ title: `Pressure Test: ${data.score}/100` });
-    } catch (e: any) {
-      console.error('Pressure test failed:', e);
-      toast({ title: 'Pressure test failed.', description: e.message || 'Try again.', variant: 'destructive' });
-    } finally {
-      setTestingId(null);
     }
+
+    setIdeas((prev) => prev.map((i) => (i.id === moveDialogIdea.id ? { ...i, status: moveTarget } : i)));
+    toast({ title: `Moved to ${STATUSES.find((s) => s.key === moveTarget)?.label}` });
+    setMoveDialogIdea(null);
+    setMoveNote('');
+    setMoving(false);
   };
 
-  const handleEnterPipeline = async (idea: Idea) => {
-    const { error } = await supabase.from('mkt_initiatives').insert({
-      title: idea.raw_idea.slice(0, 100),
-      initiative_type: 'content',
-      status: 'planning',
-      pressure_test_score: idea.pressure_test_score,
-      pressure_test_summary: idea.pressure_test_summary,
-      created_at: new Date().toISOString(),
-    });
-    if (!error) {
-      await supabase.from('mkt_ideas_bucket').update({ status: 'archived' }).eq('id', idea.id);
-      setIdeas((prev) => prev.filter((i) => i.id !== idea.id));
-      toast({ title: 'Initiative created! Redirecting...' });
-      navigate('/initiatives');
-    } else {
-      toast({ title: 'Failed to create initiative.', variant: 'destructive' });
-    }
-  };
+  /* ─── DRAG & DROP ─── */
 
   const handleDragStart = (event: DragStartEvent) => { setActiveId(event.active.id as string); };
   const handleDragEnd = (event: DragEndEvent) => {
@@ -269,31 +358,25 @@ export default function Ideas() {
     setActiveId(null);
     if (!over) return;
     const cardId = active.id as string;
-    const targetColumn = over.id as InboxType;
-    if (!COLUMNS.find((c) => c.key === targetColumn)) return;
+    const targetColumn = over.id as StatusKey;
+    if (!STATUSES.find((s) => s.key === targetColumn)) return;
     const card = ideas.find((i) => i.id === cardId);
-    if (card && card.inbox_type !== targetColumn) handleMove(cardId, targetColumn);
+    if (card && card.status !== targetColumn) {
+      openMoveDialog(card, targetColumn);
+    }
   };
 
-  const getColumnIdeas = (type: InboxType) => filteredIdeas.filter((i) => i.inbox_type === type);
+  const getColumnIdeas = (status: StatusKey) => filteredIdeas.filter((i) => i.status === status);
   const activeCard = activeId ? ideas.find((i) => i.id === activeId) : null;
 
-  // Category counts for filter bar
-  const categoryCounts = {
-    all: ideas.length,
-    marketing: ideas.filter((i) => i.category === 'marketing').length,
-    operations: ideas.filter((i) => i.category === 'operations').length,
-    customer_experience: ideas.filter((i) => i.category === 'customer_experience').length,
-    product: ideas.filter((i) => i.category === 'product').length,
-    uncategorised: ideas.filter((i) => !i.category).length,
-  };
+  /* ─── RENDER ─── */
 
   if (loading) {
     return (
       <div className="space-y-4">
-        <Skeleton className="h-32 w-full rounded-xl" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => <Skeleton key={i} className="h-64 rounded-xl" />)}
+        <Skeleton className="h-14 w-full rounded-xl" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-64 rounded-xl" />)}
         </div>
       </div>
     );
@@ -301,174 +384,106 @@ export default function Ideas() {
 
   return (
     <div className="space-y-4">
-      {/* QUICK CAPTURE — redesigned */}
-      <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-        <div className="p-4 space-y-3">
-          {/* Main input row */}
-          <div className="flex items-end gap-2">
-            <div className="flex-1 relative">
-              <Textarea
-                ref={textareaRef}
-                placeholder="What's the idea? Tap mic or type..."
-                value={inputText}
-                onChange={(e) => {
-                  setInputText(e.target.value);
-                  if (e.target.value.trim() && !captureExpanded) setCaptureExpanded(true);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleCapture(); }
-                }}
-                onFocus={() => setCaptureExpanded(true)}
-                rows={captureExpanded ? 3 : 1}
-                className="resize-none text-base transition-all duration-200 pr-12"
-              />
-              {/* Voice button overlaid */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleVoice}
-                className={`absolute right-1.5 bottom-1.5 h-9 w-9 rounded-lg ${
-                  isListening ? 'text-destructive bg-destructive/10 animate-pulse' : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {isListening ? <MicOff size={18} /> : <Mic size={18} />}
-              </Button>
-            </div>
-            <Button
-              onClick={handleCapture}
-              disabled={!inputText.trim()}
-              size="icon"
-              className="h-11 w-11 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground"
-            >
-              <Send size={18} />
-            </Button>
-          </div>
-
-          {/* Category chips — shown when expanded */}
-          {captureExpanded && (
-            <div className="flex items-center gap-2 flex-wrap animate-in fade-in slide-in-from-top-1 duration-200">
-              <Tag size={14} className="text-muted-foreground shrink-0" />
-              {CATEGORIES.map((cat) => {
-                const Icon = cat.icon;
-                const isActive = selectedCategory === cat.key;
-                return (
-                  <button
-                    key={cat.key}
-                    onClick={() => setSelectedCategory(isActive ? null : cat.key)}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium border transition-all duration-200 ${
-                      isActive ? cat.color + ' ring-1 ring-offset-1' : 'bg-card text-muted-foreground border-border hover:border-foreground/20'
-                    }`}
-                  >
-                    <Icon size={12} />
-                    {cat.label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Listening indicator */}
-        {isListening && (
-          <div className="px-4 pb-3 flex items-center gap-2">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-destructive" />
-            </span>
-            <span className="text-xs text-destructive font-medium">Listening...</span>
-          </div>
-        )}
-      </div>
-
-      {/* HEADER + FILTERS */}
+      {/* HEADER */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
-          <h1 className="font-display text-xl text-foreground">Ideas Bucket</h1>
+          <h1 className="font-display text-xl text-foreground">Ideas</h1>
           <span className="text-xs text-muted-foreground bg-border/50 px-2 py-0.5 rounded-full">{ideas.length}</span>
         </div>
-        <div className="flex items-center gap-3">
-          {mondayMode && overdueCount > 0 && (
-            <span className="text-xs font-semibold text-orange bg-orange/10 px-2.5 py-1 rounded-full">
-              {overdueCount} need processing
-            </span>
-          )}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Monday Mode</span>
-            <Switch checked={mondayMode} onCheckedChange={setMondayMode} />
-          </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleVoice}
+            className={`h-9 w-9 ${isListening ? 'text-destructive bg-destructive/10 animate-pulse' : 'text-muted-foreground'}`}
+          >
+            {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+          </Button>
+          <Button onClick={() => setShowCaptureForm(true)} className="h-9 gap-1.5 bg-primary text-primary-foreground">
+            <Plus size={16} /> New Idea
+          </Button>
         </div>
       </div>
 
-      {/* CATEGORY FILTER BAR */}
+      {/* LISTENING INDICATOR */}
+      {isListening && (
+        <div className="flex items-center gap-2 px-1">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-destructive opacity-75" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-destructive" />
+          </span>
+          <span className="text-xs text-destructive font-medium">Listening...</span>
+        </div>
+      )}
+
+      {/* FILTERS */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
         <Filter size={14} className="text-muted-foreground shrink-0" />
-        <button
-          onClick={() => setFilterCategory('all')}
-          className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition-all duration-200 ${
-            filterCategory === 'all' ? 'bg-foreground text-background border-foreground' : 'bg-card text-muted-foreground border-border hover:border-foreground/20'
-          }`}
-        >
-          All ({categoryCounts.all})
-        </button>
-        {CATEGORIES.map((cat) => {
-          const Icon = cat.icon;
-          const count = categoryCounts[cat.key];
-          return (
-            <button
-              key={cat.key}
-              onClick={() => setFilterCategory(filterCategory === cat.key ? 'all' : cat.key)}
-              className={`shrink-0 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium border transition-all duration-200 ${
-                filterCategory === cat.key ? cat.color + ' ring-1 ring-offset-1' : 'bg-card text-muted-foreground border-border hover:border-foreground/20'
-              }`}
-            >
-              <Icon size={12} />
-              {cat.label} ({count})
-            </button>
-          );
-        })}
-        {categoryCounts.uncategorised > 0 && (
-          <button
-            onClick={() => setFilterCategory(filterCategory === null ? 'all' : null)}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-medium border transition-all duration-200 ${
-              filterCategory === null ? 'bg-muted-foreground/10 text-foreground border-muted-foreground/30' : 'bg-card text-muted-foreground border-border hover:border-foreground/20'
-            }`}
-          >
-            Uncategorised ({categoryCounts.uncategorised})
-          </button>
-        )}
+        <Select value={filterCategory} onValueChange={(v) => setFilterCategory(v as any)}>
+          <SelectTrigger className="h-8 w-auto min-w-[120px] text-xs">
+            <SelectValue placeholder="Category" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Categories</SelectItem>
+            {CATEGORIES.map((c) => (
+              <SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filterPriority} onValueChange={(v) => setFilterPriority(v as any)}>
+          <SelectTrigger className="h-8 w-auto min-w-[100px] text-xs">
+            <SelectValue placeholder="Priority" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Priorities</SelectItem>
+            {PRIORITIES.map((p) => (
+              <SelectItem key={p.key} value={p.key}>{p.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* MOBILE TAB BAR */}
       {isMobile && (
         <div className="flex rounded-xl border border-border overflow-hidden">
-          {COLUMNS.map((col) => (
-            <button
-              key={col.key}
-              onClick={() => setMobileTab(col.key)}
-              className={`flex-1 py-2.5 text-xs font-semibold transition-all duration-300 ${
-                mobileTab === col.key ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground'
-              }`}
-            >
-              {col.label.split(' ')[0]}
-            </button>
-          ))}
+          {STATUSES.map((col) => {
+            const count = getColumnIdeas(col.key).length;
+            return (
+              <button
+                key={col.key}
+                onClick={() => setMobileTab(col.key)}
+                className={`flex-1 py-2.5 text-xs font-semibold transition-all duration-300 ${
+                  mobileTab === col.key ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground'
+                }`}
+              >
+                {col.label} {count > 0 && <span className="opacity-70">({count})</span>}
+              </button>
+            );
+          })}
         </div>
       )}
 
-      {/* COLUMNS */}
+      {/* KANBAN COLUMNS */}
       {isMobile ? (
         <div className="space-y-3">
           {getColumnIdeas(mobileTab).map((idea) => (
-            <IdeaCard key={idea.id} idea={idea} mondayMode={mondayMode} testingId={testingId} onMove={handleMove} onArchive={handleArchive} onPressureTest={handlePressureTest} onEnterPipeline={handleEnterPipeline} onSetCategory={handleSetCategory} />
+            <IdeaCard
+              key={idea.id}
+              idea={idea}
+              links={relatedLinks[idea.id]}
+              notes={ideaNotes[idea.id]}
+              onOpenMove={openMoveDialog}
+              onFetchNotes={fetchNotesForIdea}
+            />
           ))}
           {getColumnIdeas(mobileTab).length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-8">No ideas here yet.</p>
+            <p className="text-sm text-muted-foreground text-center py-8">No ideas in this column.</p>
           )}
         </div>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <div className="grid grid-cols-3 gap-4">
-            {COLUMNS.map((col) => {
+          <div className="grid grid-cols-4 gap-3">
+            {STATUSES.map((col) => {
               const colIdeas = getColumnIdeas(col.key);
               return (
                 <DroppableColumn key={col.key} id={col.key}>
@@ -478,7 +493,13 @@ export default function Ideas() {
                   <div className="space-y-3">
                     {colIdeas.map((idea) => (
                       <DraggableCard key={idea.id} id={idea.id}>
-                        <IdeaCard idea={idea} mondayMode={mondayMode} testingId={testingId} onMove={handleMove} onArchive={handleArchive} onPressureTest={handlePressureTest} onEnterPipeline={handleEnterPipeline} onSetCategory={handleSetCategory} />
+                        <IdeaCard
+                          idea={idea}
+                          links={relatedLinks[idea.id]}
+                          notes={ideaNotes[idea.id]}
+                          onOpenMove={openMoveDialog}
+                          onFetchNotes={fetchNotesForIdea}
+                        />
                       </DraggableCard>
                     ))}
                   </div>
@@ -489,117 +510,229 @@ export default function Ideas() {
           <DragOverlay>
             {activeCard ? (
               <div className="opacity-90 rotate-2">
-                <IdeaCard idea={activeCard} mondayMode={mondayMode} testingId={null} onMove={() => {}} onArchive={() => {}} onPressureTest={() => {}} onEnterPipeline={() => {}} onSetCategory={() => {}} />
+                <IdeaCard idea={activeCard} links={relatedLinks[activeCard.id]} notes={undefined} onOpenMove={() => {}} onFetchNotes={() => {}} />
               </div>
             ) : null}
           </DragOverlay>
         </DndContext>
       )}
+
+      {/* CAPTURE FORM DIALOG */}
+      <Dialog open={showCaptureForm} onOpenChange={setShowCaptureForm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display">Capture Idea</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Title *</label>
+              <Input
+                placeholder="Short idea title..."
+                value={formTitle}
+                onChange={(e) => setFormTitle(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleCapture(); } }}
+                autoFocus
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Category</label>
+              <Select value={formCategory} onValueChange={(v) => setFormCategory(v as CategoryKey)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map((c) => (
+                    <SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                Description <span className="text-muted-foreground/60">(optional, max 500)</span>
+              </label>
+              <Textarea
+                placeholder="More detail if needed..."
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value.slice(0, 500))}
+                rows={3}
+                className="resize-none"
+              />
+              <span className="text-[10px] text-muted-foreground mt-1 block text-right">{formDescription.length}/500</span>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Priority</label>
+              <div className="flex gap-2">
+                {PRIORITIES.map((p) => (
+                  <button
+                    key={p.key}
+                    onClick={() => setFormPriority(p.key)}
+                    className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-all ${
+                      formPriority === p.key ? p.color + ' ring-1 ring-offset-1' : 'bg-card text-muted-foreground border-border'
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Submitted by: <span className="text-foreground font-medium">{user?.email || 'Unknown'}</span>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCaptureForm(false)}>Cancel</Button>
+            <Button onClick={handleCapture} disabled={!formTitle.trim() || submitting} className="bg-primary text-primary-foreground">
+              {submitting ? <><Loader2 size={14} className="mr-1.5 animate-spin" /> Saving...</> : 'Save Idea'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MOVE STATUS DIALOG */}
+      <Dialog open={!!moveDialogIdea} onOpenChange={(open) => { if (!open) setMoveDialogIdea(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-display text-base">
+              Move to {STATUSES.find((s) => s.key === moveTarget)?.label}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              "{moveDialogIdea?.title}"
+            </p>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Add a note (optional)</label>
+              <Textarea
+                placeholder="Why is this moving? Any context..."
+                value={moveNote}
+                onChange={(e) => setMoveNote(e.target.value)}
+                rows={2}
+                className="resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMoveDialogIdea(null)}>Cancel</Button>
+            <Button onClick={confirmMove} disabled={moving} className="bg-primary text-primary-foreground">
+              {moving ? <Loader2 size={14} className="animate-spin" /> : 'Move'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
 /* ─── IDEA CARD ─── */
 
-function IdeaCard({ idea, mondayMode, testingId, onMove, onArchive, onPressureTest, onEnterPipeline, onSetCategory }: {
-  idea: Idea; mondayMode: boolean; testingId: string | null;
-  onMove: (id: string, target: InboxType) => void;
-  onArchive: (id: string) => void;
-  onPressureTest: (idea: Idea) => void;
-  onEnterPipeline: (idea: Idea) => void;
-  onSetCategory: (id: string, category: string) => void;
+function IdeaCard({ idea, links, notes, onOpenMove, onFetchNotes }: {
+  idea: Idea;
+  links?: IdeaLink[];
+  notes?: IdeaNote[];
+  onOpenMove: (idea: Idea, target: StatusKey) => void;
+  onFetchNotes: (ideaId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const overdue = mondayMode && idea.status === 'raw' && isOverdue(idea.created_at);
-  const statusStyle = STATUS_COLORS[idea.status] || STATUS_COLORS.raw;
-  const isTesting = testingId === idea.id;
-  const hasScore = idea.pressure_test_score != null;
-  const score = idea.pressure_test_score ?? 0;
+  const [showNotes, setShowNotes] = useState(false);
   const catConfig = getCategoryConfig(idea.category);
+  const prioConfig = getPriorityConfig(idea.priority);
+  const CatIcon = catConfig?.icon || Code2;
+  const hasLinks = links && links.length > 0;
+
+  const handleToggleNotes = () => {
+    if (!showNotes && !notes) onFetchNotes(idea.id);
+    setShowNotes(!showNotes);
+  };
 
   return (
-    <Card className={`rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-all duration-300 ${overdue ? 'border-l-4 border-l-orange' : ''}`}>
-      <CardContent className="p-4 space-y-3">
-        {/* Category tag + menu */}
+    <Card className="rounded-xl border border-border bg-card shadow-sm hover:shadow-md transition-all duration-300">
+      <CardContent className="p-3 space-y-2">
+        {/* Top row: category + priority + menu */}
         <div className="flex items-start justify-between gap-2">
-          <div className="flex-1 space-y-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {catConfig && (
-              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border ${catConfig.color}`}>
-                <catConfig.icon size={10} />
+              <Badge variant="outline" className="text-[10px] gap-1 px-2 py-0.5 font-semibold">
+                <CatIcon size={10} />
                 {catConfig.label}
+              </Badge>
+            )}
+            {prioConfig && (
+              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold border ${prioConfig.color}`}>
+                {prioConfig.label}
               </span>
             )}
-            <p className="text-sm leading-relaxed text-foreground">{idea.raw_idea}</p>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 text-muted-foreground"><MoreVertical size={14} /></Button>
+              <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 text-muted-foreground">
+                <MoreVertical size={14} />
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem disabled className="text-xs text-muted-foreground font-semibold">Move to...</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onMove(idea.id, 'instant')}>Instant Inbox</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onMove(idea.id, 'weekly')}>Weekly Inbox</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onMove(idea.id, 'parking_lot')}>Parking Lot</DropdownMenuItem>
-              <DropdownMenuItem disabled className="text-xs text-muted-foreground font-semibold mt-1">Tag as...</DropdownMenuItem>
-              {CATEGORIES.map((cat) => (
-                <DropdownMenuItem key={cat.key} onClick={() => onSetCategory(idea.id, cat.key)}>
-                  <cat.icon size={12} className="mr-1.5" />{cat.label}
+              {STATUSES.filter((s) => s.key !== idea.status).map((s) => (
+                <DropdownMenuItem key={s.key} onClick={() => onOpenMove(idea, s.key)}>
+                  <ArrowRight size={12} className="mr-1.5" />{s.label}
                 </DropdownMenuItem>
               ))}
-              <DropdownMenuItem onClick={() => onArchive(idea.id)} className="text-destructive focus:text-destructive mt-1">Archive</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
 
-        {/* Time + status */}
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] text-muted-foreground">{timeAgo(idea.created_at)}</span>
-          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${statusStyle.bg} ${statusStyle.text}`}>{idea.status}</span>
+        {/* Title */}
+        <p className="text-sm font-semibold leading-snug text-foreground">{idea.title}</p>
+
+        {/* Description */}
+        {idea.description && (
+          <p className={`text-xs text-muted-foreground leading-relaxed ${!expanded ? 'line-clamp-2' : ''}`}>
+            {idea.description}
+          </p>
+        )}
+        {idea.description && idea.description.length > 100 && (
+          <button onClick={() => setExpanded(!expanded)} className="text-[11px] text-primary font-medium flex items-center gap-0.5">
+            {expanded ? <><ChevronUp size={12} /> Less</> : <><ChevronDown size={12} /> More</>}
+          </button>
+        )}
+
+        {/* Emily's Related Context */}
+        {hasLinks && (
+          <div className="rounded-lg bg-secondary/10 border border-secondary/20 px-3 py-2 space-y-1">
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-secondary">
+              <Link2 size={12} />
+              Emily linked {links.length} related item{links.length > 1 ? 's' : ''}
+            </div>
+            {links.slice(0, 3).map((link) => (
+              <p key={link.id} className="text-[10px] text-muted-foreground truncate">
+                • {link.title} {link.similarity_score && <span className="text-muted-foreground/60">({(link.similarity_score * 100).toFixed(0)}%)</span>}
+              </p>
+            ))}
+          </div>
+        )}
+
+        {/* Footer: submitter, time, notes toggle */}
+        <div className="flex items-center justify-between pt-1">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-muted-foreground">{idea.submitted_by_email?.split('@')[0] || 'Unknown'}</span>
+            <span className="text-[10px] text-muted-foreground">•</span>
+            <span className="text-[10px] text-muted-foreground">{timeAgo(idea.created_at)}</span>
+          </div>
+          <button onClick={handleToggleNotes} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
+            <MessageSquare size={10} />
+            Notes
+          </button>
         </div>
 
-        {/* Pressure Test Section */}
-        {!hasScore ? (
-          <Button
-            onClick={() => onPressureTest(idea)}
-            disabled={isTesting}
-            className="w-full h-9 text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground"
-          >
-            {isTesting ? (
-              <><Loader2 size={13} className="mr-1.5 animate-spin" /> Testing...</>
-            ) : (
-              <><ShieldCheck size={13} className="mr-1.5" /> Pressure Test</>
-            )}
-          </Button>
-        ) : (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <span className={`inline-flex items-center justify-center h-8 w-8 rounded-full text-xs font-bold text-primary-foreground ${scoreColor(score)}`}>
-                {score}
-              </span>
-              <span className={`text-xs font-semibold ${scoreTextColor(score)}`}>
-                {score >= 80 ? 'Strong' : score >= 60 ? 'Viable' : score >= 40 ? 'Weak' : 'Poor'}
-              </span>
-            </div>
-
-            {idea.pressure_test_summary && (
-              <div>
-                <p className={`text-xs text-muted-foreground leading-relaxed ${!expanded ? 'line-clamp-2' : ''}`}>
-                  {idea.pressure_test_summary}
-                </p>
-                <button onClick={() => setExpanded(!expanded)} className="text-[11px] text-primary font-medium mt-0.5 flex items-center gap-0.5">
-                  {expanded ? <><ChevronUp size={12} /> Less</> : <><ChevronDown size={12} /> More</>}
-                </button>
+        {/* Notes section */}
+        {showNotes && (
+          <div className="border-t border-border pt-2 mt-1 space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+            {notes && notes.length > 0 ? notes.map((n) => (
+              <div key={n.id} className="text-[11px] text-muted-foreground">
+                <span className="font-medium text-foreground">{n.user_email?.split('@')[0] || 'System'}:</span> {n.note}
+                <span className="text-muted-foreground/50 ml-1">{timeAgo(n.created_at)}</span>
               </div>
-            )}
-
-            {score >= 60 ? (
-              <Button onClick={() => onEnterPipeline(idea)} className="w-full h-9 text-xs font-semibold bg-success hover:bg-success/90 text-primary-foreground">
-                <Rocket size={13} className="mr-1.5" /> Enter Pipeline
-              </Button>
-            ) : (
-              <Button onClick={() => onArchive(idea.id)} className="w-full h-9 text-xs font-semibold bg-orange hover:bg-orange/90 text-primary-foreground">
-                <Archive size={13} className="mr-1.5" /> Archive with Learnings
-              </Button>
+            )) : (
+              <p className="text-[11px] text-muted-foreground italic">No notes yet. Notes are added when moving status.</p>
             )}
           </div>
         )}
