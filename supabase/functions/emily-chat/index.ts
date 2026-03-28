@@ -70,6 +70,25 @@ serve(async (req) => {
       console.error("Vector retrieval failed (non-blocking):", vecErr);
     }
 
+    // --- 1b. IDEAS AWARENESS ---
+    let ideasContext = "";
+    try {
+      const { data: recentIdeas } = await supabase
+        .from("mkt_ideas")
+        .select("id, title, category, priority, status, submitted_by_email, created_at")
+        .order("created_at", { ascending: false })
+        .limit(15);
+
+      if (recentIdeas && recentIdeas.length > 0) {
+        const ideasBlock = recentIdeas
+          .map((idea: any) => `- [${idea.status.toUpperCase()}] "${idea.title}" (${idea.category}, ${idea.priority} priority, by ${idea.submitted_by_email || 'unknown'}, ${idea.created_at})`)
+          .join("\n");
+        ideasContext = `\n\n## Ideas in the System\nYou have passive awareness of these ideas stored in the Ideas system. If the conversation topic relates to any of them, you can naturally reference them — e.g. "You have an idea in the system related to this — want me to pull it up?"\n\n${ideasBlock}`;
+      }
+    } catch (ideasErr) {
+      console.error("Ideas fetch failed (non-blocking):", ideasErr);
+    }
+
     // --- 2. CONVERSATION HISTORY ---
     let conversationHistory: { role: string; content: string }[] = [];
     if (session_id) {
