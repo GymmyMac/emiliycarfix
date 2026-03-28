@@ -6,3 +6,6 @@ verify_jwt = false
 
 [functions.emily-chat]
 verify_jwt = false
+
+[functions.idea-embed]
+verify_jwt = false
