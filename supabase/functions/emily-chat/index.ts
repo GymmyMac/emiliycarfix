@@ -127,6 +127,11 @@ Tone: Direct, strategic, data-informed. You're a trusted CMO-level advisor, not 
       systemPrompt += `\n\n## Retrieved Knowledge\nThe following documents from your CARFIX knowledge base are relevant to this query. Use them to inform your response. Reference specific documents when applicable.\n\n${contextBlock}`;
     }
 
+    // Append ideas awareness
+    if (ideasContext) {
+      systemPrompt += ideasContext;
+    }
+
     // --- 4. CALL OPENROUTER ---
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
