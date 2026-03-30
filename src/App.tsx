@@ -17,6 +17,7 @@ import Initiatives from "./pages/Initiatives";
 import NotFound from "./pages/NotFound";
 import BatchReview from "./pages/BatchReview";
 import Review from "./pages/Review";
+import SeoQueue from "./pages/SeoQueue";
 
 const queryClient = new QueryClient();
 
@@ -40,6 +41,7 @@ const App = () => (
               <Route path="/initiatives" element={<Initiatives />} />
               <Route path="/batch/:batchId" element={<BatchReview />} />
               <Route path="/review" element={<Review />} />
+              <Route path="/seo-queue" element={<SeoQueue />} />
             </Route>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />
