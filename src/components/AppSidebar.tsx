@@ -12,6 +12,7 @@ import {
   LogOut,
   Rocket,
   ClipboardCheck,
+  FileEdit,
 } from 'lucide-react';
 
 const navItems = [
