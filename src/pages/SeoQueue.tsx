@@ -1,10 +1,12 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
+import { Progress } from '@/components/ui/progress';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Loader2, CheckCircle2, Clock, FileText, Send, X, Eye } from 'lucide-react';
+import { Loader2, CheckCircle2, Clock, FileText, Send, X, Eye, Play, Square } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
@@ -62,6 +64,8 @@ function isReady(t: SeoTask) {
   return t.status === 'in_progress' && !!t.draft_content;
 }
 
+type GenerationStatus = 'idle' | 'queued' | 'generating' | 'complete' | 'error';
+
 export default function SeoQueue() {
   const [tasks, setTasks] = useState<SeoTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,6 +76,17 @@ export default function SeoQueue() {
   const [revisionMode, setRevisionMode] = useState(false);
   const [revisionNote, setRevisionNote] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Generation loop state
+  const [isRunning, setIsRunning] = useState(false);
+  const [generatingTaskId, setGeneratingTaskId] = useState<string | null>(null);
+  const [generationStatuses, setGenerationStatuses] = useState<Record<string, GenerationStatus>>({});
+  const [processedCount, setProcessedCount] = useState(0);
+  const [totalToProcess, setTotalToProcess] = useState(0);
+  const stopRef = useRef(false);
 
   /* ─── fetch ─── */
   const fetchTasks = useCallback(async () => {
@@ -100,7 +115,6 @@ export default function SeoQueue() {
           if (updated.status === 'in_progress' && updated.draft_content) {
             toast.info(`New draft ready: ${updated.task_id} — ${updated.title}`);
           }
-          // Update selected task if it's open
           if (selectedTask?.id === updated.id) {
             setSelectedTask(updated);
           }
@@ -148,6 +162,94 @@ export default function SeoQueue() {
     fetchTasks();
   };
 
+  /* ─── selection helpers ─── */
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (filteredIds: string[]) => {
+    const allSelected = filteredIds.every(id => selectedIds.has(id));
+    if (allSelected) {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        filteredIds.forEach(id => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        filteredIds.forEach(id => next.add(id));
+        return next;
+      });
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    setGenerationStatuses({});
+  };
+
+  /* ─── generation loop ─── */
+  const startGeneration = async () => {
+    const ids = Array.from(selectedIds);
+    const selectedTasks = ids.map(id => tasks.find(t => t.id === id)).filter(Boolean) as SeoTask[];
+    if (selectedTasks.length === 0) return;
+
+    stopRef.current = false;
+    setIsRunning(true);
+    setProcessedCount(0);
+    setTotalToProcess(selectedTasks.length);
+
+    // Mark all as queued
+    const statuses: Record<string, GenerationStatus> = {};
+    selectedTasks.forEach(t => { statuses[t.id] = 'queued'; });
+    setGenerationStatuses(statuses);
+
+    let completed = 0;
+    for (const task of selectedTasks) {
+      if (stopRef.current) break;
+
+      setGeneratingTaskId(task.id);
+      setGenerationStatuses(prev => ({ ...prev, [task.id]: 'generating' }));
+
+      try {
+        const { error } = await supabase.functions.invoke('emily-chat', {
+          body: {
+            message: `Write ${task.task_id}. Target keyword: "${task.target_keyword}". Content type: ${task.content_type}. Pull the task details from mkt_seo_queue and write the full content following the appropriate template. End your response with SEO_DRAFT_COMPLETE: ${task.task_id} when complete.`,
+            session_id: `ag-seo-${task.task_id}-${Date.now()}`
+          }
+        });
+
+        if (error) throw error;
+        setGenerationStatuses(prev => ({ ...prev, [task.id]: 'complete' }));
+      } catch (err) {
+        console.error(`Generation failed for ${task.task_id}:`, err);
+        setGenerationStatuses(prev => ({ ...prev, [task.id]: 'error' }));
+      }
+
+      completed++;
+      setProcessedCount(completed);
+    }
+
+    setGeneratingTaskId(null);
+    setIsRunning(false);
+
+    if (stopRef.current) {
+      toast.info(`Generation stopped after ${completed} of ${selectedTasks.length} tasks.`);
+    } else {
+      toast.success(`Batch complete! ${completed} drafts added to review.`);
+    }
+    stopRef.current = false;
+  };
+
+  const stopGeneration = () => {
+    stopRef.current = true;
+  };
+
   /* ─── filtering & sorting ─── */
   let filtered = tasks;
 
@@ -163,7 +265,9 @@ export default function SeoQueue() {
 
   if (sortMode === 'newest') filtered = [...filtered].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   else if (sortMode === 'alpha') filtered = [...filtered].sort((a, b) => a.title.localeCompare(b.title));
-  // default is already priority desc from fetch
+
+  const filteredIds = filtered.map(t => t.id);
+  const allFilteredSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.has(id));
 
   /* ─── counts ─── */
   const totalCount = tasks.length;
@@ -192,6 +296,40 @@ export default function SeoQueue() {
     return <span className={`text-xs font-mono font-semibold ${color}`}>{val}</span>;
   };
 
+  /* ─── draft column content ─── */
+  const DraftCell = ({ task }: { task: SeoTask }) => {
+    const genStatus = generationStatuses[task.id];
+    if (genStatus === 'generating') {
+      return (
+        <span className="flex items-center gap-1.5 text-xs text-amber-400">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-400" />
+          </span>
+          Writing...
+        </span>
+      );
+    }
+    if (genStatus === 'queued') {
+      return <span className="text-xs text-muted-foreground">Queued</span>;
+    }
+    if (genStatus === 'complete' && !task.draft_content) {
+      return <span className="text-xs text-emerald-400">Sent to Emily</span>;
+    }
+    if (genStatus === 'error') {
+      return <span className="text-xs text-red-400">Error</span>;
+    }
+    if (task.draft_saved_at) {
+      return (
+        <span className="text-xs text-emerald-400">
+          Draft ready<br />
+          <span className="text-muted-foreground">{formatDistanceToNow(new Date(task.draft_saved_at), { addSuffix: true })}</span>
+        </span>
+      );
+    }
+    return <span className="text-xs text-muted-foreground">Not written</span>;
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -217,7 +355,7 @@ export default function SeoQueue() {
   ];
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
+    <div className="mx-auto max-w-6xl space-y-4 pb-24">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground md:text-3xl">SEO Content Queue</h1>
@@ -290,6 +428,12 @@ export default function SeoQueue() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-accent/40 text-left">
+                <th className="px-3 py-3 w-10">
+                  <Checkbox
+                    checked={allFilteredSelected}
+                    onCheckedChange={() => toggleSelectAll(filteredIds)}
+                  />
+                </th>
                 <th className="px-3 py-3 font-medium text-muted-foreground">Task</th>
                 <th className="px-3 py-3 font-medium text-muted-foreground">Title</th>
                 <th className="hidden px-3 py-3 font-medium text-muted-foreground md:table-cell">Type</th>
@@ -307,13 +451,20 @@ export default function SeoQueue() {
                 const st = statusConfig[task.status] ?? statusConfig.pending;
                 const ready = isReady(task);
                 const isPublished = task.status === 'published';
+                const isSelected = selectedIds.has(task.id);
 
                 return (
                   <tr
                     key={task.id}
                     onClick={() => setSelectedTask(task)}
-                    className={`cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-accent/60 ${isPublished ? 'opacity-50' : ''}`}
+                    className={`cursor-pointer border-b border-border last:border-0 transition-colors hover:bg-accent/60 ${isPublished ? 'opacity-50' : ''} ${isSelected ? 'bg-primary/5' : ''}`}
                   >
+                    <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleSelect(task.id)}
+                      />
+                    </td>
                     <td className="px-3 py-3">
                       <span className="font-mono text-xs font-semibold text-foreground bg-accent rounded px-1.5 py-0.5">{task.task_id}</span>
                     </td>
@@ -336,14 +487,7 @@ export default function SeoQueue() {
                       <Badge variant="outline" className={st.classes}>{st.label}</Badge>
                     </td>
                     <td className="hidden px-3 py-3 sm:table-cell">
-                      {task.draft_saved_at ? (
-                        <span className="text-xs text-emerald-400">
-                          Draft ready<br />
-                          <span className="text-muted-foreground">{formatDistanceToNow(new Date(task.draft_saved_at), { addSuffix: true })}</span>
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Not written</span>
-                      )}
+                      <DraftCell task={task} />
                     </td>
                     <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
                       {ready && (
@@ -367,6 +511,51 @@ export default function SeoQueue() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Floating Action Bar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+          <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-card/80 backdrop-blur-xl shadow-2xl px-5 py-3">
+            <span className="text-sm font-medium text-foreground whitespace-nowrap">
+              {selectedIds.size} task{selectedIds.size !== 1 ? 's' : ''} selected
+            </span>
+
+            {isRunning && totalToProcess > 0 && (
+              <div className="flex items-center gap-2 min-w-[140px]">
+                <Progress value={(processedCount / totalToProcess) * 100} className="h-2 flex-1" />
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  {processedCount}/{totalToProcess}
+                </span>
+              </div>
+            )}
+
+            {!isRunning ? (
+              <Button
+                onClick={startGeneration}
+                size="sm"
+                className="bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white gap-1.5 shadow-lg"
+              >
+                <Play size={14} /> Start Generation
+              </Button>
+            ) : (
+              <Button
+                onClick={stopGeneration}
+                size="sm"
+                className="bg-red-600 hover:bg-red-500 text-white gap-1.5"
+              >
+                <Loader2 size={14} className="animate-spin" />
+                <Square size={14} /> Stop
+              </Button>
+            )}
+
+            {!isRunning && (
+              <Button variant="ghost" size="sm" onClick={clearSelection} className="text-muted-foreground">
+                Cancel
+              </Button>
+            )}
+          </div>
         </div>
       )}
 
