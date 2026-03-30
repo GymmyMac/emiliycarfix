@@ -17,6 +17,7 @@ import Initiatives from "./pages/Initiatives";
 import NotFound from "./pages/NotFound";
 import BatchReview from "./pages/BatchReview";
 import Review from "./pages/Review";
+import SeoQueue from "./pages/SeoQueue";
 
 const queryClient = new QueryClient();
 
