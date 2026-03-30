@@ -12,6 +12,7 @@ import {
   Calendar,
   Settings,
   X,
+  FileEdit,
 } from 'lucide-react';
 
 const mainItems = [
