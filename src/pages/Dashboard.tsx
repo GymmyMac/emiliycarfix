@@ -169,14 +169,14 @@ function KanbanDropColumn({ id, label, color, count, children }: {
     <div
       ref={setNodeRef}
       className={cn(
-        'flex flex-col min-w-[220px] w-[220px] lg:w-auto lg:flex-1 rounded-xl border border-border bg-card/50 border-t-4 transition-colors',
+        'flex flex-col min-w-[240px] w-[240px] rounded-xl border border-border bg-card/50 border-t-4 transition-colors',
         color,
         isOver && 'ring-2 ring-primary/40 bg-accent/40'
       )}
     >
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border/50">
-        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</span>
-        <span className="text-[10px] font-bold bg-muted/20 text-muted-foreground rounded-full w-5 h-5 flex items-center justify-center">{count}</span>
+        <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{label}</span>
+        <span className="text-xs font-bold bg-muted/20 text-muted-foreground rounded-full w-6 h-6 flex items-center justify-center">{count}</span>
       </div>
       <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[55vh] min-h-[100px]">
         {children}
@@ -208,7 +208,7 @@ function KanbanCard({ task, column, onOpen, channelScopes, onToggleChannel }: {
       ref={setNodeRef}
       style={style}
       className={cn(
-        'rounded-lg border bg-card p-2.5 shadow-sm cursor-grab active:cursor-grabbing transition-all',
+        'rounded-lg border bg-card p-3 shadow-sm cursor-grab active:cursor-grabbing transition-all',
         isPendingReview && 'border-amber-500/60 ring-1 ring-amber-500/20',
         isDragging && 'opacity-50 shadow-lg scale-105',
         !isPendingReview && 'border-border/60'
@@ -221,13 +221,13 @@ function KanbanCard({ task, column, onOpen, channelScopes, onToggleChannel }: {
         </div>
         <div className={cn('w-1 h-8 rounded-full shrink-0', getPriorityColor(task.priority_score))} />
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-foreground leading-tight truncate" title={task.title}>
+          <p className="text-sm font-semibold text-foreground leading-tight truncate" title={task.title}>
             {task.title.length > 55 ? task.title.slice(0, 55) + '…' : task.title}
           </p>
           <div className="flex items-center gap-1 mt-1 flex-wrap">
             <TypeBadge type={task.content_type} />
             {task.priority_score != null && (
-              <span className="text-[9px] font-bold text-muted-foreground bg-muted/15 rounded px-1">P{task.priority_score}</span>
+              <span className="text-xs font-bold text-muted-foreground bg-muted/15 rounded px-1">P{task.priority_score}</span>
             )}
           </div>
         </div>
@@ -240,7 +240,7 @@ function KanbanCard({ task, column, onOpen, channelScopes, onToggleChannel }: {
             key={ch}
             onClick={(e) => { e.stopPropagation(); onToggleChannel(task.id, ch); }}
             className={cn(
-              'text-[9px] font-bold rounded-full px-2 py-0.5 transition-all border',
+              'text-[11px] font-bold rounded-full px-2 py-0.5 transition-all border',
               channels.includes(ch)
                 ? ch === 'SEO/Blog' ? 'bg-green-500/20 text-green-400 border-green-500/40'
                 : ch === 'Social' ? 'bg-orange-500/20 text-orange-400 border-orange-500/40'
@@ -255,14 +255,14 @@ function KanbanCard({ task, column, onOpen, channelScopes, onToggleChannel }: {
 
       {/* Target date + action */}
       <div className="flex items-center justify-between mt-2">
-        <span className="text-[10px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {task.target_publish_date ? format(new Date(task.target_publish_date), 'd MMM') : ''}
         </span>
         <Button
           size="sm"
           variant={isPendingReview ? 'default' : 'ghost'}
           className={cn(
-            'h-6 text-[10px] px-2',
+            'h-6 text-xs px-2',
             isPendingReview && 'bg-amber-500 hover:bg-amber-600 text-white'
           )}
           onClick={(e) => { e.stopPropagation(); onOpen(task); }}
@@ -693,9 +693,9 @@ export default function Dashboard() {
           </div>
 
           {/* MAIN CONTENT AREA */}
-          <div className="flex flex-col lg:flex-row gap-4">
+          <div className="flex flex-col gap-4">
             {/* Pipeline / Calendar */}
-            <div className="flex-1 min-w-0">
+            <div className="w-full min-w-0">
               {viewMode === 'pipeline' ? (
                 /* ── KANBAN BOARD ── */
                 <DndContext
@@ -704,7 +704,7 @@ export default function Dashboard() {
                   onDragStart={handleDragStart}
                   onDragEnd={handleDragEnd}
                 >
-                  <div className="flex gap-3 overflow-x-auto pb-2 lg:grid lg:grid-cols-7 lg:overflow-x-visible">
+                  <div className="flex gap-3 overflow-x-auto pb-2">
                     {KANBAN_COLUMNS.map((col) => (
                       <KanbanDropColumn
                         key={col.id}
@@ -733,8 +733,8 @@ export default function Dashboard() {
                   </div>
                   <DragOverlay>
                     {activeDragTask && (
-                      <div className="rounded-lg border border-primary bg-card p-2.5 shadow-xl w-[220px] opacity-90">
-                        <p className="text-xs font-semibold text-foreground truncate">{activeDragTask.title}</p>
+                      <div className="rounded-lg border border-primary bg-card p-3 shadow-xl w-[240px] opacity-90">
+                        <p className="text-sm font-semibold text-foreground truncate">{activeDragTask.title}</p>
                         <TypeBadge type={activeDragTask.content_type} />
                       </div>
                     )}
@@ -799,37 +799,38 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* SIDEBAR — Emily Suggests (desktop only, reduced weight) */}
-            <div className="hidden lg:block w-[280px] shrink-0">
-              <div className="rounded-xl border border-border bg-card/30 shadow-sm overflow-hidden">
-                <button
-                  onClick={() => setSuggestionsOpen(!suggestionsOpen)}
-                  className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-bold text-muted-foreground uppercase tracking-wider hover:bg-accent/30 transition-colors"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <Sparkles size={12} className="text-secondary" /> Emily Suggests
-                  </span>
-                  {suggestionsOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                </button>
-                {suggestionsOpen && (
-                  <div className="p-2.5 space-y-2 border-t border-border/30">
-                    {suggestions.map((s, i) => (
-                      <div key={i} className="rounded-lg border border-border/30 p-2.5 space-y-1 bg-accent/10">
-                        <p className="text-xs font-medium text-foreground leading-tight">{s.title}</p>
-                        <div className="flex items-center gap-1">
-                          {s.category && <span className="text-[9px] rounded-full bg-primary/10 text-primary px-1.5 py-0.5 font-semibold">{s.category}</span>}
-                          <TypeBadge type={s.content_type} />
-                        </div>
-                        <p className="text-[10px] text-muted-foreground">{s.reason}</p>
-                        <Button size="sm" variant="ghost" className="h-6 text-[10px] w-full" onClick={() => handleAddSuggestion(s)}>
-                          <Plus size={10} className="mr-1" /> Add to Queue
-                        </Button>
+          </div>
+
+          {/* EMILY SUGGESTS — full-width below board */}
+          <div className="rounded-xl border border-border bg-card/30 shadow-sm overflow-hidden">
+            <button
+              onClick={() => setSuggestionsOpen(!suggestionsOpen)}
+              className="w-full flex items-center justify-between px-4 py-3 text-sm font-bold text-muted-foreground uppercase tracking-wider hover:bg-accent/30 transition-colors"
+            >
+              <span className="flex items-center gap-1.5">
+                <Sparkles size={14} className="text-secondary" /> Emily Suggests
+              </span>
+              {suggestionsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+            {suggestionsOpen && (
+              <div className="p-3 border-t border-border/30">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {suggestions.map((s, i) => (
+                    <div key={i} className="rounded-lg border border-border/30 p-3 space-y-1.5 bg-accent/10">
+                      <p className="text-sm font-medium text-foreground leading-tight">{s.title}</p>
+                      <div className="flex items-center gap-1">
+                        {s.category && <span className="text-xs rounded-full bg-primary/10 text-primary px-2 py-0.5 font-semibold">{s.category}</span>}
+                        <TypeBadge type={s.content_type} />
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <p className="text-xs text-muted-foreground">{s.reason}</p>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs w-full" onClick={() => handleAddSuggestion(s)}>
+                        <Plus size={12} className="mr-1" /> Add to Queue
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </TabsContent>
 
