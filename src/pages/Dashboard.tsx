@@ -592,7 +592,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="w-full max-w-full space-y-4 overflow-x-hidden">
+    <div className="w-full max-w-full space-y-4 min-w-0">
       {/* ── HEADER ── */}
       <div className="rounded-xl bg-foreground/95 px-5 py-4 text-card">
         <h1 className="font-display text-xl font-bold tracking-tight">Content Command Centre</h1>
