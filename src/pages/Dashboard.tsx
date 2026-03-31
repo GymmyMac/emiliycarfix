@@ -864,11 +864,11 @@ export default function Dashboard() {
       )}
 
       {/* ═══════════════════ BRIEF EMILY SHEET ═══════════════════ */}
-      <Sheet open={briefOpen} onOpenChange={setBriefOpen}>
+      <Sheet open={briefOpen} onOpenChange={(open) => { setBriefOpen(open); if (!open) setEditingTaskId(null); }}>
         <SheetContent className="w-full sm:w-[480px] sm:max-w-[480px] overflow-y-auto">
           <SheetHeader className="mb-4">
             <SheetTitle className="text-lg font-bold text-foreground text-left flex items-center gap-2">
-              Brief Emily
+              {editingTaskId ? 'Edit Brief' : 'Brief Emily'}
             </SheetTitle>
           </SheetHeader>
           <div className="space-y-5">
