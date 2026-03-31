@@ -799,37 +799,38 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* SIDEBAR — Emily Suggests (desktop only, reduced weight) */}
-            <div className="hidden lg:block w-[280px] shrink-0">
-              <div className="rounded-xl border border-border bg-card/30 shadow-sm overflow-hidden">
-                <button
-                  onClick={() => setSuggestionsOpen(!suggestionsOpen)}
-                  className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-bold text-muted-foreground uppercase tracking-wider hover:bg-accent/30 transition-colors"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <Sparkles size={12} className="text-secondary" /> Emily Suggests
-                  </span>
-                  {suggestionsOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                </button>
-                {suggestionsOpen && (
-                  <div className="p-2.5 space-y-2 border-t border-border/30">
-                    {suggestions.map((s, i) => (
-                      <div key={i} className="rounded-lg border border-border/30 p-2.5 space-y-1 bg-accent/10">
-                        <p className="text-xs font-medium text-foreground leading-tight">{s.title}</p>
-                        <div className="flex items-center gap-1">
-                          {s.category && <span className="text-[9px] rounded-full bg-primary/10 text-primary px-1.5 py-0.5 font-semibold">{s.category}</span>}
-                          <TypeBadge type={s.content_type} />
-                        </div>
-                        <p className="text-[10px] text-muted-foreground">{s.reason}</p>
-                        <Button size="sm" variant="ghost" className="h-6 text-[10px] w-full" onClick={() => handleAddSuggestion(s)}>
-                          <Plus size={10} className="mr-1" /> Add to Queue
-                        </Button>
+          </div>
+
+          {/* EMILY SUGGESTS — full-width below board */}
+          <div className="rounded-xl border border-border bg-card/30 shadow-sm overflow-hidden">
+            <button
+              onClick={() => setSuggestionsOpen(!suggestionsOpen)}
+              className="w-full flex items-center justify-between px-4 py-3 text-sm font-bold text-muted-foreground uppercase tracking-wider hover:bg-accent/30 transition-colors"
+            >
+              <span className="flex items-center gap-1.5">
+                <Sparkles size={14} className="text-secondary" /> Emily Suggests
+              </span>
+              {suggestionsOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+            {suggestionsOpen && (
+              <div className="p-3 border-t border-border/30">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {suggestions.map((s, i) => (
+                    <div key={i} className="rounded-lg border border-border/30 p-3 space-y-1.5 bg-accent/10">
+                      <p className="text-sm font-medium text-foreground leading-tight">{s.title}</p>
+                      <div className="flex items-center gap-1">
+                        {s.category && <span className="text-xs rounded-full bg-primary/10 text-primary px-2 py-0.5 font-semibold">{s.category}</span>}
+                        <TypeBadge type={s.content_type} />
                       </div>
-                    ))}
-                  </div>
-                )}
+                      <p className="text-xs text-muted-foreground">{s.reason}</p>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs w-full" onClick={() => handleAddSuggestion(s)}>
+                        <Plus size={12} className="mr-1" /> Add to Queue
+                      </Button>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </TabsContent>
 
