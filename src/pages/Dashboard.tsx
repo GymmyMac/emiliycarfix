@@ -404,7 +404,11 @@ export default function Dashboard() {
   }, [tasks]);
 
   /* ── drag & drop ── */
-  const handleDragStart = (event: DragStartEvent) => setActiveId(event.active.id as string);
+  const handleDragStart = (event: DragStartEvent) => {
+    const task = tasks.find(t => t.id === event.active.id);
+    setActiveId(event.active.id as string);
+    setDragOriginalStatus(task?.status || null);
+  };
 
   // Resolve which column an over target belongs to
   const resolveColumn = (overId: string): KanbanColumnId | null => {
