@@ -435,9 +435,11 @@ export default function Dashboard() {
   };
 
   const handleDragEnd = async (event: DragEndEvent) => {
-    setActiveId(null);
     const { active, over } = event;
-    if (!over) return;
+    const origStatus = dragOriginalStatus;
+    setActiveId(null);
+    setDragOriginalStatus(null);
+    if (!over || !origStatus) return;
 
     const draggedTask = tasks.find(t => t.id === active.id);
     if (!draggedTask) return;
@@ -446,25 +448,23 @@ export default function Dashboard() {
     if (!targetCol) return;
 
     // Prevent published from moving back
-    if (draggedTask.status === 'published' && targetCol !== 'published') {
+    if (origStatus === 'published' && targetCol !== 'published') {
       toast({ title: "Published content can't be moved back", variant: 'destructive' });
       fetchData();
       return;
     }
 
     // Same column reorder
-    if (draggedTask.status === targetCol && active.id !== over.id) {
+    if (origStatus === targetCol && active.id !== over.id) {
       const colTasks = tasks.filter(t => t.status === targetCol);
       const oldIndex = colTasks.findIndex(t => t.id === active.id);
       const newIndex = colTasks.findIndex(t => t.id === over.id);
       if (oldIndex !== -1 && newIndex !== -1) {
         const reordered = arrayMove(colTasks, oldIndex, newIndex);
-        // Rebuild full task list preserving order
         setTasks(prev => {
           const others = prev.filter(t => t.status !== targetCol);
           return [...others, ...reordered];
         });
-        // Update priority scores to reflect new order (highest first)
         const updates = reordered.map((t, i) => ({
           id: t.id,
           priority_score: Math.max(100 - i * 5, 1),
@@ -476,8 +476,8 @@ export default function Dashboard() {
       }
     }
 
-    // Cross-column move — status already updated in handleDragOver, persist to DB
-    if (draggedTask.status === targetCol) return; // no-op if already moved
+    // Cross-column move — persist to DB
+    if (origStatus === targetCol) return;
 
     const updates: Record<string, any> = { status: targetCol };
     if (targetCol === 'approved') { updates.james_approved = true; updates.approved_at = new Date().toISOString(); }
