@@ -488,29 +488,60 @@ export default function Dashboard() {
     fetchData();
   };
 
-  /* ── Brief Emily submit ── */
+  /* ── Brief Emily submit (insert or update) ── */
   const handleBriefSubmit = async () => {
     if (!briefTopic.trim()) return;
     setBriefing(true);
-    const { error } = await supabase.from('mkt_seo_queue').insert({
-      status: 'queued',
+
+    const payload = {
       content_type: briefType,
       title: briefTopic.trim(),
       category: briefCategory || null,
       target_publish_date: briefDate ? briefDate.toISOString().split('T')[0] : null,
-      james_approved: false,
       priority_score: briefPriority,
       slug: toSlug(briefTopic),
       notes: briefNotes || null,
       output_types: briefOutputs,
-    });
-    setBriefing(false);
-    if (!error) {
-      toast({ title: 'Added to Queue →', description: "Emily will pick it up." });
-      setBriefTopic(''); setBriefCategory(''); setBriefType('decision_page');
-      setBriefOutputs(['seo_article']); setBriefPriority(60);
-      setBriefDate(undefined); setBriefNotes(''); setBriefOpen(false);
+    };
+
+    if (editingTaskId) {
+      const { error } = await supabase.from('mkt_seo_queue').update(payload).eq('id', editingTaskId);
+      setBriefing(false);
+      if (!error) {
+        toast({ title: 'Job updated ✓' });
+        resetBriefForm();
+      }
+    } else {
+      const { error } = await supabase.from('mkt_seo_queue').insert({
+        ...payload,
+        status: 'queued',
+        james_approved: false,
+      });
+      setBriefing(false);
+      if (!error) {
+        toast({ title: 'Added to Queue →', description: "Emily will pick it up." });
+        resetBriefForm();
+      }
     }
+  };
+
+  const resetBriefForm = () => {
+    setBriefTopic(''); setBriefCategory(''); setBriefType('decision_page');
+    setBriefOutputs(['seo_article']); setBriefPriority(60);
+    setBriefDate(undefined); setBriefNotes(''); setBriefOpen(false);
+    setEditingTaskId(null);
+  };
+
+  const openEditBrief = (task: SeoTask) => {
+    setEditingTaskId(task.id);
+    setBriefTopic(task.title || '');
+    setBriefCategory(task.category || '');
+    setBriefType(task.content_type || 'decision_page');
+    setBriefOutputs(task.output_types || ['seo_article']);
+    setBriefPriority(task.priority_score || 60);
+    setBriefDate(task.target_publish_date ? new Date(task.target_publish_date) : undefined);
+    setBriefNotes(task.notes || '');
+    setBriefOpen(true);
   };
 
   const toggleBriefOutput = (key: string) => {
