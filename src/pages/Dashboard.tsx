@@ -296,6 +296,8 @@ export default function Dashboard() {
   const [briefNotes, setBriefNotes] = useState('');
   const [briefing, setBriefing] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [deleteConfirmProgress, setDeleteConfirmProgress] = useState(0);
+  const [deleteHolding, setDeleteHolding] = useState(false);
 
   // Flash animation for realtime updates
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set());
