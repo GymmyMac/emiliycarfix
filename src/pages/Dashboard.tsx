@@ -17,10 +17,11 @@ import { format } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
-  DndContext, closestCorners, DragEndEvent, DragOverlay, DragStartEvent,
+  DndContext, DragEndEvent, DragOverlay, DragStartEvent, DragOverEvent,
   PointerSensor, useSensor, useSensors, useDroppable,
+  rectIntersection,
 } from '@dnd-kit/core';
-import { useSortable } from '@dnd-kit/sortable';
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
   FileText, CheckCircle2, Clock, AlertCircle,
@@ -273,6 +274,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'pipeline' | 'calendar'>('pipeline');
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [dragOriginalStatus, setDragOriginalStatus] = useState<string | null>(null);
   const [filterPendingOnly, setFilterPendingOnly] = useState(false);
 
   // Review state
@@ -402,38 +404,91 @@ export default function Dashboard() {
   }, [tasks]);
 
   /* ── drag & drop ── */
-  const handleDragStart = (event: DragStartEvent) => setActiveId(event.active.id as string);
+  const handleDragStart = (event: DragStartEvent) => {
+    const task = tasks.find(t => t.id === event.active.id);
+    setActiveId(event.active.id as string);
+    setDragOriginalStatus(task?.status || null);
+  };
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    setActiveId(null);
+  // Resolve which column an over target belongs to
+  const resolveColumn = (overId: string): KanbanColumnId | null => {
+    const colIds = KANBAN_COLUMNS.map(c => c.id) as string[];
+    if (colIds.includes(overId)) return overId as KanbanColumnId;
+    // overId is a card id — find its column
+    const card = tasks.find(t => t.id === overId);
+    if (card) return card.status as KanbanColumnId;
+    return null;
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
     const { active, over } = event;
     if (!over) return;
-    const targetColumn = over.id as KanbanColumnId;
+    const activeTask = tasks.find(t => t.id === active.id);
+    if (!activeTask) return;
+    const targetCol = resolveColumn(over.id as string);
+    if (!targetCol || activeTask.status === targetCol) return;
+    if (activeTask.status === 'published') return;
+    // Optimistic cross-column move
+    setTasks(prev => prev.map(t =>
+      t.id === activeTask.id ? { ...t, status: targetCol } as SeoTask : t
+    ));
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    const origStatus = dragOriginalStatus;
+    setActiveId(null);
+    setDragOriginalStatus(null);
+    if (!over || !origStatus) return;
+
     const draggedTask = tasks.find(t => t.id === active.id);
     if (!draggedTask) return;
-    if (draggedTask.status === targetColumn) return;
+
+    const targetCol = resolveColumn(over.id as string);
+    if (!targetCol) return;
 
     // Prevent published from moving back
-    if (draggedTask.status === 'published') {
+    if (origStatus === 'published' && targetCol !== 'published') {
       toast({ title: "Published content can't be moved back", variant: 'destructive' });
+      fetchData();
       return;
     }
 
-    // Optimistic
-    setTasks(prev => prev.map(t =>
-      t.id === draggedTask.id ? { ...t, status: targetColumn } as SeoTask : t
-    ));
+    // Same column reorder
+    if (origStatus === targetCol && active.id !== over.id) {
+      const colTasks = tasks.filter(t => t.status === targetCol);
+      const oldIndex = colTasks.findIndex(t => t.id === active.id);
+      const newIndex = colTasks.findIndex(t => t.id === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const reordered = arrayMove(colTasks, oldIndex, newIndex);
+        setTasks(prev => {
+          const others = prev.filter(t => t.status !== targetCol);
+          return [...others, ...reordered];
+        });
+        const updates = reordered.map((t, i) => ({
+          id: t.id,
+          priority_score: Math.max(100 - i * 5, 1),
+        }));
+        for (const u of updates) {
+          await supabase.from('mkt_seo_queue').update({ priority_score: u.priority_score }).eq('id', u.id);
+        }
+        return;
+      }
+    }
 
-    const updates: Record<string, any> = { status: targetColumn };
-    if (targetColumn === 'approved') { updates.james_approved = true; updates.approved_at = new Date().toISOString(); }
-    if (targetColumn === 'published') { updates.published_at = new Date().toISOString(); updates.james_approved = true; }
+    // Cross-column move — persist to DB
+    if (origStatus === targetCol) return;
+
+    const updates: Record<string, any> = { status: targetCol };
+    if (targetCol === 'approved') { updates.james_approved = true; updates.approved_at = new Date().toISOString(); }
+    if (targetCol === 'published') { updates.published_at = new Date().toISOString(); updates.james_approved = true; }
 
     const { error } = await supabase.from('mkt_seo_queue').update(updates).eq('id', draggedTask.id);
     if (error) {
       toast({ title: 'Failed to move card', description: error.message, variant: 'destructive' });
       fetchData();
     } else {
-      toast({ title: `Moved to ${targetColumn.replace('_', ' ')}` });
+      toast({ title: `Moved to ${targetCol.replace('_', ' ')}` });
     }
   };
 
@@ -796,8 +851,9 @@ export default function Dashboard() {
       {viewMode === 'pipeline' ? (
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCorners}
+          collisionDetection={rectIntersection}
           onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
           <div className="flex gap-3 pb-2 overflow-x-auto" style={{ minWidth: 0 }}>
@@ -809,6 +865,7 @@ export default function Dashboard() {
                 borderColor={col.borderColor}
                 count={kanbanData[col.id].length}
               >
+                <SortableContext items={kanbanData[col.id].map(t => t.id)} strategy={verticalListSortingStrategy}>
                 {kanbanData[col.id].map(task => (
                   <KanbanCard
                     key={task.id}
@@ -818,6 +875,7 @@ export default function Dashboard() {
                     onToggleOutput={toggleOutput}
                   />
                 ))}
+                </SortableContext>
                 {kanbanData[col.id].length === 0 && (
                   <div className="flex items-center justify-center h-16 text-[10px] text-muted-foreground/40">
                     Empty
