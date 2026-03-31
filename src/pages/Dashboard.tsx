@@ -860,6 +860,7 @@ export default function Dashboard() {
                 borderColor={col.borderColor}
                 count={kanbanData[col.id].length}
               >
+                <SortableContext items={kanbanData[col.id].map(t => t.id)} strategy={verticalListSortingStrategy}>
                 {kanbanData[col.id].map(task => (
                   <KanbanCard
                     key={task.id}
@@ -869,6 +870,7 @@ export default function Dashboard() {
                     onToggleOutput={toggleOutput}
                   />
                 ))}
+                </SortableContext>
                 {kanbanData[col.id].length === 0 && (
                   <div className="flex items-center justify-center h-16 text-[10px] text-muted-foreground/40">
                     Empty
