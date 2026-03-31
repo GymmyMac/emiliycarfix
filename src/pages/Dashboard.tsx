@@ -798,7 +798,7 @@ export default function Dashboard() {
                     key={task.id}
                     task={task}
                     column={col.id}
-                    onOpen={openReview}
+                    onOpen={col.id === 'queued' ? openEditBrief : openReview}
                     onToggleOutput={toggleOutput}
                   />
                 ))}
