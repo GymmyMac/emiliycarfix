@@ -208,7 +208,7 @@ function KanbanCard({ task, column, onOpen, channelScopes, onToggleChannel }: {
       ref={setNodeRef}
       style={style}
       className={cn(
-        'rounded-lg border bg-card p-2.5 shadow-sm cursor-grab active:cursor-grabbing transition-all',
+        'rounded-lg border bg-card p-3 shadow-sm cursor-grab active:cursor-grabbing transition-all',
         isPendingReview && 'border-amber-500/60 ring-1 ring-amber-500/20',
         isDragging && 'opacity-50 shadow-lg scale-105',
         !isPendingReview && 'border-border/60'
