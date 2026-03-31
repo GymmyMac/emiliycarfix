@@ -990,7 +990,7 @@ export default function Dashboard() {
               className="w-full h-11 font-semibold text-sm"
               style={{ backgroundColor: '#2563eb' }}
             >
-              Add to Queue →
+              {editingTaskId ? 'Save Changes →' : 'Add to Queue →'}
             </Button>
           </div>
         </SheetContent>
