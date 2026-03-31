@@ -693,9 +693,9 @@ export default function Dashboard() {
           </div>
 
           {/* MAIN CONTENT AREA */}
-          <div className="flex flex-col lg:flex-row gap-4">
+          <div className="flex flex-col gap-4">
             {/* Pipeline / Calendar */}
-            <div className="flex-1 min-w-0">
+            <div className="w-full min-w-0">
               {viewMode === 'pipeline' ? (
                 /* ── KANBAN BOARD ── */
                 <DndContext
