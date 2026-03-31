@@ -262,7 +262,7 @@ function KanbanCard({ task, column, onOpen, channelScopes, onToggleChannel }: {
           size="sm"
           variant={isPendingReview ? 'default' : 'ghost'}
           className={cn(
-            'h-6 text-[10px] px-2',
+            'h-6 text-xs px-2',
             isPendingReview && 'bg-amber-500 hover:bg-amber-600 text-white'
           )}
           onClick={(e) => { e.stopPropagation(); onOpen(task); }}
