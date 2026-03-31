@@ -295,6 +295,7 @@ export default function Dashboard() {
   const [briefDate, setBriefDate] = useState<Date | undefined>();
   const [briefNotes, setBriefNotes] = useState('');
   const [briefing, setBriefing] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
   // Flash animation for realtime updates
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set());
