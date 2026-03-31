@@ -221,7 +221,7 @@ function KanbanCard({ task, column, onOpen, channelScopes, onToggleChannel }: {
         </div>
         <div className={cn('w-1 h-8 rounded-full shrink-0', getPriorityColor(task.priority_score))} />
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-foreground leading-tight truncate" title={task.title}>
+          <p className="text-sm font-semibold text-foreground leading-tight truncate" title={task.title}>
             {task.title.length > 55 ? task.title.slice(0, 55) + '…' : task.title}
           </p>
           <div className="flex items-center gap-1 mt-1 flex-wrap">
