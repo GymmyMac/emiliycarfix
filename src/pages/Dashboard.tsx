@@ -733,7 +733,7 @@ export default function Dashboard() {
                   </div>
                   <DragOverlay>
                     {activeDragTask && (
-                      <div className="rounded-lg border border-primary bg-card p-2.5 shadow-xl w-[220px] opacity-90">
+                      <div className="rounded-lg border border-primary bg-card p-3 shadow-xl w-[240px] opacity-90">
                         <p className="text-xs font-semibold text-foreground truncate">{activeDragTask.title}</p>
                         <TypeBadge type={activeDragTask.content_type} />
                       </div>
