@@ -274,6 +274,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'pipeline' | 'calendar'>('pipeline');
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [dragOriginalStatus, setDragOriginalStatus] = useState<string | null>(null);
   const [filterPendingOnly, setFilterPendingOnly] = useState(false);
 
   // Review state
