@@ -221,8 +221,8 @@ function KanbanCard({ task, column, onOpen, channelScopes, onToggleChannel }: {
         </div>
         <div className={cn('w-1 h-8 rounded-full shrink-0', getPriorityColor(task.priority_score))} />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-foreground leading-tight truncate" title={task.title}>
-            {task.title.length > 55 ? task.title.slice(0, 55) + '…' : task.title}
+          <p className="text-sm font-semibold text-foreground leading-snug line-clamp-3" title={task.title}>
+            {task.title}
           </p>
           <div className="flex items-center gap-1 mt-1 flex-wrap">
             <TypeBadge type={task.content_type} />
@@ -592,7 +592,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="w-full max-w-full space-y-4 overflow-x-hidden">
+    <div className="w-full max-w-full space-y-4 min-w-0">
       {/* ── HEADER ── */}
       <div className="rounded-xl bg-foreground/95 px-5 py-4 text-card">
         <h1 className="font-display text-xl font-bold tracking-tight">Content Command Centre</h1>
@@ -704,7 +704,7 @@ export default function Dashboard() {
                   onDragStart={handleDragStart}
                   onDragEnd={handleDragEnd}
                 >
-                  <div className="flex gap-3 overflow-x-auto pb-2">
+                  <div className="flex gap-3 pb-2 overflow-x-auto" style={{ minWidth: 0 }}>
                     {KANBAN_COLUMNS.map((col) => (
                       <KanbanDropColumn
                         key={col.id}
