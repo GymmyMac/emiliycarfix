@@ -17,10 +17,11 @@ import { format } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
-  DndContext, closestCorners, DragEndEvent, DragOverlay, DragStartEvent,
+  DndContext, DragEndEvent, DragOverlay, DragStartEvent, DragOverEvent,
   PointerSensor, useSensor, useSensors, useDroppable,
+  rectIntersection,
 } from '@dnd-kit/core';
-import { useSortable } from '@dnd-kit/sortable';
+import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
   FileText, CheckCircle2, Clock, AlertCircle,
