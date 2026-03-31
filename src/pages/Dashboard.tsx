@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,15 +12,23 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
-  FileText, CheckCircle2, Clock, AlertCircle, Database,
+  DndContext, closestCorners, DragEndEvent, DragOverlay, DragStartEvent,
+  PointerSensor, useSensor, useSensors, useDroppable,
+} from '@dnd-kit/core';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
+  FileText, CheckCircle2, Clock, AlertCircle,
   ChevronDown, ChevronUp, Eye, Pencil, X, CalendarIcon,
-  Plus, Sparkles, Download, ExternalLink,
+  Plus, Sparkles, Download, ExternalLink, LayoutGrid, CalendarDays,
+  GripVertical, Play, Send,
 } from 'lucide-react';
 
 /* ────────────────────────── types ────────────────────────── */
@@ -81,7 +89,19 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }>
   published: { bg: 'bg-green-500/15', text: 'text-green-400', label: 'Published' },
 };
 
-const CALENDAR_DOT_COLORS: Record<string, string> = {
+const KANBAN_COLUMNS = [
+  { id: 'queued', label: 'Queued', color: 'border-t-muted-foreground' },
+  { id: 'briefed', label: 'Briefed', color: 'border-t-blue-500' },
+  { id: 'in_draft', label: 'In Draft', color: 'border-t-amber-500' },
+  { id: 'pending_review', label: 'Pending Review', color: 'border-t-yellow-500' },
+  { id: 'approved', label: 'Approved', color: 'border-t-emerald-500' },
+  { id: 'scheduled', label: 'Scheduled', color: 'border-t-purple-500' },
+  { id: 'published', label: 'Published', color: 'border-t-green-500' },
+] as const;
+
+type KanbanColumnId = typeof KANBAN_COLUMNS[number]['id'];
+
+const CHANNEL_COLORS: Record<string, string> = {
   seo_article: '#22c55e',
   decision_page: '#22c55e',
   ai_article: '#22c55e',
@@ -94,6 +114,13 @@ const CALENDAR_DOT_COLORS: Record<string, string> = {
   sms: '#ec4899',
   video_script: '#14b8a6',
   tiktok: '#f97316',
+};
+
+// Calendar channel grouping colors
+const CALENDAR_CHANNEL_COLORS = {
+  'SEO/Blog': '#22c55e',
+  'Social': '#f97316',
+  'Email': '#a855f7',
 };
 
 function toSlug(s: string) {
@@ -115,25 +142,174 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${c.bg} ${c.text}`}>{c.label}</span>;
 }
 
+function getKanbanColumn(task: SeoTask): KanbanColumnId {
+  if (task.status === 'published') return 'published';
+  if (task.james_approved && task.target_publish_date) return 'scheduled';
+  if (task.james_approved || task.status === 'approved') return 'approved';
+  if ((task.status === 'draft' || task.status === 'in_progress') && task.draft_content && !task.james_approved) return 'pending_review';
+  if ((task.status === 'in_progress' || task.status === 'draft') && task.draft_content) return 'in_draft';
+  if (task.status === 'briefed') return 'briefed';
+  if (task.status === 'needs_revision') return 'in_draft';
+  return 'queued';
+}
+
+function getPriorityColor(score: number | null) {
+  if (!score) return 'bg-gray-500';
+  if (score >= 70) return 'bg-red-500';
+  if (score >= 40) return 'bg-amber-500';
+  return 'bg-gray-400';
+}
+
+/* ────────────────────── Droppable Column ────────────────────── */
+function KanbanDropColumn({ id, label, color, count, children }: {
+  id: string; label: string; color: string; count: number; children: React.ReactNode;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'flex flex-col min-w-[220px] w-[220px] lg:w-auto lg:flex-1 rounded-xl border border-border bg-card/50 border-t-4 transition-colors',
+        color,
+        isOver && 'ring-2 ring-primary/40 bg-accent/40'
+      )}
+    >
+      <div className="flex items-center justify-between px-3 py-2.5 border-b border-border/50">
+        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</span>
+        <span className="text-[10px] font-bold bg-muted/20 text-muted-foreground rounded-full w-5 h-5 flex items-center justify-center">{count}</span>
+      </div>
+      <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[55vh] min-h-[100px]">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/* ────────────────────── Draggable Card ────────────────────── */
+function KanbanCard({ task, column, onOpen, channelScopes, onToggleChannel }: {
+  task: SeoTask; column: KanbanColumnId;
+  onOpen: (t: SeoTask) => void;
+  channelScopes: Record<string, string[]>;
+  onToggleChannel: (taskId: string, channel: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: task.id,
+    data: { task, column },
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+  const isPendingReview = column === 'pending_review';
+  const channels = channelScopes[task.id] || [];
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'rounded-lg border bg-card p-2.5 shadow-sm cursor-grab active:cursor-grabbing transition-all',
+        isPendingReview && 'border-amber-500/60 ring-1 ring-amber-500/20',
+        isDragging && 'opacity-50 shadow-lg scale-105',
+        !isPendingReview && 'border-border/60'
+      )}
+    >
+      {/* Drag handle + priority bar */}
+      <div className="flex items-start gap-1.5">
+        <div {...attributes} {...listeners} className="mt-0.5 text-muted-foreground/40 hover:text-muted-foreground cursor-grab">
+          <GripVertical size={12} />
+        </div>
+        <div className={cn('w-1 h-8 rounded-full shrink-0', getPriorityColor(task.priority_score))} />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-foreground leading-tight truncate" title={task.title}>
+            {task.title.length > 55 ? task.title.slice(0, 55) + '…' : task.title}
+          </p>
+          <div className="flex items-center gap-1 mt-1 flex-wrap">
+            <TypeBadge type={task.content_type} />
+            {task.priority_score != null && (
+              <span className="text-[9px] font-bold text-muted-foreground bg-muted/15 rounded px-1">P{task.priority_score}</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Channel scope toggles */}
+      <div className="flex gap-1 mt-2">
+        {(['SEO/Blog', 'Social', 'Email'] as const).map((ch) => (
+          <button
+            key={ch}
+            onClick={(e) => { e.stopPropagation(); onToggleChannel(task.id, ch); }}
+            className={cn(
+              'text-[9px] font-bold rounded-full px-2 py-0.5 transition-all border',
+              channels.includes(ch)
+                ? ch === 'SEO/Blog' ? 'bg-green-500/20 text-green-400 border-green-500/40'
+                : ch === 'Social' ? 'bg-orange-500/20 text-orange-400 border-orange-500/40'
+                : 'bg-purple-500/20 text-purple-400 border-purple-500/40'
+                : 'bg-muted/5 text-muted-foreground/50 border-border/30'
+            )}
+          >
+            {ch}
+          </button>
+        ))}
+      </div>
+
+      {/* Target date + action */}
+      <div className="flex items-center justify-between mt-2">
+        <span className="text-[10px] text-muted-foreground">
+          {task.target_publish_date ? format(new Date(task.target_publish_date), 'd MMM') : ''}
+        </span>
+        <Button
+          size="sm"
+          variant={isPendingReview ? 'default' : 'ghost'}
+          className={cn(
+            'h-6 text-[10px] px-2',
+            isPendingReview && 'bg-amber-500 hover:bg-amber-600 text-white'
+          )}
+          onClick={(e) => { e.stopPropagation(); onOpen(task); }}
+        >
+          {column === 'queued' && <><Send size={10} className="mr-1" />Brief</>}
+          {(column === 'briefed' || column === 'in_draft') && <><Eye size={10} className="mr-1" />View</>}
+          {column === 'pending_review' && <><CheckCircle2 size={10} className="mr-1" />Review</>}
+          {column === 'approved' && <><CalendarIcon size={10} className="mr-1" />Schedule</>}
+          {column === 'scheduled' && <><Eye size={10} className="mr-1" />View</>}
+          {column === 'published' && <><ExternalLink size={10} className="mr-1" />View</>}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /* ────────────────────────── MAIN COMPONENT ────────────────────────── */
 export default function Dashboard() {
   const [tasks, setTasks] = useState<SeoTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageTab, setPageTab] = useState<'queue' | 'ledger'>('queue');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [calendarOpen, setCalendarOpen] = useState(true);
+  const [viewMode, setViewMode] = useState<'pipeline' | 'calendar'>('pipeline');
   const [selectedTask, setSelectedTask] = useState<SeoTask | null>(null);
   const [revisionMode, setRevisionMode] = useState(false);
   const [revisionNote, setRevisionNote] = useState('');
   const [pubDatePicker, setPubDatePicker] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
+  const [channelScopes, setChannelScopes] = useState<Record<string, string[]>>({});
+  const [activeId, setActiveId] = useState<string | null>(null);
 
-  // Brief Emily form
+  // Brief Emily sheet
+  const [briefOpen, setBriefOpen] = useState(false);
   const [briefTopic, setBriefTopic] = useState('');
   const [briefCategory, setBriefCategory] = useState('');
   const [briefType, setBriefType] = useState('seo_article');
+  const [briefChannels, setBriefChannels] = useState<string[]>(['SEO/Blog']);
+  const [briefPriority, setBriefPriority] = useState<number>(60);
   const [briefDate, setBriefDate] = useState<Date | undefined>();
+  const [briefNotes, setBriefNotes] = useState('');
   const [briefing, setBriefing] = useState(false);
+
+  // Emily suggestions collapsed
+  const [suggestionsOpen, setSuggestionsOpen] = useState(true);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
 
   const fetchData = useCallback(async () => {
     const { data } = await supabase.from('mkt_seo_queue').select('*').order('priority_score', { ascending: false });
@@ -171,31 +347,43 @@ export default function Dashboard() {
 
   /* ── computed ── */
   const now = new Date();
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000).toISOString();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-  const stats = useMemo(() => {
-    const approved7 = tasks.filter(t => t.james_approved && t.approved_at && t.approved_at > sevenDaysAgo).length;
-    const published7 = tasks.filter(t => t.status === 'published' && t.published_at && t.published_at > sevenDaysAgo).length;
-    const inDraft7 = tasks.filter(t => ['draft', 'in_progress'].includes(t.status) && t.updated_at && t.updated_at > sevenDaysAgo).length;
-    const pendingReview = tasks.filter(t => t.status === 'draft' && !t.james_approved).length;
-    return { approved7, published7, inDraft7, pendingReview, total: tasks.length };
-  }, [tasks, sevenDaysAgo]);
+  const metrics = useMemo(() => {
+    const pendingReview = tasks.filter(t =>
+      (t.status === 'draft' || t.status === 'in_progress') && t.draft_content && !t.james_approved
+    ).length;
+    const approved = tasks.filter(t => t.james_approved && t.status !== 'published').length;
+    const scheduled = tasks.filter(t => t.james_approved && t.target_publish_date && t.status !== 'published').length;
+    const publishedMonth = tasks.filter(t => t.status === 'published' && t.published_at && t.published_at >= monthStart).length;
+    return { pendingReview, approved, scheduled, publishedMonth };
+  }, [tasks, monthStart]);
 
-  const filteredTasks = useMemo(() => {
-    if (filterStatus === 'all') return tasks;
-    if (filterStatus === 'pending_review') return tasks.filter(t => t.status === 'draft' && !t.james_approved);
-    if (filterStatus === 'approved') return tasks.filter(t => t.james_approved);
-    if (filterStatus === 'published') return tasks.filter(t => t.status === 'published');
-    if (filterStatus === 'needs_revision') return tasks.filter(t => t.status === 'needs_revision');
-    if (filterStatus === 'briefed') return tasks.filter(t => t.status === 'briefed');
-    return tasks;
-  }, [tasks, filterStatus]);
+  // Needs my action items
+  const actionItems = useMemo(() =>
+    tasks.filter(t => (t.status === 'draft' || t.status === 'in_progress') && t.draft_content && !t.james_approved)
+      .sort((a, b) => (b.priority_score || 0) - (a.priority_score || 0)),
+    [tasks]
+  );
+
+  // Kanban columns
+  const kanbanData = useMemo(() => {
+    const cols: Record<KanbanColumnId, SeoTask[]> = {
+      queued: [], briefed: [], in_draft: [], pending_review: [],
+      approved: [], scheduled: [], published: [],
+    };
+    tasks.forEach(t => {
+      const col = getKanbanColumn(t);
+      cols[col].push(t);
+    });
+    return cols;
+  }, [tasks]);
 
   const publishedTasks = useMemo(() => tasks.filter(t => t.status === 'published'), [tasks]);
 
   /* ── 14-day calendar data ── */
   const calendarDays = useMemo(() => {
-    const days: { date: Date; label: string; items: SeoTask[] }[] = [];
+    const days: { date: Date; label: string; dayLabel: string; items: SeoTask[] }[] = [];
     for (let i = 0; i < 14; i++) {
       const d = new Date(now);
       d.setDate(d.getDate() + i);
@@ -203,6 +391,7 @@ export default function Dashboard() {
       days.push({
         date: d,
         label: format(d, 'd MMM'),
+        dayLabel: format(d, 'EEE'),
         items: tasks.filter(t => t.target_publish_date?.startsWith(ds)),
       });
     }
@@ -211,14 +400,14 @@ export default function Dashboard() {
 
   /* ── AI suggestions ── */
   const suggestions = useMemo(() => {
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 86400000).toISOString();
+    const fourteenDaysAgo = new Date(now.getTime() - 14 * 86400000).toISOString();
     const results: { title: string; category: string | null; reason: string; content_type: string }[] = [];
 
-    // Suggestion 1: Category gap
     const catCounts: Record<string, SeoTask[]> = {};
     tasks.filter(t => t.status === 'pending' && t.category).forEach(t => {
       (catCounts[t.category!] ||= []).push(t);
     });
-    const fourteenDaysAgo = new Date(now.getTime() - 14 * 86400000).toISOString();
     let gapCat: string | null = null;
     let gapMax = 0;
     for (const [cat, items] of Object.entries(catCounts)) {
@@ -230,13 +419,11 @@ export default function Dashboard() {
       results.push({ title: best.title, category: best.category, reason: `No ${gapCat} content drafted this week`, content_type: best.content_type || 'seo_article' });
     }
 
-    // Suggestion 2: High priority untouched
     const untouched = tasks.filter(t => t.status === 'pending' && !t.draft_content).sort((a, b) => (b.priority_score || 0) - (a.priority_score || 0));
-    if (untouched.length > 0 && (!results.length || untouched[0].id !== results[0]?.title)) {
+    if (untouched.length > 0) {
       results.push({ title: untouched[0].title, category: untouched[0].category, reason: `High priority (${untouched[0].priority_score}), not yet started`, content_type: untouched[0].content_type || 'seo_article' });
     }
 
-    // Suggestion 3: Content type gap
     const typeCounts: Record<string, number> = {};
     tasks.filter(t => t.updated_at && t.updated_at > fourteenDaysAgo).forEach(t => {
       if (t.content_type) typeCounts[t.content_type] = (typeCounts[t.content_type] || 0) + 1;
@@ -247,6 +434,61 @@ export default function Dashboard() {
 
     return results.slice(0, 3);
   }, [tasks]);
+
+  /* ── channel scope toggle ── */
+  const toggleChannel = useCallback((taskId: string, channel: string) => {
+    setChannelScopes(prev => {
+      const current = prev[taskId] || [];
+      const next = current.includes(channel) ? current.filter(c => c !== channel) : [...current, channel];
+      return { ...prev, [taskId]: next };
+    });
+  }, []);
+
+  /* ── drag & drop ── */
+  const columnStatusMap: Record<KanbanColumnId, Partial<SeoTask>> = {
+    queued: { status: 'pending', james_approved: false },
+    briefed: { status: 'briefed' },
+    in_draft: { status: 'in_progress' },
+    pending_review: { status: 'draft', james_approved: false },
+    approved: { status: 'approved', james_approved: true, approved_at: new Date().toISOString() },
+    scheduled: { status: 'approved', james_approved: true },
+    published: { status: 'published', published_at: new Date().toISOString() },
+  };
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    setActiveId(null);
+    const { active, over } = event;
+    if (!over) return;
+
+    const targetColumn = over.id as KanbanColumnId;
+    const draggedTask = tasks.find(t => t.id === active.id);
+    if (!draggedTask) return;
+
+    const currentCol = getKanbanColumn(draggedTask);
+    if (currentCol === targetColumn) return;
+
+    const updates = columnStatusMap[targetColumn];
+    if (!updates) return;
+
+    // Optimistic update
+    setTasks(prev => prev.map(t =>
+      t.id === draggedTask.id ? { ...t, ...updates } as SeoTask : t
+    ));
+
+    const { error } = await supabase
+      .from('mkt_seo_queue')
+      .update(updates)
+      .eq('id', draggedTask.id);
+
+    if (error) {
+      toast({ title: 'Failed to move card', description: error.message, variant: 'destructive' });
+      fetchData();
+    }
+  };
 
   /* ── actions ── */
   const handleApprove = async (task: SeoTask) => {
@@ -279,8 +521,9 @@ export default function Dashboard() {
       category: briefCategory || null,
       target_publish_date: briefDate ? briefDate.toISOString().split('T')[0] : null,
       james_approved: false,
-      priority_score: 75,
+      priority_score: briefPriority,
       slug: toSlug(briefTopic),
+      notes: briefNotes || null,
     });
     setBriefing(false);
     if (!error) {
@@ -288,7 +531,11 @@ export default function Dashboard() {
       setBriefTopic('');
       setBriefCategory('');
       setBriefType('seo_article');
+      setBriefChannels(['SEO/Blog']);
+      setBriefPriority(60);
       setBriefDate(undefined);
+      setBriefNotes('');
+      setBriefOpen(false);
     }
   };
 
@@ -325,6 +572,8 @@ export default function Dashboard() {
     URL.revokeObjectURL(url);
   };
 
+  const activeDragTask = activeId ? tasks.find(t => t.id === activeId) : null;
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -335,21 +584,11 @@ export default function Dashboard() {
     );
   }
 
-  const STAT_CARDS = [
-    { label: 'Articles Approved', value: stats.approved7, icon: CheckCircle2, border: 'border-l-blue-500' },
-    { label: 'Published', value: stats.published7, icon: FileText, border: 'border-l-green-500' },
-    { label: 'In Draft', value: stats.inDraft7, icon: Clock, border: 'border-l-orange-500' },
-    { label: 'Pending Review', value: stats.pendingReview, icon: AlertCircle, border: 'border-l-amber-500' },
-    { label: 'Total Queue', value: stats.total, icon: Database, border: 'border-l-gray-500' },
-  ];
-
-  const FILTER_TABS = [
-    { value: 'all', label: 'All' },
-    { value: 'pending_review', label: 'Pending Review' },
-    { value: 'approved', label: 'Approved' },
-    { value: 'published', label: 'Published' },
-    { value: 'needs_revision', label: 'Needs Revision' },
-    { value: 'briefed', label: 'Briefed' },
+  const METRIC_CARDS = [
+    { label: 'Pending My Review', value: metrics.pendingReview, icon: AlertCircle, border: 'border-l-amber-500', color: 'text-amber-500' },
+    { label: 'Approved', value: metrics.approved, icon: CheckCircle2, border: 'border-l-emerald-500', color: 'text-emerald-500' },
+    { label: 'Scheduled', value: metrics.scheduled, icon: CalendarDays, border: 'border-l-purple-500', color: 'text-purple-500' },
+    { label: 'Published This Month', value: metrics.publishedMonth, icon: FileText, border: 'border-l-green-500', color: 'text-green-500' },
   ];
 
   return (
@@ -369,13 +608,13 @@ export default function Dashboard() {
 
         {/* ═══════════════════ QUEUE TAB ═══════════════════ */}
         <TabsContent value="queue" className="space-y-4 mt-4">
-          {/* ZONE A — 7-Day Rearview */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            {STAT_CARDS.map((s) => (
+          {/* METRICS BAR — 4 cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {METRIC_CARDS.map((s) => (
               <Card key={s.label} className={`rounded-xl border-l-4 ${s.border} shadow-sm`}>
                 <CardContent className="p-3">
                   <div className="flex items-center gap-2">
-                    <s.icon size={16} className="text-muted-foreground shrink-0" />
+                    <s.icon size={16} className={cn('shrink-0', s.color)} />
                     <span className="text-2xl font-bold text-foreground">{s.value}</span>
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
@@ -384,228 +623,218 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* ZONE B — 14-Day Calendar */}
-          <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-            <button
-              onClick={() => setCalendarOpen(!calendarOpen)}
-              className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-accent/50 transition-colors"
-            >
-              <span>14-Day Content Calendar</span>
-              {calendarOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-            </button>
-            {calendarOpen && (
-              <div className="px-4 pb-4 overflow-x-auto">
-                <div className="grid grid-cols-14 gap-1 min-w-[700px]" style={{ gridTemplateColumns: 'repeat(14, 1fr)' }}>
-                  {calendarDays.map((day) => (
-                    <div
-                      key={day.label}
-                      className={`rounded-lg p-2 min-h-[60px] text-center ${day.items.length === 0 ? 'bg-muted/10' : 'bg-card'}`}
-                    >
-                      <p className="text-[10px] font-semibold text-muted-foreground mb-1">{day.label}</p>
-                      <div className="flex flex-wrap justify-center gap-1">
-                        {day.items.map((item) => (
-                          <Tooltip key={item.id}>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={() => setSelectedTask(item)}
-                                className="w-3 h-3 rounded-full transition-transform hover:scale-150"
-                                style={{ backgroundColor: CALENDAR_DOT_COLORS[item.content_type || ''] || '#6b7280' }}
-                              />
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="text-xs max-w-[200px]">
-                              <p className="font-semibold">{item.title}</p>
-                              <p className="text-muted-foreground">{TYPE_COLORS[item.content_type || '']?.label || item.content_type}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        ))}
-                      </div>
+          {/* NEEDS MY ACTION STRIP */}
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              <h2 className="text-sm font-bold text-foreground">Needs My Action</h2>
+              {actionItems.length > 0 && (
+                <span className="text-[10px] font-bold bg-amber-500/20 text-amber-500 rounded-full px-2 py-0.5">{actionItems.length}</span>
+              )}
+            </div>
+            {actionItems.length === 0 ? (
+              <p className="text-sm text-muted-foreground flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-green-500" />
+                You're all clear — no content needs your attention right now
+              </p>
+            ) : (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {actionItems.map(task => (
+                  <button
+                    key={task.id}
+                    onClick={() => setSelectedTask(task)}
+                    className="shrink-0 rounded-lg border border-amber-500/30 bg-card p-2.5 text-left hover:bg-accent/50 transition-colors min-w-[200px] max-w-[240px]"
+                  >
+                    <p className="text-xs font-semibold text-foreground truncate">{task.title}</p>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <TypeBadge type={task.content_type} />
+                      {task.priority_score != null && (
+                        <span className={cn(
+                          'text-[9px] font-bold rounded px-1 py-0.5',
+                          task.priority_score >= 70 ? 'bg-red-500/15 text-red-400' :
+                          task.priority_score >= 40 ? 'bg-amber-500/15 text-amber-400' :
+                          'bg-muted/15 text-muted-foreground'
+                        )}>
+                          P{task.priority_score}
+                        </span>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  </button>
+                ))}
               </div>
             )}
           </div>
 
-          {/* ZONE C + D layout */}
-          <div className="flex flex-col lg:flex-row gap-4">
-            {/* ZONE C — Approval Queue */}
-            <div className="flex-1 min-w-0 space-y-3">
-              {/* Filter tabs */}
-              <div className="flex flex-wrap gap-1.5">
-                {FILTER_TABS.map((tab) => (
-                  <button
-                    key={tab.value}
-                    onClick={() => setFilterStatus(tab.value)}
-                    className={cn(
-                      'rounded-full px-3 py-1 text-xs font-semibold transition-colors',
-                      filterStatus === tab.value
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted/15 text-muted-foreground hover:bg-muted/25'
-                    )}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
+          {/* VIEW TOGGLE + BRIEF EMILY BUTTON */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1 rounded-lg border border-border p-0.5">
+              <button
+                onClick={() => setViewMode('pipeline')}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors',
+                  viewMode === 'pipeline' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <LayoutGrid size={14} /> Pipeline
+              </button>
+              <button
+                onClick={() => setViewMode('calendar')}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors',
+                  viewMode === 'calendar' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <CalendarDays size={14} /> Calendar
+              </button>
+            </div>
+            <Button onClick={() => setBriefOpen(true)} className="h-9 text-sm font-semibold gap-1.5">
+              <Plus size={14} /> Brief Emily
+            </Button>
+          </div>
 
-              {/* Table */}
-              <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/5">
-                        <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Title</th>
-                        <th className="text-left px-3 py-2 font-semibold text-muted-foreground hidden md:table-cell">Type</th>
-                        <th className="text-left px-3 py-2 font-semibold text-muted-foreground hidden md:table-cell">Status</th>
-                        <th className="text-left px-3 py-2 font-semibold text-muted-foreground hidden lg:table-cell">Priority</th>
-                        <th className="text-left px-3 py-2 font-semibold text-muted-foreground hidden lg:table-cell">Target</th>
-                        <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredTasks.length === 0 ? (
-                        <tr><td colSpan={6} className="text-center py-12 text-muted-foreground">No tasks match this filter</td></tr>
-                      ) : (
-                        filteredTasks.map((task) => (
-                          <tr
+          {/* MAIN CONTENT AREA */}
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Pipeline / Calendar */}
+            <div className="flex-1 min-w-0">
+              {viewMode === 'pipeline' ? (
+                /* ── KANBAN BOARD ── */
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCorners}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                >
+                  <div className="flex gap-3 overflow-x-auto pb-2 lg:grid lg:grid-cols-7 lg:overflow-x-visible">
+                    {KANBAN_COLUMNS.map((col) => (
+                      <KanbanDropColumn
+                        key={col.id}
+                        id={col.id}
+                        label={col.label}
+                        color={col.color}
+                        count={kanbanData[col.id].length}
+                      >
+                        {kanbanData[col.id].map(task => (
+                          <KanbanCard
                             key={task.id}
-                            className="border-b border-border/50 hover:bg-accent/30 transition-colors cursor-pointer"
-                            onClick={() => setSelectedTask(task)}
-                          >
-                            <td className="px-3 py-2.5">
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <div>
-                                    <p className="font-medium text-foreground truncate max-w-[250px]">{task.title}</p>
-                                    {task.target_keyword && (
-                                      <p className="text-xs text-muted-foreground truncate max-w-[250px]">{task.target_keyword}</p>
-                                    )}
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="max-w-[300px]">
-                                  <p>{task.title}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </td>
-                            <td className="px-3 py-2.5 hidden md:table-cell">
-                              <TypeBadge type={task.content_type} />
-                            </td>
-                            <td className="px-3 py-2.5 hidden md:table-cell">
-                              <StatusBadge status={task.status} />
-                            </td>
-                            <td className="px-3 py-2.5 hidden lg:table-cell">
-                              {task.priority_score != null && (
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs font-bold text-foreground">{task.priority_score}</span>
-                                  <div className="w-12 h-1.5 rounded-full bg-muted/20 overflow-hidden">
-                                    <div
-                                      className="h-full rounded-full"
-                                      style={{
-                                        width: `${task.priority_score}%`,
-                                        backgroundColor: task.priority_score >= 70 ? '#ef4444' : task.priority_score >= 40 ? '#f59e0b' : '#6b7280',
-                                      }}
+                            task={task}
+                            column={col.id}
+                            onOpen={setSelectedTask}
+                            channelScopes={channelScopes}
+                            onToggleChannel={toggleChannel}
+                          />
+                        ))}
+                        {kanbanData[col.id].length === 0 && (
+                          <div className="flex items-center justify-center h-16 text-[10px] text-muted-foreground/40">
+                            Empty
+                          </div>
+                        )}
+                      </KanbanDropColumn>
+                    ))}
+                  </div>
+                  <DragOverlay>
+                    {activeDragTask && (
+                      <div className="rounded-lg border border-primary bg-card p-2.5 shadow-xl w-[220px] opacity-90">
+                        <p className="text-xs font-semibold text-foreground truncate">{activeDragTask.title}</p>
+                        <TypeBadge type={activeDragTask.content_type} />
+                      </div>
+                    )}
+                  </DragOverlay>
+                </DndContext>
+              ) : (
+                /* ── CALENDAR VIEW ── */
+                <div className="rounded-xl border border-border bg-card/50 shadow-sm overflow-hidden">
+                  <div className="px-4 py-3 border-b border-border">
+                    <h3 className="text-sm font-bold text-foreground">14-Day Content Calendar</h3>
+                    <div className="flex gap-3 mt-1">
+                      {Object.entries(CALENDAR_CHANNEL_COLORS).map(([ch, color]) => (
+                        <span key={ch} className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                          {ch}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="p-4 overflow-x-auto">
+                    <div className="grid gap-1 min-w-[700px]" style={{ gridTemplateColumns: 'repeat(14, 1fr)' }}>
+                      {calendarDays.map((day) => (
+                        <div
+                          key={day.label}
+                          className={cn(
+                            'rounded-lg p-2 min-h-[80px] text-center border border-border/30',
+                            day.items.length === 0 ? 'bg-muted/5' : 'bg-card'
+                          )}
+                        >
+                          <p className="text-[9px] font-bold text-muted-foreground uppercase">{day.dayLabel}</p>
+                          <p className="text-[11px] font-semibold text-foreground mb-1">{day.label}</p>
+                          <div className="flex flex-col items-center gap-1">
+                            {day.items.map((item) => {
+                              // Determine channel color
+                              const ct = item.content_type || '';
+                              const channelColor =
+                                ['social_post', 'social', 'tiktok'].includes(ct) ? CALENDAR_CHANNEL_COLORS.Social :
+                                ['email_draft', 'email', 'sms'].includes(ct) ? CALENDAR_CHANNEL_COLORS.Email :
+                                CALENDAR_CHANNEL_COLORS['SEO/Blog'];
+                              return (
+                                <Tooltip key={item.id}>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      onClick={() => setSelectedTask(item)}
+                                      className="w-3 h-3 rounded-full transition-transform hover:scale-150"
+                                      style={{ backgroundColor: channelColor }}
                                     />
-                                  </div>
-                                </div>
-                              )}
-                            </td>
-                            <td className="px-3 py-2.5 hidden lg:table-cell text-xs text-muted-foreground">
-                              {task.target_publish_date ? format(new Date(task.target_publish_date), 'd MMM') : '—'}
-                            </td>
-                            <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
-                              {(task.status === 'draft' && !task.james_approved) || (task.status === 'in_progress' && task.draft_content) ? (
-                                <Button size="sm" variant="outline" className="h-8 text-xs border-amber-500/50 text-amber-500 hover:bg-amber-500/10" onClick={() => setSelectedTask(task)}>
-                                  Review
-                                </Button>
-                              ) : task.james_approved ? (
-                                <span className="text-xs text-green-500 font-semibold flex items-center justify-end gap-1"><CheckCircle2 size={12} /> Approved</span>
-                              ) : task.status === 'published' ? (
-                                <span className="text-xs text-green-500 font-semibold flex items-center justify-end gap-1"><CheckCircle2 size={12} /> Published</span>
-                              ) : (
-                                <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setSelectedTask(task)}>
-                                  <Eye size={14} className="mr-1" /> View
-                                </Button>
-                              )}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top" className="text-xs max-w-[200px]">
+                                    <p className="font-semibold">{item.title}</p>
+                                    <p className="text-muted-foreground">{TYPE_COLORS[ct]?.label || ct}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
-            {/* ZONE D + E — Topic Loader + Suggestions (hidden mobile by default) */}
-            <div className="hidden lg:block w-[320px] shrink-0 space-y-4">
-              {/* Brief Emily */}
-              <Card className="rounded-xl border border-border shadow-sm">
-                <CardContent className="p-4 space-y-3">
-                  <h3 className="font-semibold text-sm text-foreground flex items-center gap-2"><Pencil size={14} /> Brief Emily</h3>
-                  <Input
-                    placeholder="e.g. How to replace brake pads on a Toyota Hilux"
-                    value={briefTopic}
-                    onChange={(e) => setBriefTopic(e.target.value)}
-                    className="text-sm"
-                  />
-                  <Select value={briefCategory} onValueChange={setBriefCategory}>
-                    <SelectTrigger className="text-sm h-9"><SelectValue placeholder="Category" /></SelectTrigger>
-                    <SelectContent>
-                      {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Select value={briefType} onValueChange={setBriefType}>
-                    <SelectTrigger className="text-sm h-9"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="seo_article">SEO Article</SelectItem>
-                      <SelectItem value="video_script">Video Script</SelectItem>
-                      <SelectItem value="social_post">Social Post</SelectItem>
-                      <SelectItem value="email_draft">Email Draft</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="w-full justify-start text-left text-sm h-9 font-normal">
-                        <CalendarIcon size={14} className="mr-2 shrink-0" />
-                        {briefDate ? format(briefDate, 'dd MMM yyyy') : 'Target date (optional)'}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={briefDate} onSelect={setBriefDate} className="p-3 pointer-events-auto" />
-                    </PopoverContent>
-                  </Popover>
-                  <Button onClick={handleBriefSubmit} disabled={!briefTopic.trim() || briefing} className="w-full h-9 text-sm font-semibold">
-                    <Plus size={14} className="mr-1.5" /> Add to Queue
-                  </Button>
-                </CardContent>
-              </Card>
-
-              {/* Emily Suggests */}
-              <Card className="rounded-xl border border-border shadow-sm">
-                <CardContent className="p-4 space-y-3">
-                  <h3 className="font-semibold text-sm text-foreground flex items-center gap-2"><Sparkles size={14} className="text-secondary" /> Emily Suggests</h3>
-                  {suggestions.map((s, i) => (
-                    <div key={i} className="rounded-lg border border-border/50 p-3 space-y-1.5 bg-accent/30">
-                      <p className="text-sm font-medium text-foreground leading-tight">{s.title}</p>
-                      <div className="flex items-center gap-1.5">
-                        {s.category && <span className="text-[10px] rounded-full bg-primary/10 text-primary px-2 py-0.5 font-semibold">{s.category}</span>}
-                        <TypeBadge type={s.content_type} />
+            {/* SIDEBAR — Emily Suggests (desktop only, reduced weight) */}
+            <div className="hidden lg:block w-[280px] shrink-0">
+              <div className="rounded-xl border border-border bg-card/30 shadow-sm overflow-hidden">
+                <button
+                  onClick={() => setSuggestionsOpen(!suggestionsOpen)}
+                  className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-bold text-muted-foreground uppercase tracking-wider hover:bg-accent/30 transition-colors"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles size={12} className="text-secondary" /> Emily Suggests
+                  </span>
+                  {suggestionsOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                </button>
+                {suggestionsOpen && (
+                  <div className="p-2.5 space-y-2 border-t border-border/30">
+                    {suggestions.map((s, i) => (
+                      <div key={i} className="rounded-lg border border-border/30 p-2.5 space-y-1 bg-accent/10">
+                        <p className="text-xs font-medium text-foreground leading-tight">{s.title}</p>
+                        <div className="flex items-center gap-1">
+                          {s.category && <span className="text-[9px] rounded-full bg-primary/10 text-primary px-1.5 py-0.5 font-semibold">{s.category}</span>}
+                          <TypeBadge type={s.content_type} />
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">{s.reason}</p>
+                        <Button size="sm" variant="ghost" className="h-6 text-[10px] w-full" onClick={() => handleAddSuggestion(s)}>
+                          <Plus size={10} className="mr-1" /> Add to Queue
+                        </Button>
                       </div>
-                      <p className="text-xs text-muted-foreground">{s.reason}</p>
-                      <Button size="sm" variant="outline" className="h-7 text-xs w-full mt-1" onClick={() => handleAddSuggestion(s)}>
-                        <Plus size={12} className="mr-1" /> Add to Queue
-                      </Button>
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </TabsContent>
 
         {/* ═══════════════════ LEDGER TAB ═══════════════════ */}
         <TabsContent value="ledger" className="space-y-4 mt-4">
-          {/* Summary */}
           <div className="grid grid-cols-3 gap-3">
             <Card className="rounded-xl border-l-4 border-l-green-500 shadow-sm">
               <CardContent className="p-3">
@@ -627,14 +856,12 @@ export default function Dashboard() {
             </Card>
           </div>
 
-          {/* Export */}
           <div className="flex justify-end">
             <Button variant="outline" size="sm" onClick={exportCsv} className="text-xs h-8">
               <Download size={14} className="mr-1.5" /> Export CSV
             </Button>
           </div>
 
-          {/* Published table */}
           <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -676,6 +903,138 @@ export default function Dashboard() {
         </TabsContent>
       </Tabs>
 
+      {/* ═══════════════════ BRIEF EMILY SHEET ═══════════════════ */}
+      <Sheet open={briefOpen} onOpenChange={setBriefOpen}>
+        <SheetContent className="w-full sm:w-[440px] sm:max-w-[440px] overflow-y-auto">
+          <SheetHeader className="mb-4">
+            <SheetTitle className="text-lg font-bold text-foreground text-left flex items-center gap-2">
+              <Send size={18} /> Brief Emily
+            </SheetTitle>
+          </SheetHeader>
+          <div className="space-y-4">
+            {/* Topic */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Topic / Working Title *</label>
+              <Input
+                placeholder="e.g. How to replace brake pads on a Toyota Hilux"
+                value={briefTopic}
+                onChange={(e) => setBriefTopic(e.target.value)}
+              />
+            </div>
+
+            {/* Category */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Category</label>
+              <Select value={briefCategory} onValueChange={setBriefCategory}>
+                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                <SelectContent>
+                  {['Braking', 'Suspension', 'Engine', 'Drivetrain', 'Cooling', 'Electrical', 'Other',
+                    ...categories.filter(c => !['Braking', 'Suspension', 'Engine', 'Drivetrain', 'Cooling', 'Electrical', 'Other'].includes(c))
+                  ].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Content Type */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Content Type</label>
+              <Select value={briefType} onValueChange={setBriefType}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="seo_article">SEO Article</SelectItem>
+                  <SelectItem value="decision_page">Decision Page</SelectItem>
+                  <SelectItem value="regional_seo">Regional SEO</SelectItem>
+                  <SelectItem value="email_draft">Email Newsletter</SelectItem>
+                  <SelectItem value="social_post">Social Post</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Channel Scope */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Channel Scope</label>
+              <div className="flex gap-2">
+                {['SEO/Blog', 'Social', 'Email'].map(ch => (
+                  <button
+                    key={ch}
+                    onClick={() => setBriefChannels(prev =>
+                      prev.includes(ch) ? prev.filter(c => c !== ch) : [...prev, ch]
+                    )}
+                    className={cn(
+                      'text-xs font-semibold rounded-full px-3 py-1.5 border transition-all',
+                      briefChannels.includes(ch)
+                        ? ch === 'SEO/Blog' ? 'bg-green-500/20 text-green-600 border-green-500/40'
+                        : ch === 'Social' ? 'bg-orange-500/20 text-orange-600 border-orange-500/40'
+                        : 'bg-purple-500/20 text-purple-600 border-purple-500/40'
+                        : 'bg-muted/10 text-muted-foreground border-border'
+                    )}
+                  >
+                    {ch}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Priority */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Priority</label>
+              <div className="flex gap-2">
+                {[{ label: 'High', value: 90, color: 'bg-red-500/15 text-red-500 border-red-500/40' },
+                  { label: 'Medium', value: 60, color: 'bg-amber-500/15 text-amber-500 border-amber-500/40' },
+                  { label: 'Low', value: 30, color: 'bg-muted/15 text-muted-foreground border-border' }
+                ].map(p => (
+                  <button
+                    key={p.value}
+                    onClick={() => setBriefPriority(p.value)}
+                    className={cn(
+                      'text-xs font-semibold rounded-full px-3 py-1.5 border transition-all',
+                      briefPriority === p.value ? p.color : 'bg-muted/5 text-muted-foreground/50 border-border/30'
+                    )}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Target Date */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Target Publish Date</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start text-left font-normal">
+                    <CalendarIcon size={14} className="mr-2 shrink-0" />
+                    {briefDate ? format(briefDate, 'dd MMM yyyy') : 'Optional'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={briefDate} onSelect={setBriefDate} className="p-3 pointer-events-auto" />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Additional Notes for Emily</label>
+              <Textarea
+                placeholder="Any specific angles, keywords, or requirements..."
+                value={briefNotes}
+                onChange={(e) => setBriefNotes(e.target.value)}
+                className="min-h-[80px]"
+              />
+            </div>
+
+            <Button
+              onClick={handleBriefSubmit}
+              disabled={!briefTopic.trim() || briefing}
+              className="w-full h-11 font-semibold text-sm"
+            >
+              <Plus size={14} className="mr-1.5" /> Add to Queue
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+
       {/* ═══════════════════ REVIEW DRAWER ═══════════════════ */}
       <Sheet open={!!selectedTask} onOpenChange={(open) => { if (!open) { setSelectedTask(null); setRevisionMode(false); setRevisionNote(''); setPubDatePicker(false); } }}>
         <SheetContent className="w-full sm:w-[50vw] sm:max-w-[700px] overflow-y-auto p-0">
@@ -708,7 +1067,6 @@ export default function Dashboard() {
                 </div>
               </SheetHeader>
 
-              {/* Content */}
               <div className="flex-1 overflow-y-auto p-5">
                 {selectedTask.hero_image_url && (
                   <img src={selectedTask.hero_image_url} alt="" className="w-full rounded-lg mb-4 object-cover max-h-[200px]" />
@@ -736,7 +1094,6 @@ export default function Dashboard() {
                 )}
               </div>
 
-              {/* Actions */}
               <div className="border-t border-border p-4 space-y-3">
                 {revisionMode ? (
                   <div className="space-y-2">
