@@ -771,7 +771,7 @@ export default function Dashboard() {
             <CalendarDays size={14} /> Calendar
           </button>
         </div>
-        <Button onClick={() => setBriefOpen(true)} className="h-9 text-sm font-semibold gap-1.5" style={{ backgroundColor: '#2563eb' }}>
+        <Button onClick={() => { setEditingTaskId(null); setBriefTopic(''); setBriefCategory(''); setBriefType('decision_page'); setBriefOutputs(['seo_article']); setBriefPriority(60); setBriefDate(undefined); setBriefNotes(''); setBriefOpen(true); }} className="h-9 text-sm font-semibold gap-1.5" style={{ backgroundColor: '#2563eb' }}>
           <Plus size={14} /> Brief Emily
         </Button>
       </div>
