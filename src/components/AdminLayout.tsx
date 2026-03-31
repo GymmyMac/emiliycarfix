@@ -40,7 +40,7 @@ export default function AdminLayout() {
         </div>
       </header>
 
-      <main className="flex-1 md:ml-[220px] pt-14 md:pt-0 pb-16 md:pb-0 px-4 md:px-6 py-4 md:py-6 overflow-x-hidden">
+      <main className="flex-1 md:ml-[60px] pt-14 md:pt-0 pb-16 md:pb-0 px-4 md:px-6 py-4 md:py-6 overflow-x-hidden">
         <Outlet />
       </main>
 
