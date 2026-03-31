@@ -169,7 +169,7 @@ function KanbanDropColumn({ id, label, color, count, children }: {
     <div
       ref={setNodeRef}
       className={cn(
-        'flex flex-col min-w-[220px] w-[220px] lg:w-auto lg:flex-1 rounded-xl border border-border bg-card/50 border-t-4 transition-colors',
+        'flex flex-col min-w-[240px] w-[240px] rounded-xl border border-border bg-card/50 border-t-4 transition-colors',
         color,
         isOver && 'ring-2 ring-primary/40 bg-accent/40'
       )}
