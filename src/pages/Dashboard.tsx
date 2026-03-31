@@ -175,8 +175,8 @@ function KanbanDropColumn({ id, label, color, count, children }: {
       )}
     >
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border/50">
-        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{label}</span>
-        <span className="text-[10px] font-bold bg-muted/20 text-muted-foreground rounded-full w-5 h-5 flex items-center justify-center">{count}</span>
+        <span className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{label}</span>
+        <span className="text-xs font-bold bg-muted/20 text-muted-foreground rounded-full w-6 h-6 flex items-center justify-center">{count}</span>
       </div>
       <div className="flex-1 p-2 space-y-2 overflow-y-auto max-h-[55vh] min-h-[100px]">
         {children}
