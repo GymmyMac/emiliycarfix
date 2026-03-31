@@ -240,7 +240,7 @@ function KanbanCard({ task, column, onOpen, channelScopes, onToggleChannel }: {
             key={ch}
             onClick={(e) => { e.stopPropagation(); onToggleChannel(task.id, ch); }}
             className={cn(
-              'text-[9px] font-bold rounded-full px-2 py-0.5 transition-all border',
+              'text-[11px] font-bold rounded-full px-2 py-0.5 transition-all border',
               channels.includes(ch)
                 ? ch === 'SEO/Blog' ? 'bg-green-500/20 text-green-400 border-green-500/40'
                 : ch === 'Social' ? 'bg-orange-500/20 text-orange-400 border-orange-500/40'
