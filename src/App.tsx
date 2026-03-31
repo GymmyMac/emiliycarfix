@@ -43,6 +43,7 @@ const App = () => (
               <Route path="/batch/:batchId" element={<BatchReview />} />
               <Route path="/review" element={<Review />} />
               <Route path="/seo-queue" element={<SeoQueue />} />
+              <Route path="/emilys-brief" element={<EmilysBrief />} />
             </Route>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />
