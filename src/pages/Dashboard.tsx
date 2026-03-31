@@ -175,7 +175,7 @@ function KanbanCard({ task, column, onOpen, onToggleOutput }: {
 
   const actionButton = () => {
     switch (column) {
-      case 'queued': return <><Send size={10} className="mr-1" />Brief Emily →</>;
+      case 'queued': return <><Pencil size={10} className="mr-1" />Edit Brief</>;
       case 'briefed': return <><Eye size={10} className="mr-1" />View Draft</>;
       case 'in_draft': return <><Eye size={10} className="mr-1" />View Draft</>;
       case 'pending_review': return <><CheckCircle2 size={10} className="mr-1" />Review →</>;
@@ -295,6 +295,7 @@ export default function Dashboard() {
   const [briefDate, setBriefDate] = useState<Date | undefined>();
   const [briefNotes, setBriefNotes] = useState('');
   const [briefing, setBriefing] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 
   // Flash animation for realtime updates
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set());
@@ -487,29 +488,60 @@ export default function Dashboard() {
     fetchData();
   };
 
-  /* ── Brief Emily submit ── */
+  /* ── Brief Emily submit (insert or update) ── */
   const handleBriefSubmit = async () => {
     if (!briefTopic.trim()) return;
     setBriefing(true);
-    const { error } = await supabase.from('mkt_seo_queue').insert({
-      status: 'queued',
+
+    const payload = {
       content_type: briefType,
       title: briefTopic.trim(),
       category: briefCategory || null,
       target_publish_date: briefDate ? briefDate.toISOString().split('T')[0] : null,
-      james_approved: false,
       priority_score: briefPriority,
       slug: toSlug(briefTopic),
       notes: briefNotes || null,
       output_types: briefOutputs,
-    });
-    setBriefing(false);
-    if (!error) {
-      toast({ title: 'Added to Queue →', description: "Emily will pick it up." });
-      setBriefTopic(''); setBriefCategory(''); setBriefType('decision_page');
-      setBriefOutputs(['seo_article']); setBriefPriority(60);
-      setBriefDate(undefined); setBriefNotes(''); setBriefOpen(false);
+    };
+
+    if (editingTaskId) {
+      const { error } = await supabase.from('mkt_seo_queue').update(payload).eq('id', editingTaskId);
+      setBriefing(false);
+      if (!error) {
+        toast({ title: 'Job updated ✓' });
+        resetBriefForm();
+      }
+    } else {
+      const { error } = await supabase.from('mkt_seo_queue').insert({
+        ...payload,
+        status: 'queued',
+        james_approved: false,
+      });
+      setBriefing(false);
+      if (!error) {
+        toast({ title: 'Added to Queue →', description: "Emily will pick it up." });
+        resetBriefForm();
+      }
     }
+  };
+
+  const resetBriefForm = () => {
+    setBriefTopic(''); setBriefCategory(''); setBriefType('decision_page');
+    setBriefOutputs(['seo_article']); setBriefPriority(60);
+    setBriefDate(undefined); setBriefNotes(''); setBriefOpen(false);
+    setEditingTaskId(null);
+  };
+
+  const openEditBrief = (task: SeoTask) => {
+    setEditingTaskId(task.id);
+    setBriefTopic(task.title || '');
+    setBriefCategory(task.category || '');
+    setBriefType(task.content_type || 'decision_page');
+    setBriefOutputs(task.output_types || ['seo_article']);
+    setBriefPriority(task.priority_score || 60);
+    setBriefDate(task.target_publish_date ? new Date(task.target_publish_date) : undefined);
+    setBriefNotes(task.notes || '');
+    setBriefOpen(true);
   };
 
   const toggleBriefOutput = (key: string) => {
@@ -739,7 +771,7 @@ export default function Dashboard() {
             <CalendarDays size={14} /> Calendar
           </button>
         </div>
-        <Button onClick={() => setBriefOpen(true)} className="h-9 text-sm font-semibold gap-1.5" style={{ backgroundColor: '#2563eb' }}>
+        <Button onClick={() => { setEditingTaskId(null); setBriefTopic(''); setBriefCategory(''); setBriefType('decision_page'); setBriefOutputs(['seo_article']); setBriefPriority(60); setBriefDate(undefined); setBriefNotes(''); setBriefOpen(true); }} className="h-9 text-sm font-semibold gap-1.5" style={{ backgroundColor: '#2563eb' }}>
           <Plus size={14} /> Brief Emily
         </Button>
       </div>
@@ -766,7 +798,7 @@ export default function Dashboard() {
                     key={task.id}
                     task={task}
                     column={col.id}
-                    onOpen={openReview}
+                    onOpen={col.id === 'queued' ? openEditBrief : openReview}
                     onToggleOutput={toggleOutput}
                   />
                 ))}
@@ -832,11 +864,11 @@ export default function Dashboard() {
       )}
 
       {/* ═══════════════════ BRIEF EMILY SHEET ═══════════════════ */}
-      <Sheet open={briefOpen} onOpenChange={setBriefOpen}>
+      <Sheet open={briefOpen} onOpenChange={(open) => { setBriefOpen(open); if (!open) setEditingTaskId(null); }}>
         <SheetContent className="w-full sm:w-[480px] sm:max-w-[480px] overflow-y-auto">
           <SheetHeader className="mb-4">
             <SheetTitle className="text-lg font-bold text-foreground text-left flex items-center gap-2">
-              Brief Emily
+              {editingTaskId ? 'Edit Brief' : 'Brief Emily'}
             </SheetTitle>
           </SheetHeader>
           <div className="space-y-5">
@@ -958,7 +990,7 @@ export default function Dashboard() {
               className="w-full h-11 font-semibold text-sm"
               style={{ backgroundColor: '#2563eb' }}
             >
-              Add to Queue →
+              {editingTaskId ? 'Save Changes →' : 'Add to Queue →'}
             </Button>
           </div>
         </SheetContent>
