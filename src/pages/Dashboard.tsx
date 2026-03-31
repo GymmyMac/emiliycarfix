@@ -704,7 +704,7 @@ export default function Dashboard() {
                   onDragStart={handleDragStart}
                   onDragEnd={handleDragEnd}
                 >
-                  <div className="flex gap-3 overflow-x-auto pb-2">
+                  <div className="flex gap-3 pb-2 overflow-x-auto" style={{ minWidth: 0 }}
                     {KANBAN_COLUMNS.map((col) => (
                       <KanbanDropColumn
                         key={col.id}
