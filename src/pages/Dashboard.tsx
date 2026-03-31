@@ -255,7 +255,7 @@ function KanbanCard({ task, column, onOpen, channelScopes, onToggleChannel }: {
 
       {/* Target date + action */}
       <div className="flex items-center justify-between mt-2">
-        <span className="text-[10px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           {task.target_publish_date ? format(new Date(task.target_publish_date), 'd MMM') : ''}
         </span>
         <Button
