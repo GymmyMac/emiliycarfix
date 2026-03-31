@@ -546,6 +546,20 @@ export default function Dashboard() {
     setBriefOpen(true);
   };
 
+  const handleDeleteJob = async () => {
+    if (!editingTaskId) return;
+    const { error } = await supabase.from('mkt_seo_queue').delete().eq('id', editingTaskId);
+    if (!error) {
+      toast({ title: 'Job deleted' });
+      resetBriefForm();
+      fetchData();
+    } else {
+      toast({ title: 'Failed to delete', description: error.message, variant: 'destructive' });
+    }
+    setDeleteConfirmProgress(0);
+    setDeleteHolding(false);
+  };
+
   const toggleBriefOutput = (key: string) => {
     setBriefOutputs(prev => {
       let next = prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key];
