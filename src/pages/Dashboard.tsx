@@ -175,7 +175,7 @@ function KanbanCard({ task, column, onOpen, onToggleOutput }: {
 
   const actionButton = () => {
     switch (column) {
-      case 'queued': return <><Send size={10} className="mr-1" />Brief Emily →</>;
+      case 'queued': return <><Pencil size={10} className="mr-1" />Edit Brief</>;
       case 'briefed': return <><Eye size={10} className="mr-1" />View Draft</>;
       case 'in_draft': return <><Eye size={10} className="mr-1" />View Draft</>;
       case 'pending_review': return <><CheckCircle2 size={10} className="mr-1" />Review →</>;
