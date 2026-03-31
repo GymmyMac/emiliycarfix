@@ -296,6 +296,8 @@ export default function Dashboard() {
   const [briefNotes, setBriefNotes] = useState('');
   const [briefing, setBriefing] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [deleteConfirmProgress, setDeleteConfirmProgress] = useState(0);
+  const [deleteHolding, setDeleteHolding] = useState(false);
 
   // Flash animation for realtime updates
   const [flashIds, setFlashIds] = useState<Set<string>>(new Set());
@@ -542,6 +544,20 @@ export default function Dashboard() {
     setBriefDate(task.target_publish_date ? new Date(task.target_publish_date) : undefined);
     setBriefNotes(task.notes || '');
     setBriefOpen(true);
+  };
+
+  const handleDeleteJob = async () => {
+    if (!editingTaskId) return;
+    const { error } = await supabase.from('mkt_seo_queue').delete().eq('id', editingTaskId);
+    if (!error) {
+      toast({ title: 'Job deleted' });
+      resetBriefForm();
+      fetchData();
+    } else {
+      toast({ title: 'Failed to delete', description: error.message, variant: 'destructive' });
+    }
+    setDeleteConfirmProgress(0);
+    setDeleteHolding(false);
   };
 
   const toggleBriefOutput = (key: string) => {
@@ -990,8 +1006,90 @@ export default function Dashboard() {
               className="w-full h-11 font-semibold text-sm"
               style={{ backgroundColor: '#2563eb' }}
             >
-              {editingTaskId ? 'Save Changes →' : 'Add to Queue →'}
+            {editingTaskId ? 'Save Changes →' : 'Add to Queue →'}
             </Button>
+
+            {/* Delete with slide-to-confirm */}
+            {editingTaskId && (
+              <div className="mt-4 pt-4 border-t border-border">
+                <p className="text-xs text-muted-foreground mb-2 text-center">Hold and slide to delete this job</p>
+                <div
+                  className="relative w-full h-11 rounded-lg overflow-hidden select-none"
+                  style={{ backgroundColor: '#fee2e2' }}
+                  onMouseUp={() => { setDeleteHolding(false); if (deleteConfirmProgress < 100) setDeleteConfirmProgress(0); }}
+                  onMouseLeave={() => { setDeleteHolding(false); if (deleteConfirmProgress < 100) setDeleteConfirmProgress(0); }}
+                  onTouchEnd={() => { setDeleteHolding(false); if (deleteConfirmProgress < 100) setDeleteConfirmProgress(0); }}
+                >
+                  {/* Progress fill */}
+                  <div
+                    className="absolute inset-y-0 left-0 rounded-lg transition-all duration-100"
+                    style={{ width: `${deleteConfirmProgress}%`, backgroundColor: '#ef4444' }}
+                  />
+                  {/* Draggable thumb */}
+                  <div
+                    className="absolute inset-0 flex items-center cursor-grab active:cursor-grabbing"
+                    onMouseDown={(e) => {
+                      setDeleteHolding(true);
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const startX = e.clientX;
+                      const width = rect.width;
+                      const handleMove = (ev: MouseEvent) => {
+                        const delta = ev.clientX - startX;
+                        const pct = Math.max(0, Math.min(100, (delta / width) * 100));
+                        setDeleteConfirmProgress(pct);
+                        if (pct >= 95) {
+                          handleDeleteJob();
+                          document.removeEventListener('mousemove', handleMove);
+                          document.removeEventListener('mouseup', handleUp);
+                        }
+                      };
+                      const handleUp = () => {
+                        setDeleteHolding(false);
+                        setDeleteConfirmProgress(0);
+                        document.removeEventListener('mousemove', handleMove);
+                        document.removeEventListener('mouseup', handleUp);
+                      };
+                      document.addEventListener('mousemove', handleMove);
+                      document.addEventListener('mouseup', handleUp);
+                    }}
+                    onTouchStart={(e) => {
+                      setDeleteHolding(true);
+                      const touch = e.touches[0];
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const startX = touch.clientX;
+                      const width = rect.width;
+                      const handleMove = (ev: TouchEvent) => {
+                        const delta = ev.touches[0].clientX - startX;
+                        const pct = Math.max(0, Math.min(100, (delta / width) * 100));
+                        setDeleteConfirmProgress(pct);
+                        if (pct >= 95) {
+                          handleDeleteJob();
+                          document.removeEventListener('touchmove', handleMove);
+                          document.removeEventListener('touchend', handleUp);
+                        }
+                      };
+                      const handleUp = () => {
+                        setDeleteHolding(false);
+                        setDeleteConfirmProgress(0);
+                        document.removeEventListener('touchmove', handleMove);
+                        document.removeEventListener('touchend', handleUp);
+                      };
+                      document.addEventListener('touchmove', handleMove);
+                      document.addEventListener('touchend', handleUp);
+                    }}
+                  >
+                    <div className="relative z-10 w-full text-center">
+                      <span className={cn(
+                        'text-sm font-semibold transition-colors',
+                        deleteConfirmProgress > 50 ? 'text-white' : 'text-red-600'
+                      )}>
+                        {deleteConfirmProgress >= 95 ? 'Deleting...' : '⟶ Slide to Delete'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </SheetContent>
       </Sheet>
