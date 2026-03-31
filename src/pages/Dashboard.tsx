@@ -227,7 +227,7 @@ function KanbanCard({ task, column, onOpen, channelScopes, onToggleChannel }: {
           <div className="flex items-center gap-1 mt-1 flex-wrap">
             <TypeBadge type={task.content_type} />
             {task.priority_score != null && (
-              <span className="text-[9px] font-bold text-muted-foreground bg-muted/15 rounded px-1">P{task.priority_score}</span>
+              <span className="text-xs font-bold text-muted-foreground bg-muted/15 rounded px-1">P{task.priority_score}</span>
             )}
           </div>
         </div>
