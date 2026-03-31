@@ -846,8 +846,9 @@ export default function Dashboard() {
       {viewMode === 'pipeline' ? (
         <DndContext
           sensors={sensors}
-          collisionDetection={closestCorners}
+          collisionDetection={rectIntersection}
           onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
           <div className="flex gap-3 pb-2 overflow-x-auto" style={{ minWidth: 0 }}>
