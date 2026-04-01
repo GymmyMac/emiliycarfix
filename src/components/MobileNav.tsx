@@ -13,6 +13,7 @@ import {
   Settings,
   X,
   FileEdit,
+  Brain,
 } from 'lucide-react';
 
 const mainItems = [
