@@ -13,6 +13,7 @@ import {
   Settings,
   X,
   FileEdit,
+  Brain,
 } from 'lucide-react';
 
 const mainItems = [
@@ -26,6 +27,7 @@ const moreItems = [
   { label: 'Review Queue', icon: ClipboardCheck, path: '/review' },
   { label: 'SEO Queue', icon: FileEdit, path: '/seo-queue' },
   { label: 'Initiatives', icon: Rocket, path: '/initiatives' },
+  { label: 'Emily Ops', icon: Brain, path: '/emily-ops' },
   { label: 'Analytics', icon: BarChart3, path: '/analytics' },
   { label: 'Calendar', icon: Calendar, path: '/calendar' },
   { label: 'Settings', icon: Settings, path: '/settings' },

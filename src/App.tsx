@@ -19,6 +19,7 @@ import BatchReview from "./pages/BatchReview";
 import Review from "./pages/Review";
 import SeoQueue from "./pages/SeoQueue";
 import EmilysBrief from "./pages/EmilysBrief";
+import EmilyOperations from "./pages/EmilyOperations";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +45,7 @@ const App = () => (
               <Route path="/review" element={<Review />} />
               <Route path="/seo-queue" element={<SeoQueue />} />
               <Route path="/emilys-brief" element={<EmilysBrief />} />
+              <Route path="/emily-ops" element={<EmilyOperations />} />
             </Route>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />
