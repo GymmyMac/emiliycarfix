@@ -11,6 +11,7 @@ import {
   Settings,
   LogOut,
   MessageCircle,
+  Brain,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
