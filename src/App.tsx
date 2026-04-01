@@ -45,6 +45,7 @@ const App = () => (
               <Route path="/review" element={<Review />} />
               <Route path="/seo-queue" element={<SeoQueue />} />
               <Route path="/emilys-brief" element={<EmilysBrief />} />
+              <Route path="/emily-ops" element={<EmilyOperations />} />
             </Route>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />

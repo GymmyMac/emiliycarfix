@@ -20,6 +20,7 @@ const navItems = [
   { label: "Emily's Brief", icon: BookOpen, path: '/emilys-brief' },
   { label: 'Ideas Bucket', icon: Lightbulb, path: '/ideas' },
   { label: 'Emily', icon: MessageCircle, path: '/emily', isEmily: true },
+  { label: 'Emily Ops', icon: Brain, path: '/emily-ops', isEmily: true },
   { label: 'Analytics', icon: BarChart3, path: '/analytics' },
   { label: 'Settings', icon: Settings, path: '/settings' },
 ];
