@@ -33,7 +33,7 @@ interface GA4Row {
 interface FeatureFlag {
   id: string;
   flag_key: string;
-  enabled: boolean;
+  flag_value: boolean;
   label?: string;
 }
 
