@@ -164,7 +164,7 @@ export default function EmilyOperations() {
   useEffect(() => {
     fetchAll();
     fetchCredits();
-    const interval = setInterval(() => { fetchAll(); fetchCredits(); }, 60_000);
+    const interval = setInterval(fetchAll, 60_000);
     return () => clearInterval(interval);
   }, [fetchAll, fetchCredits]);
 
