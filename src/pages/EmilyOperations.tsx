@@ -218,6 +218,20 @@ export default function EmilyOperations() {
         <p className="text-xs text-muted-foreground">Holistic control &amp; growth visibility</p>
       </div>
 
+      <Tabs defaultValue="controls" className="w-full">
+        <TabsList>
+          <TabsTrigger value="controls">Controls</TabsTrigger>
+          <TabsTrigger value="pipeline" className="flex items-center gap-1.5">
+            <Workflow size={14} /> Pipeline
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="pipeline" className="mt-4">
+          <PipelineCanvas />
+        </TabsContent>
+
+        <TabsContent value="controls" className="mt-4 space-y-6">
+
       {/* ═══════ 1. GROWTH INSIGHTS ═══════ */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
