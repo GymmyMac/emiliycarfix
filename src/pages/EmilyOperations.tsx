@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   ChartContainer, ChartTooltip, ChartTooltipContent,
 } from '@/components/ui/chart';
@@ -15,10 +16,11 @@ import {
   Globe, FileText, MapPin, BookOpen,
   Video, MessageCircle as Reddit, Twitter,
   Power, AlertTriangle, CreditCard,
-  CircleDot, Send as SendIcon,
+  CircleDot, Send as SendIcon, Workflow,
 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+import PipelineCanvas from '@/components/PipelineCanvas';
 
 /* ─── Types ─── */
 interface GA4Row {
