@@ -173,7 +173,7 @@ export default function EmilyOperations() {
     setFlags((prev) => ({ ...prev, [key]: newValue }));
     const { error } = await supabase
       .from('feature_flags')
-      .update({ enabled: newValue })
+      .update({ flag_value: newValue })
       .eq('flag_key', key);
     if (error) {
       setFlags((prev) => ({ ...prev, [key]: !newValue }));
