@@ -119,7 +119,7 @@ export default function EmilyOperations() {
       const fm: Record<string, boolean> = {};
       const fi: Record<string, string> = {};
       flagsRes.data.forEach((f: FeatureFlag) => {
-        fm[f.flag_key] = f.enabled;
+        fm[f.flag_key] = f.flag_value;
         fi[f.flag_key] = f.id;
       });
       setFlags(fm);
