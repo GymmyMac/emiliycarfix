@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   ChartContainer, ChartTooltip, ChartTooltipContent,
 } from '@/components/ui/chart';
@@ -15,10 +16,11 @@ import {
   Globe, FileText, MapPin, BookOpen,
   Video, MessageCircle as Reddit, Twitter,
   Power, AlertTriangle, CreditCard,
-  CircleDot, Send as SendIcon,
+  CircleDot, Send as SendIcon, Workflow,
 } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+import PipelineCanvas from '@/components/PipelineCanvas';
 
 /* ─── Types ─── */
 interface GA4Row {
@@ -215,6 +217,20 @@ export default function EmilyOperations() {
         </h1>
         <p className="text-xs text-muted-foreground">Holistic control &amp; growth visibility</p>
       </div>
+
+      <Tabs defaultValue="controls" className="w-full">
+        <TabsList>
+          <TabsTrigger value="controls">Controls</TabsTrigger>
+          <TabsTrigger value="pipeline" className="flex items-center gap-1.5">
+            <Workflow size={14} /> Pipeline
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="pipeline" className="mt-4">
+          <PipelineCanvas />
+        </TabsContent>
+
+        <TabsContent value="controls" className="mt-4 space-y-6">
 
       {/* ═══════ 1. GROWTH INSIGHTS ═══════ */}
       <section className="space-y-4">
@@ -454,6 +470,8 @@ export default function EmilyOperations() {
           </Card>
         </div>
       </section>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
