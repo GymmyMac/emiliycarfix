@@ -33,7 +33,7 @@ interface GA4Row {
 interface FeatureFlag {
   id: string;
   flag_key: string;
-  enabled: boolean;
+  flag_value: boolean;
   label?: string;
 }
 
@@ -119,7 +119,7 @@ export default function EmilyOperations() {
       const fm: Record<string, boolean> = {};
       const fi: Record<string, string> = {};
       flagsRes.data.forEach((f: FeatureFlag) => {
-        fm[f.flag_key] = f.enabled;
+        fm[f.flag_key] = f.flag_value;
         fi[f.flag_key] = f.id;
       });
       setFlags(fm);
@@ -164,7 +164,7 @@ export default function EmilyOperations() {
   useEffect(() => {
     fetchAll();
     fetchCredits();
-    const interval = setInterval(() => { fetchAll(); fetchCredits(); }, 60_000);
+    const interval = setInterval(fetchAll, 60_000);
     return () => clearInterval(interval);
   }, [fetchAll, fetchCredits]);
 
@@ -173,7 +173,7 @@ export default function EmilyOperations() {
     setFlags((prev) => ({ ...prev, [key]: newValue }));
     const { error } = await supabase
       .from('feature_flags')
-      .update({ enabled: newValue })
+      .update({ flag_value: newValue })
       .eq('flag_key', key);
     if (error) {
       setFlags((prev) => ({ ...prev, [key]: !newValue }));
