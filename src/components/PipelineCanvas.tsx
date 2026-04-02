@@ -105,10 +105,10 @@ export default function PipelineCanvas() {
   const [loading, setLoading] = useState(true);
 
   const fetchFlags = useCallback(async () => {
-    const { data } = await supabase.from('feature_flags').select('flag_key, enabled');
+    const { data } = await supabase.from('feature_flags').select('flag_key, flag_value');
     if (data) {
       const map: Record<string, boolean> = {};
-      data.forEach((f: any) => { map[f.flag_key] = f.enabled; });
+      data.forEach((f: any) => { map[f.flag_key] = f.flag_value; });
       setFlags(map);
     }
     setLoading(false);
