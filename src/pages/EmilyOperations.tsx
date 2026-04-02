@@ -470,6 +470,8 @@ export default function EmilyOperations() {
           </Card>
         </div>
       </section>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
