@@ -7,19 +7,11 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import Login from "./pages/Login";
 import AdminLayout from "./components/AdminLayout";
 import Dashboard from "./pages/Dashboard";
-import Ideas from "./pages/Ideas";
+import Approvals from "./pages/Approvals";
+import Operations from "./pages/Operations";
 import Analytics from "./pages/Analytics";
-import Emily from "./pages/Emily";
-import CalendarPage from "./pages/Calendar";
-import ContentQueue from "./pages/ContentQueue";
 import Settings from "./pages/Settings";
-import Initiatives from "./pages/Initiatives";
 import NotFound from "./pages/NotFound";
-import BatchReview from "./pages/BatchReview";
-import Review from "./pages/Review";
-import SeoQueue from "./pages/SeoQueue";
-import EmilysBrief from "./pages/EmilysBrief";
-import EmilyOperations from "./pages/EmilyOperations";
 
 const queryClient = new QueryClient();
 
@@ -34,18 +26,10 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route element={<AdminLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/content-queue" element={<ContentQueue />} />
-              <Route path="/ideas" element={<Ideas />} />
+              <Route path="/approvals" element={<Approvals />} />
+              <Route path="/operations" element={<Operations />} />
               <Route path="/analytics" element={<Analytics />} />
-              <Route path="/emily" element={<Emily />} />
-              <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/settings" element={<Settings />} />
-              <Route path="/initiatives" element={<Initiatives />} />
-              <Route path="/batch/:batchId" element={<BatchReview />} />
-              <Route path="/review" element={<Review />} />
-              <Route path="/seo-queue" element={<SeoQueue />} />
-              <Route path="/emilys-brief" element={<EmilysBrief />} />
-              <Route path="/emily-ops" element={<EmilyOperations />} />
             </Route>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />
