@@ -18,6 +18,62 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 
+/* ─── Social Card Component ─── */
+function SocialCard({ item, onApprove, onReject, onEdit, onLightbox }: {
+  item: SocialItem;
+  onApprove: (id: string) => void;
+  onReject: (id: string) => void;
+  onEdit: (item: SocialItem) => void;
+  onLightbox: (url: string | null) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const stream = item.psyops_stream?.toLowerCase() || '';
+  const badgeClass = STREAM_BADGE[stream] || 'bg-muted/20 text-muted-foreground';
+  const platClass = PLATFORM_COLORS[item.platform?.toLowerCase() || ''] || 'bg-muted/20 text-muted-foreground';
+  const copy = item.draft_copy || '';
+  const truncated = copy.length > 280;
+
+  return (
+    <Card className="border-border">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          {item.platform && <Badge variant="outline" className={`${platClass} border-transparent text-[11px] font-semibold`}>{item.platform}</Badge>}
+          {stream && <Badge variant="outline" className={`${badgeClass} border-transparent text-[11px] font-semibold`}>{stream.toUpperCase()}</Badge>}
+          <Badge variant="outline" className="text-[10px] border-border">{item.status}</Badge>
+        </div>
+        <div className="font-mono text-sm text-foreground whitespace-pre-wrap">
+          {expanded || !truncated ? copy : copy.slice(0, 280) + '...'}
+          {truncated && (
+            <button className="text-primary text-xs ml-1" onClick={() => setExpanded(!expanded)}>
+              {expanded ? 'Collapse' : 'Expand'}
+            </button>
+          )}
+        </div>
+        {item.image_url && (
+          <button onClick={() => onLightbox(item.image_url)} className="block">
+            <img src={item.image_url} alt="Content" className="w-[200px] h-[150px] object-cover rounded-md border border-border" />
+          </button>
+        )}
+        <div className="flex items-center gap-4 text-xs text-muted-foreground">
+          <span>{item.scheduled_for ? `Scheduled: ${format(new Date(item.scheduled_for), 'd MMM HH:mm')}` : 'Not scheduled'}</span>
+          <span>Created: {format(new Date(item.created_at), 'd MMM')}</span>
+        </div>
+        <div className="flex items-center gap-2 justify-end">
+          <Button size="sm" className="h-8 text-xs bg-success hover:bg-success/90 text-primary-foreground" onClick={() => onApprove(item.id)}>
+            <CheckCircle2 size={14} className="mr-1" /> Approve
+          </Button>
+          <Button size="sm" variant="outline" className="h-8 text-xs border-primary text-primary hover:bg-primary/10" onClick={() => onEdit(item)}>
+            <Pencil size={14} className="mr-1" /> Edit
+          </Button>
+          <Button size="sm" variant="outline" className="h-8 text-xs border-destructive text-destructive hover:bg-destructive/10" onClick={() => onReject(item.id)}>
+            <XCircle size={14} className="mr-1" /> Reject
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 /* ─── Types ─── */
 interface AeoArticle {
   id: string;
