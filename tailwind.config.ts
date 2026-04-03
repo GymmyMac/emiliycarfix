@@ -14,7 +14,6 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ['"Oswald"', 'system-ui', 'sans-serif'],
         sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
         mono: ['ui-monospace', 'SFMono-Regular', 'monospace'],
       },
@@ -62,9 +61,23 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
-        emily: "hsl(var(--emily))",
-        orange: "hsl(var(--orange))",
         success: "hsl(var(--success))",
+        warning: "hsl(var(--warning))",
+        info: "hsl(var(--info))",
+        "surface-raised": "hsl(var(--surface-raised))",
+        phase: {
+          form: "hsl(var(--phase-form))",
+          load: "hsl(var(--phase-load))",
+          launch: "hsl(var(--phase-launch))",
+          storm: "hsl(var(--phase-storm))",
+          perform: "hsl(var(--phase-perform))",
+        },
+        stream: {
+          disrupt: "hsl(var(--stream-disrupt))",
+          educate: "hsl(var(--stream-educate))",
+          convert: "hsl(var(--stream-convert))",
+          amplify: "hsl(var(--stream-amplify))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -80,10 +93,15 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "pulse-phase": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.8" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "pulse-phase": "pulse-phase 2s ease-in-out infinite",
       },
     },
   },
