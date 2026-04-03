@@ -1,1156 +1,412 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { toast } from '@/hooks/use-toast';
-import { Badge } from '@/components/ui/badge';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import {
-  DndContext, DragEndEvent, DragOverlay, DragStartEvent, DragOverEvent,
-  PointerSensor, useSensor, useSensors, useDroppable,
-  rectIntersection,
-} from '@dnd-kit/core';
-import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import {
-  FileText, CheckCircle2, Clock, AlertCircle,
-  ChevronDown, ChevronUp, Eye, Pencil, X, CalendarIcon,
-  Plus, Sparkles, LayoutGrid, CalendarDays,
-  GripVertical, Send, ArrowLeft, ExternalLink,
+  AlertTriangle, CheckCircle2, XCircle, Info, Clock,
+  ArrowRight, Zap, RefreshCw,
 } from 'lucide-react';
+import { format, formatDistanceToNow, subDays } from 'date-fns';
+import {
+  BarChart, Bar, Line, ComposedChart, XAxis, YAxis,
+  Tooltip as RechartsTooltip, ResponsiveContainer,
+} from 'recharts';
 
-/* ────────────────────────── types ────────────────────────── */
-interface SeoTask {
+/* ─── Types ─── */
+interface AppConfig {
+  business_phase: string;
+  stream_weight_disrupt: number;
+  stream_weight_educate: number;
+  stream_weight_convert: number;
+  stream_weight_amplify: number;
+}
+
+interface EmilyRun {
   id: string;
-  task_id: string | null;
-  title: string;
-  content_type: string | null;
-  target_keyword: string | null;
-  category: string | null;
-  priority_score: number | null;
+  started_at: string;
   status: string;
-  output_types: string[] | null;
-  notes: string | null;
-  revision_note: string | null;
-  scheduled_for: string | null;
-  target_publish_date: string | null;
-  draft_content: string | null;
-  james_approved: boolean | null;
-  approved_at: string | null;
-  published_at: string | null;
-  created_at: string;
-  updated_at: string | null;
-  hero_image_url: string | null;
-  slug: string | null;
-  seo_difficulty: number | null;
+  generated_count: number;
+  failed_count: number;
+  estimated_cost_usd: number | null;
+  error_message: string | null;
 }
 
-interface JobOutput {
-  id: string;
-  job_id: string;
-  output_type: string;
-  content: string | null;
-  image_url: string | null;
-  status: string;
+interface OpenRouterSnapshot {
+  checked_at: string;
+  credits_remaining_usd: number | null;
+  usage_usd: number | null;
+  is_low_balance: boolean | null;
 }
 
-/* ────────────────────────── constants ────────────────────────── */
-const KANBAN_COLUMNS = [
-  { id: 'queued', label: 'QUEUED', borderColor: '#6b7280' },
-  { id: 'briefed', label: 'BRIEFED', borderColor: '#3b82f6' },
-  { id: 'in_draft', label: 'IN DRAFT', borderColor: '#8b5cf6' },
-  { id: 'pending_review', label: 'PENDING REVIEW', borderColor: '#f59e0b' },
-  { id: 'approved', label: 'APPROVED', borderColor: '#22c55e' },
-  { id: 'scheduled', label: 'SCHEDULED', borderColor: '#14b8a6' },
-  { id: 'published', label: 'PUBLISHED', borderColor: '#15803d' },
-] as const;
+interface FeatureFlag {
+  flag_key: string;
+  flag_value: boolean;
+}
 
-type KanbanColumnId = typeof KANBAN_COLUMNS[number]['id'];
-
-const OUTPUT_TYPE_CONFIG: Record<string, { icon: string; label: string; activeColor: string }> = {
-  seo_article: { icon: '📄', label: 'SEO Article', activeColor: 'bg-blue-500/20 text-blue-600 border-blue-500/40' },
-  fb_ig: { icon: '📱', label: 'Fb / IG', activeColor: 'bg-purple-500/20 text-purple-600 border-purple-500/40' },
-  tiktok: { icon: '🎬', label: 'TikTok', activeColor: 'bg-red-500/20 text-red-600 border-red-500/40' },
-  email: { icon: '📧', label: 'Email', activeColor: 'bg-orange-500/20 text-orange-600 border-orange-500/40' },
-  sms: { icon: '💬', label: 'SMS', activeColor: 'bg-green-500/20 text-green-600 border-green-500/40' },
-  image: { icon: '🖼️', label: 'Image', activeColor: 'bg-yellow-500/20 text-yellow-600 border-yellow-500/40' },
-  x_post: { icon: '🐦', label: 'X Post', activeColor: 'bg-sky-500/20 text-sky-600 border-sky-500/40' },
-  reddit: { icon: '📝', label: 'Reddit', activeColor: 'bg-orange-600/20 text-orange-700 border-orange-600/40' },
+/* ─── Phase config ─── */
+const PHASE_CONFIG: Record<string, { color: string; cssVar: string; desc: string }> = {
+  FORM: { color: 'hsl(var(--phase-form))', cssVar: 'phase-form', desc: 'Foundational architecture & brand definition' },
+  LOAD: { color: 'hsl(var(--phase-load))', cssVar: 'phase-load', desc: 'Cold awareness & narrative disruption pipeline' },
+  LAUNCH: { color: 'hsl(var(--phase-launch))', cssVar: 'phase-launch', desc: 'Market entry & channel activation' },
+  STORM: { color: 'hsl(var(--phase-storm))', cssVar: 'phase-storm', desc: 'Aggressive growth & conversion optimization' },
+  PERFORM: { color: 'hsl(var(--phase-perform))', cssVar: 'phase-perform', desc: 'Scale, retention & advocacy loops' },
 };
 
-const OUTPUT_TYPE_KEYS = Object.keys(OUTPUT_TYPE_CONFIG);
+const STREAM_CONFIG = [
+  { key: 'disrupt', label: 'DISRUPT', color: 'hsl(var(--stream-disrupt))' },
+  { key: 'educate', label: 'EDUCATE', color: 'hsl(var(--stream-educate))' },
+  { key: 'convert', label: 'CONVERT', color: 'hsl(var(--stream-convert))' },
+  { key: 'amplify', label: 'AMPLIFY', color: 'hsl(var(--stream-amplify))' },
+];
 
-const CONTENT_TYPE_LABELS: Record<string, string> = {
-  decision_page: 'DECISION PAGE',
-  seo_article: 'SEO ARTICLE',
-  ai_article: 'AI ARTICLE',
-  regional_seo: 'REGIONAL SEO',
-  social_campaign: 'SOCIAL CAMPAIGN',
-  product_guide: 'PRODUCT GUIDE',
-};
+const CHANNEL_FLAGS = [
+  { key: 'facebook_enabled', label: 'Facebook' },
+  { key: 'instagram_enabled', label: 'Instagram' },
+  { key: 'tiktok_enabled', label: 'TikTok' },
+  { key: 'email_enabled', label: 'Email' },
+  { key: 'sms_enabled', label: 'SMS' },
+  { key: 'blog_aeo_enabled', label: 'Blog/AEO' },
+];
 
-const BRIEF_OUTPUT_DESCRIPTIONS: Record<string, string> = {
-  seo_article: 'Long-form guide, 600–900 words, optimised for search and AI citation',
-  fb_ig: 'Facebook post (100–150 words) + Instagram caption (50–80 words)',
-  tiktok: '60–90 second spoken video script. One product, one result.',
-  email: 'Subject line + preview text + campaign body. Mailchimp-ready.',
-  sms: 'Under 160 characters. Urgency or offer driven.',
-  image: 'Ideogram prompt for a matched visual — square for social, landscape for article.',
-  x_post: 'Under 280 characters. Deal alert or quick tip.',
-  reddit: '200–400 word DIY thread. Community-first.',
-};
-
-function toSlug(s: string) {
-  return s.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-');
-}
-
-function wordCount(text: string | null) {
-  if (!text) return 0;
-  return text.trim().split(/\s+/).filter(Boolean).length;
-}
-
-function getPriorityStyle(score: number | null) {
-  if (!score) return { bar: 'bg-gray-400', badge: 'bg-muted/15 text-muted-foreground' };
-  if (score >= 80) return { bar: 'bg-red-500', badge: 'bg-red-500/15 text-red-600' };
-  if (score >= 50) return { bar: 'bg-amber-500', badge: 'bg-amber-500/15 text-amber-600' };
-  return { bar: 'bg-gray-400', badge: 'bg-muted/15 text-muted-foreground' };
-}
-
-/* ────────────────────── Droppable Column ────────────────────── */
-function KanbanDropColumn({ id, label, borderColor, count, children }: {
-  id: string; label: string; borderColor: string; count: number; children: React.ReactNode;
-}) {
-  const { setNodeRef, isOver } = useDroppable({ id });
-  return (
-    <div
-      ref={setNodeRef}
-      className={cn(
-        'flex flex-col min-w-[240px] w-[240px] rounded-lg bg-[#ffffff] shadow-sm border border-border/50 transition-colors',
-        isOver && 'ring-2 ring-primary/40 bg-accent/40'
-      )}
-      style={{ borderTopWidth: 4, borderTopColor: borderColor }}
-    >
-      <div className="flex items-center justify-between px-3 py-2.5">
-        <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#6b7280' }}>{label}</span>
-        <span
-          className="text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center text-white"
-          style={{ backgroundColor: borderColor }}
-        >{count}</span>
-      </div>
-      <div className="flex-1 px-2 pb-2 space-y-2 overflow-y-auto max-h-[60vh] min-h-[80px]">
-        {children}
-      </div>
-    </div>
-  );
-}
-
-/* ────────────────────── Draggable Card ────────────────────── */
-function KanbanCard({ task, column, onOpen, onToggleOutput }: {
-  task: SeoTask; column: KanbanColumnId;
-  onOpen: (t: SeoTask) => void;
-  onToggleOutput: (taskId: string, outputType: string) => void;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: task.id,
-    data: { task, column },
-    disabled: column === 'published',
-  });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-  const isPendingReview = column === 'pending_review';
-  const pStyle = getPriorityStyle(task.priority_score);
-  const outputs = task.output_types || [];
-
-  const actionButton = () => {
-    switch (column) {
-      case 'queued': return <><Pencil size={10} className="mr-1" />Edit Brief</>;
-      case 'briefed': return <><Eye size={10} className="mr-1" />View Draft</>;
-      case 'in_draft': return <><Eye size={10} className="mr-1" />View Draft</>;
-      case 'pending_review': return <><CheckCircle2 size={10} className="mr-1" />Review →</>;
-      case 'approved': return <><CalendarIcon size={10} className="mr-1" />Schedule</>;
-      case 'scheduled': return null;
-      case 'published': return <><ExternalLink size={10} className="mr-1" />View Live →</>;
-    }
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        'rounded-lg border bg-white p-3 shadow-sm cursor-grab active:cursor-grabbing transition-all',
-        isPendingReview && 'border-amber-500/60 bg-[#fffbeb]',
-        isDragging && 'opacity-50 shadow-lg scale-105',
-        !isPendingReview && 'border-border/60'
-      )}
-    >
-      {/* Header: drag handle + priority bar + priority badge */}
-      <div className="flex items-start gap-1.5">
-        <div {...attributes} {...listeners} className="mt-0.5 text-muted-foreground/40 hover:text-muted-foreground cursor-grab">
-          <GripVertical size={12} />
-        </div>
-        <div className={cn('w-1 h-8 rounded-full shrink-0', isPendingReview ? 'bg-amber-500' : pStyle.bar)} />
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold leading-snug line-clamp-2" style={{ color: '#111827' }}>
-            {task.title}
-          </p>
-          <div className="flex items-center gap-1 mt-1 flex-wrap">
-            <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide bg-primary/10 text-primary">
-              {CONTENT_TYPE_LABELS[task.content_type || ''] || task.content_type || '—'}
-            </span>
-          </div>
-        </div>
-        {task.priority_score != null && (
-          <span className={cn('text-[10px] font-bold rounded px-1.5 py-0.5 shrink-0', pStyle.badge)}>
-            P{task.priority_score}
-          </span>
-        )}
-      </div>
-
-      {/* Output type pills */}
-      <div className="flex flex-wrap gap-1 mt-2">
-        {OUTPUT_TYPE_KEYS.map((key) => {
-          const cfg = OUTPUT_TYPE_CONFIG[key];
-          const active = outputs.includes(key);
-          return (
-            <button
-              key={key}
-              onClick={(e) => { e.stopPropagation(); onToggleOutput(task.id, key); }}
-              className={cn(
-                'text-[10px] font-semibold rounded-full px-1.5 py-0.5 border transition-all',
-                active ? cfg.activeColor : 'bg-muted/5 text-muted-foreground/40 border-border/30'
-              )}
-            >
-              {cfg.icon}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Footer: date + action */}
-      <div className="flex items-center justify-between mt-2">
-        <span className="text-xs" style={{ color: '#6b7280' }}>
-          {task.target_publish_date ? format(new Date(task.target_publish_date), 'd MMM') :
-           task.scheduled_for ? format(new Date(task.scheduled_for), 'd MMM HH:mm') : ''}
-        </span>
-        {column === 'scheduled' ? (
-          <span className="text-xs font-medium" style={{ color: '#14b8a6' }}>
-            {task.scheduled_for ? format(new Date(task.scheduled_for), 'd MMM HH:mm') : 'Scheduled'}
-          </span>
-        ) : (
-          <Button
-            size="sm"
-            variant={isPendingReview ? 'default' : 'ghost'}
-            className={cn(
-              'h-6 text-[11px] px-2',
-              isPendingReview && 'bg-amber-500 hover:bg-amber-600 text-white'
-            )}
-            onClick={(e) => { e.stopPropagation(); onOpen(task); }}
-          >
-            {actionButton()}
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ────────────────────────── MAIN COMPONENT ────────────────────────── */
 export default function Dashboard() {
-  const [tasks, setTasks] = useState<SeoTask[]>([]);
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'pipeline' | 'calendar'>('pipeline');
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [dragOriginalStatus, setDragOriginalStatus] = useState<string | null>(null);
-  const [filterPendingOnly, setFilterPendingOnly] = useState(false);
+  const [config, setConfig] = useState<AppConfig | null>(null);
+  const [pendingArticles, setPendingArticles] = useState(0);
+  const [pendingSocial, setPendingSocial] = useState(0);
+  const [lastRun, setLastRun] = useState<EmilyRun | null>(null);
+  const [lastSuccessRun, setLastSuccessRun] = useState<EmilyRun | null>(null);
+  const [orSnapshot, setOrSnapshot] = useState<OpenRouterSnapshot | null>(null);
+  const [flags, setFlags] = useState<Record<string, boolean>>({});
+  const [recentRuns, setRecentRuns] = useState<EmilyRun[]>([]);
+  const [april1Dismissed, setApril1Dismissed] = useState(() => {
+    const d = localStorage.getItem('dismiss_april1');
+    if (!d) return false;
+    return Date.now() - parseInt(d) < 7 * 24 * 60 * 60 * 1000;
+  });
 
-  // Review state
-  const [reviewTask, setReviewTask] = useState<SeoTask | null>(null);
-  const [reviewOutputs, setReviewOutputs] = useState<JobOutput[]>([]);
-  const [reviewTab, setReviewTab] = useState<string>('');
-  const [revisionMode, setRevisionMode] = useState(false);
-  const [revisionNote, setRevisionNote] = useState('');
-  const [scheduleMode, setScheduleMode] = useState(false);
-  const [scheduleDate, setScheduleDate] = useState<Date | undefined>();
-  const [scheduleTime, setScheduleTime] = useState('09:00');
+  const fetchAll = useCallback(async () => {
+    const [
+      configRes, articlesRes, socialRes, lastRunRes, lastSuccessRes,
+      orRes, flagsRes, runsRes,
+    ] = await Promise.all([
+      supabase.from('app_config').select('business_phase, stream_weight_disrupt, stream_weight_educate, stream_weight_convert, stream_weight_amplify').limit(1).single(),
+      supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('james_approved', false).not('draft_content', 'is', null),
+      supabase.from('mkt_content_queue').select('id', { count: 'exact', head: true }).eq('status', 'draft'),
+      supabase.from('emily_runs').select('*').order('started_at', { ascending: false }).limit(1),
+      supabase.from('emily_runs').select('*').eq('status', 'success').order('started_at', { ascending: false }).limit(1),
+      supabase.from('emily_openrouter_snapshots').select('*').order('checked_at', { ascending: false }).limit(1),
+      supabase.from('feature_flags').select('flag_key, flag_value'),
+      supabase.from('emily_runs').select('*').gte('started_at', subDays(new Date(), 7).toISOString()).order('started_at', { ascending: true }),
+    ]);
 
-  // Brief Emily
-  const [briefOpen, setBriefOpen] = useState(false);
-  const [briefTopic, setBriefTopic] = useState('');
-  const [briefCategory, setBriefCategory] = useState('');
-  const [briefType, setBriefType] = useState('decision_page');
-  const [briefOutputs, setBriefOutputs] = useState<string[]>(['seo_article']);
-  const [briefPriority, setBriefPriority] = useState<number>(60);
-  const [briefDate, setBriefDate] = useState<Date | undefined>();
-  const [briefNotes, setBriefNotes] = useState('');
-  const [briefing, setBriefing] = useState(false);
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [deleteConfirmProgress, setDeleteConfirmProgress] = useState(0);
-  const [deleteHolding, setDeleteHolding] = useState(false);
-
-  // Flash animation for realtime updates
-  const [flashIds, setFlashIds] = useState<Set<string>>(new Set());
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
-  );
-
-  const fetchData = useCallback(async () => {
-    const { data } = await supabase.from('mkt_seo_queue').select('*').order('priority_score', { ascending: false });
-    if (data) setTasks(data);
+    if (configRes.data) setConfig(configRes.data);
+    setPendingArticles(articlesRes.count || 0);
+    setPendingSocial(socialRes.count || 0);
+    if (lastRunRes.data?.[0]) setLastRun(lastRunRes.data[0]);
+    if (lastSuccessRes.data?.[0]) setLastSuccessRun(lastSuccessRes.data[0]);
+    if (orRes.data?.[0]) setOrSnapshot(orRes.data[0]);
+    if (flagsRes.data) {
+      const fm: Record<string, boolean> = {};
+      flagsRes.data.forEach((f: FeatureFlag) => { fm[f.flag_key] = f.flag_value; });
+      setFlags(fm);
+    }
+    if (runsRes.data) setRecentRuns(runsRes.data);
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Realtime — mkt_seo_queue
+  // Realtime for emily_runs
   useEffect(() => {
-    const channel = supabase
-      .channel('dashboard-seo')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'mkt_seo_queue' }, (payload) => {
-        const newRow = payload.new as SeoTask;
-        if (payload.eventType === 'INSERT') {
-          setTasks(prev => [newRow, ...prev]);
-          flashCard(newRow.id);
-        } else if (payload.eventType === 'UPDATE') {
-          setTasks(prev => prev.map(t => t.id === newRow.id ? newRow : t));
-          flashCard(newRow.id);
-        } else if (payload.eventType === 'DELETE') {
-          const oldRow = payload.old as SeoTask;
-          setTasks(prev => prev.filter(t => t.id !== oldRow.id));
-        }
-      })
+    const ch = supabase.channel('dash-runs')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'emily_runs' }, () => fetchAll())
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, []);
-
-  function flashCard(id: string) {
-    setFlashIds(prev => new Set(prev).add(id));
-    setTimeout(() => setFlashIds(prev => { const s = new Set(prev); s.delete(id); return s; }), 2000);
-  }
-
-  /* ── computed ── */
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-
-  const metrics = useMemo(() => ({
-    pendingReview: tasks.filter(t => t.status === 'pending_review').length,
-    approved: tasks.filter(t => t.status === 'approved').length,
-    scheduled: tasks.filter(t => t.status === 'scheduled').length,
-    publishedMonth: tasks.filter(t => t.status === 'published' && t.published_at && t.published_at >= monthStart).length,
-  }), [tasks, monthStart]);
-
-  const kanbanData = useMemo(() => {
-    const cols: Record<KanbanColumnId, SeoTask[]> = {
-      queued: [], briefed: [], in_draft: [], pending_review: [],
-      approved: [], scheduled: [], published: [],
-    };
-    tasks.forEach(t => {
-      const col = t.status as KanbanColumnId;
-      if (cols[col]) cols[col].push(t);
-      else cols.queued.push(t); // fallback
-    });
-    if (filterPendingOnly) {
-      // Show only pending_review, clear others
-      Object.keys(cols).forEach(k => {
-        if (k !== 'pending_review') cols[k as KanbanColumnId] = [];
-      });
-    }
-    return cols;
-  }, [tasks, filterPendingOnly]);
-
-  /* ── 14-day calendar ── */
-  const calendarDays = useMemo(() => {
-    const days: { date: Date; label: string; dayLabel: string; items: SeoTask[] }[] = [];
-    for (let i = 0; i < 14; i++) {
-      const d = new Date(now);
-      d.setDate(d.getDate() + i);
-      const ds = d.toISOString().split('T')[0];
-      days.push({
-        date: d,
-        label: format(d, 'd MMM'),
-        dayLabel: format(d, 'EEE'),
-        items: tasks.filter(t => {
-          const dateStr = t.scheduled_for?.split('T')[0] || t.target_publish_date;
-          return dateStr === ds;
-        }),
-      });
-    }
-    return days;
-  }, [tasks]);
-
-  /* ── output type toggle (writes to DB) ── */
-  const toggleOutput = useCallback(async (taskId: string, outputType: string) => {
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
-    const current = task.output_types || [];
-    const next = current.includes(outputType) ? current.filter(o => o !== outputType) : [...current, outputType];
-    // Optimistic
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, output_types: next } : t));
-    await supabase.from('mkt_seo_queue').update({ output_types: next }).eq('id', taskId);
-  }, [tasks]);
-
-  /* ── drag & drop ── */
-  const handleDragStart = (event: DragStartEvent) => {
-    const task = tasks.find(t => t.id === event.active.id);
-    setActiveId(event.active.id as string);
-    setDragOriginalStatus(task?.status || null);
-  };
-
-  // Resolve which column an over target belongs to
-  const resolveColumn = (overId: string): KanbanColumnId | null => {
-    const colIds = KANBAN_COLUMNS.map(c => c.id) as string[];
-    if (colIds.includes(overId)) return overId as KanbanColumnId;
-    // overId is a card id — find its column
-    const card = tasks.find(t => t.id === overId);
-    if (card) return card.status as KanbanColumnId;
-    return null;
-  };
-
-  const handleDragOver = (event: DragOverEvent) => {
-    const { active, over } = event;
-    if (!over) return;
-    const activeTask = tasks.find(t => t.id === active.id);
-    if (!activeTask) return;
-    const targetCol = resolveColumn(over.id as string);
-    if (!targetCol || activeTask.status === targetCol) return;
-    if (activeTask.status === 'published') return;
-    // Optimistic cross-column move
-    setTasks(prev => prev.map(t =>
-      t.id === activeTask.id ? { ...t, status: targetCol } as SeoTask : t
-    ));
-  };
-
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    const origStatus = dragOriginalStatus;
-    setActiveId(null);
-    setDragOriginalStatus(null);
-    if (!over || !origStatus) return;
-
-    const draggedTask = tasks.find(t => t.id === active.id);
-    if (!draggedTask) return;
-
-    const targetCol = resolveColumn(over.id as string);
-    if (!targetCol) return;
-
-    // Prevent published from moving back
-    if (origStatus === 'published' && targetCol !== 'published') {
-      toast({ title: "Published content can't be moved back", variant: 'destructive' });
-      fetchData();
-      return;
-    }
-
-    // Same column reorder
-    if (origStatus === targetCol && active.id !== over.id) {
-      const colTasks = tasks.filter(t => t.status === targetCol);
-      const oldIndex = colTasks.findIndex(t => t.id === active.id);
-      const newIndex = colTasks.findIndex(t => t.id === over.id);
-      if (oldIndex !== -1 && newIndex !== -1) {
-        const reordered = arrayMove(colTasks, oldIndex, newIndex);
-        setTasks(prev => {
-          const others = prev.filter(t => t.status !== targetCol);
-          return [...others, ...reordered];
-        });
-        const updates = reordered.map((t, i) => ({
-          id: t.id,
-          priority_score: Math.max(100 - i * 5, 1),
-        }));
-        for (const u of updates) {
-          await supabase.from('mkt_seo_queue').update({ priority_score: u.priority_score }).eq('id', u.id);
-        }
-        return;
-      }
-    }
-
-    // Cross-column move — persist to DB
-    if (origStatus === targetCol) return;
-
-    const updates: Record<string, any> = { status: targetCol };
-    if (targetCol === 'approved') { updates.james_approved = true; updates.approved_at = new Date().toISOString(); }
-    if (targetCol === 'published') { updates.published_at = new Date().toISOString(); updates.james_approved = true; }
-
-    const { error } = await supabase.from('mkt_seo_queue').update(updates).eq('id', draggedTask.id);
-    if (error) {
-      toast({ title: 'Failed to move card', description: error.message, variant: 'destructive' });
-      fetchData();
-    } else {
-      toast({ title: `Moved to ${targetCol.replace('_', ' ')}` });
-    }
-  };
-
-  /* ── Review actions ── */
-  const openReview = async (task: SeoTask) => {
-    setReviewTask(task);
-    setRevisionMode(false);
-    setRevisionNote('');
-    setScheduleMode(false);
-    setScheduleDate(undefined);
-    // Fetch outputs
-    const { data } = await supabase.from('mkt_job_outputs').select('*').eq('job_id', task.id);
-    const outputs = data || [];
-    setReviewOutputs(outputs);
-    setReviewTab(outputs.length > 0 ? outputs[0].output_type : 'draft');
-  };
-
-  const handlePublishNow = async () => {
-    if (!reviewTask) return;
-    await supabase.from('mkt_seo_queue').update({
-      status: 'published', published_at: new Date().toISOString(), james_approved: true,
-    }).eq('id', reviewTask.id);
-    if (reviewOutputs.length > 0) {
-      await supabase.from('mkt_job_outputs').update({ status: 'approved' }).eq('job_id', reviewTask.id);
-    }
-    toast({ title: 'Published ✓' });
-    setReviewTask(null);
-    fetchData();
-  };
-
-  const handleSchedule = async () => {
-    if (!reviewTask || !scheduleDate) return;
-    const dt = new Date(scheduleDate);
-    const [h, m] = scheduleTime.split(':').map(Number);
-    dt.setHours(h, m, 0, 0);
-    await supabase.from('mkt_seo_queue').update({
-      status: 'scheduled', scheduled_for: dt.toISOString(), james_approved: true,
-    }).eq('id', reviewTask.id);
-    toast({ title: `Scheduled for ${format(dt, 'd MMM yyyy HH:mm')} ✓` });
-    setReviewTask(null);
-    setScheduleMode(false);
-    fetchData();
-  };
-
-  const handleRevision = async () => {
-    if (!reviewTask) return;
-    await supabase.from('mkt_seo_queue').update({
-      status: 'in_draft', revision_note: revisionNote || null,
-    }).eq('id', reviewTask.id);
-    toast({ title: 'Sent back to Emily' });
-    setReviewTask(null);
-    setRevisionMode(false);
-    setRevisionNote('');
-    fetchData();
-  };
-
-  /* ── Brief Emily submit (insert or update) ── */
-  const handleBriefSubmit = async () => {
-    if (!briefTopic.trim()) return;
-    setBriefing(true);
-
-    const payload = {
-      content_type: briefType,
-      title: briefTopic.trim(),
-      category: briefCategory || null,
-      target_publish_date: briefDate ? briefDate.toISOString().split('T')[0] : null,
-      priority_score: briefPriority,
-      slug: toSlug(briefTopic),
-      notes: briefNotes || null,
-      output_types: briefOutputs,
-    };
-
-    if (editingTaskId) {
-      const { error } = await supabase.from('mkt_seo_queue').update(payload).eq('id', editingTaskId);
-      setBriefing(false);
-      if (!error) {
-        toast({ title: 'Job updated ✓' });
-        resetBriefForm();
-      }
-    } else {
-      const { error } = await supabase.from('mkt_seo_queue').insert({
-        ...payload,
-        status: 'queued',
-        james_approved: false,
-      });
-      setBriefing(false);
-      if (!error) {
-        toast({ title: 'Added to Queue →', description: "Emily will pick it up." });
-        resetBriefForm();
-      }
-    }
-  };
-
-  const resetBriefForm = () => {
-    setBriefTopic(''); setBriefCategory(''); setBriefType('decision_page');
-    setBriefOutputs(['seo_article']); setBriefPriority(60);
-    setBriefDate(undefined); setBriefNotes(''); setBriefOpen(false);
-    setEditingTaskId(null);
-  };
-
-  const openEditBrief = (task: SeoTask) => {
-    setEditingTaskId(task.id);
-    setBriefTopic(task.title || '');
-    setBriefCategory(task.category || '');
-    setBriefType(task.content_type || 'decision_page');
-    setBriefOutputs(task.output_types || ['seo_article']);
-    setBriefPriority(task.priority_score || 60);
-    setBriefDate(task.target_publish_date ? new Date(task.target_publish_date) : undefined);
-    setBriefNotes(task.notes || '');
-    setBriefOpen(true);
-  };
-
-  const handleDeleteJob = async () => {
-    if (!editingTaskId) return;
-    const { error } = await supabase.from('mkt_seo_queue').delete().eq('id', editingTaskId);
-    if (!error) {
-      toast({ title: 'Job deleted' });
-      resetBriefForm();
-      fetchData();
-    } else {
-      toast({ title: 'Failed to delete', description: error.message, variant: 'destructive' });
-    }
-    setDeleteConfirmProgress(0);
-    setDeleteHolding(false);
-  };
-
-  const toggleBriefOutput = (key: string) => {
-    setBriefOutputs(prev => {
-      let next = prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key];
-      // Smart default: FB/IG → auto-add image
-      if (key === 'fb_ig' && next.includes('fb_ig') && !next.includes('image')) {
-        next = [...next, 'image'];
-        toast({ title: 'Image Brief added', description: 'Instagram posts need an image — added automatically' });
-      }
-      return next;
-    });
-  };
-
-  const activeDragTask = activeId ? tasks.find(t => t.id === activeId) : null;
-
-  /* ── FULL-SCREEN REVIEW ── */
-  if (reviewTask) {
-    const currentOutput = reviewOutputs.find(o => o.output_type === reviewTab);
-    const hasMultiple = reviewOutputs.length > 1;
-
-    return (
-      <div className="fixed inset-0 z-50 flex flex-col" style={{ backgroundColor: '#f9fafb' }}>
-        {/* Top bar */}
-        <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ backgroundColor: '#1a1a2e' }}>
-          <div className="flex items-center gap-3 min-w-0">
-            <button onClick={() => setReviewTask(null)} className="text-white/70 hover:text-white">
-              <ArrowLeft size={20} />
-            </button>
-            <h1 className="text-white text-sm font-semibold truncate">{reviewTask.title}</h1>
-          </div>
-          {!revisionMode && (
-            <button
-              onClick={() => setRevisionMode(true)}
-              className="text-white/50 hover:text-white text-xs shrink-0"
-            >
-              Request Revision
-            </button>
-          )}
-        </div>
-
-        {/* Revision inline */}
-        {revisionMode && (
-          <div className="px-4 py-3 border-b border-border bg-amber-50 flex items-center gap-3">
-            <Textarea
-              placeholder="What needs changing?"
-              value={revisionNote}
-              onChange={(e) => setRevisionNote(e.target.value)}
-              className="flex-1 min-h-[40px] text-sm"
-            />
-            <Button size="sm" onClick={handleRevision} className="shrink-0 bg-amber-500 hover:bg-amber-600 text-white">
-              Send to Emily →
-            </Button>
-            <button onClick={() => setRevisionMode(false)} className="text-muted-foreground text-xs">Cancel</button>
-          </div>
-        )}
-
-        {/* Tabs if multiple outputs */}
-        {hasMultiple && (
-          <div className="flex gap-1 px-4 pt-3 border-b border-border bg-white overflow-x-auto">
-            {reviewOutputs.map(o => (
-              <button
-                key={o.output_type}
-                onClick={() => setReviewTab(o.output_type)}
-                className={cn(
-                  'px-3 py-2 text-xs font-semibold rounded-t-lg transition-colors whitespace-nowrap',
-                  reviewTab === o.output_type
-                    ? 'bg-accent text-foreground border-b-2 border-primary'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {OUTPUT_TYPE_CONFIG[o.output_type]?.icon} {OUTPUT_TYPE_CONFIG[o.output_type]?.label || o.output_type}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto px-4 py-6">
-          <div className="max-w-[720px] mx-auto">
-            {currentOutput ? (
-              <div className="space-y-4">
-                {currentOutput.image_url && (
-                  <img src={currentOutput.image_url} alt="" className="w-full rounded-lg object-cover max-h-[300px]" />
-                )}
-                {currentOutput.content && (
-                  <div className="prose prose-sm max-w-none" style={{ color: '#111827' }}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{currentOutput.content}</ReactMarkdown>
-                  </div>
-                )}
-              </div>
-            ) : reviewTask.draft_content ? (
-              <div className="relative">
-                <span className="absolute top-2 right-2 text-[10px] font-mono text-muted-foreground bg-white/80 px-2 py-0.5 rounded">
-                  {wordCount(reviewTask.draft_content)} words
-                </span>
-                <div className="prose prose-sm max-w-none" style={{ color: '#111827' }}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{reviewTask.draft_content}</ReactMarkdown>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">
-                Emily hasn't written a draft yet
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Bottom action bar */}
-        <div className="border-t border-border bg-white px-4 py-3 shrink-0">
-          {scheduleMode ? (
-            <div className="max-w-[720px] mx-auto space-y-3">
-              <div className="flex gap-3 items-end flex-wrap">
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Date</label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" className="h-9 text-sm">
-                        <CalendarIcon size={14} className="mr-2" />
-                        {scheduleDate ? format(scheduleDate, 'd MMM yyyy') : 'Pick date'}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar mode="single" selected={scheduleDate} onSelect={setScheduleDate} className="p-3 pointer-events-auto" />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">Time</label>
-                  <Input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} className="h-9 w-32" />
-                </div>
-                <Button onClick={handleSchedule} disabled={!scheduleDate} className="h-9" style={{ backgroundColor: '#2563eb' }}>
-                  Schedule for {scheduleDate ? format(scheduleDate, 'd MMM') : '...'} →
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setScheduleMode(false)}>Cancel</Button>
-              </div>
-            </div>
-          ) : (
-            <div className="max-w-[720px] mx-auto flex gap-3">
-              <Button onClick={handlePublishNow} className="flex-1 h-11 font-semibold" style={{ backgroundColor: '#22c55e' }}>
-                ✓ Publish Now
-              </Button>
-              <Button onClick={() => setScheduleMode(true)} className="flex-1 h-11 font-semibold" style={{ backgroundColor: '#2563eb' }}>
-                📅 Schedule
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+    return () => { supabase.removeChannel(ch); };
+  }, [fetchAll]);
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-16 w-full rounded-lg" />
-        <Skeleton className="h-12 w-full rounded-lg" />
-        <Skeleton className="h-64 w-full rounded-lg" />
+      <div className="space-y-6 max-w-[1400px]">
+        <Skeleton className="h-20 w-full" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Skeleton className="h-24" /><Skeleton className="h-24" />
+        </div>
+        <Skeleton className="h-48" />
       </div>
     );
   }
 
-  const METRIC_CARDS = [
-    { label: 'Pending My Review', value: metrics.pendingReview, icon: AlertCircle, color: '#f59e0b' },
-    { label: 'Approved', value: metrics.approved, icon: CheckCircle2, color: '#22c55e' },
-    { label: 'Scheduled', value: metrics.scheduled, icon: CalendarDays, color: '#14b8a6' },
-    { label: 'Published This Month', value: metrics.publishedMonth, icon: FileText, color: '#15803d' },
-  ];
+  const phase = config?.business_phase?.toUpperCase() || 'LOAD';
+  const phaseConf = PHASE_CONFIG[phase] || PHASE_CONFIG.LOAD;
+  const weights = {
+    disrupt: config?.stream_weight_disrupt ?? 0,
+    educate: config?.stream_weight_educate ?? 0,
+    convert: config?.stream_weight_convert ?? 0,
+    amplify: config?.stream_weight_amplify ?? 0,
+  };
+  const weightSum = weights.disrupt + weights.educate + weights.convert + weights.amplify;
+
+  // Build attention items
+  const attentionItems: { type: string; badge: string; badgeColor: string; text: string; cta: string; link: string; timestamp: string }[] = [];
+
+  if (pendingArticles > 0) {
+    attentionItems.push({
+      type: 'approval', badge: 'AEO', badgeColor: 'bg-info/20 text-info',
+      text: `${pendingArticles} article${pendingArticles > 1 ? 's' : ''} awaiting approval`,
+      cta: 'Review Now', link: '/approvals', timestamp: '',
+    });
+  }
+  if (pendingSocial > 0) {
+    attentionItems.push({
+      type: 'approval', badge: 'SOCIAL', badgeColor: 'bg-warning/20 text-warning',
+      text: `${pendingSocial} social & campaign item${pendingSocial > 1 ? 's' : ''} waiting`,
+      cta: 'Review Now', link: '/approvals', timestamp: '',
+    });
+  }
+  if (lastRun?.status === 'failed') {
+    attentionItems.push({
+      type: 'error', badge: 'ERROR', badgeColor: 'bg-destructive/20 text-destructive',
+      text: `Emily's last run failed. Generated: ${lastRun.generated_count}. Failed: ${lastRun.failed_count}.`,
+      cta: 'Investigate', link: '/analytics',
+      timestamp: lastRun.started_at ? `Run started: ${format(new Date(lastRun.started_at), 'd MMM HH:mm')}` : '',
+    });
+  }
+  if (lastSuccessRun && lastSuccessRun.generated_count === 0) {
+    attentionItems.push({
+      type: 'warning', badge: 'WARNING', badgeColor: 'bg-warning/20 text-warning',
+      text: "Emily's last run generated 0 articles. Something's wrong with production.",
+      cta: 'Check Emily Ops', link: '/operations',
+      timestamp: lastSuccessRun.started_at ? `Run completed: ${format(new Date(lastSuccessRun.started_at), 'd MMM HH:mm')}` : '',
+    });
+  }
+  if (orSnapshot && (orSnapshot.credits_remaining_usd === null || orSnapshot.credits_remaining_usd < 2)) {
+    const isNull = orSnapshot.credits_remaining_usd === null;
+    attentionItems.push({
+      type: 'warning', badge: 'BALANCE', badgeColor: 'bg-warning/20 text-warning',
+      text: isNull
+        ? `Balance monitoring unavailable. Last checked: ${orSnapshot.checked_at ? format(new Date(orSnapshot.checked_at), 'd MMM HH:mm') : 'never'}`
+        : `Low OpenRouter credit balance: $${orSnapshot.credits_remaining_usd?.toFixed(2)}. Recharge recommended.`,
+      cta: 'View Balance', link: '/operations',
+      timestamp: orSnapshot.checked_at ? `Last checked: ${format(new Date(orSnapshot.checked_at), 'd MMM HH:mm')}` : '',
+    });
+  }
+
+  // Chart data
+  const chartData = (() => {
+    const days: Record<string, { date: string; runs: number; generated: number }> = {};
+    for (let i = 6; i >= 0; i--) {
+      const d = format(subDays(new Date(), i), 'yyyy-MM-dd');
+      days[d] = { date: format(subDays(new Date(), i), 'EEE'), runs: 0, generated: 0 };
+    }
+    recentRuns.forEach(r => {
+      const d = r.started_at.split('T')[0];
+      if (days[d]) {
+        days[d].runs++;
+        days[d].generated += r.generated_count || 0;
+      }
+    });
+    return Object.values(days);
+  })();
+
+  const totalGenerated = recentRuns.reduce((s, r) => s + (r.generated_count || 0), 0);
+  const totalCost = recentRuns.reduce((s, r) => s + (r.estimated_cost_usd || 0), 0);
+  const avgPerRun = recentRuns.length > 0 ? Math.round(totalGenerated / recentRuns.length) : 0;
+
+  // Intelligence feed
+  const signals = recentRuns
+    .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
+    .slice(0, 5)
+    .map(r => ({
+      text: `Emily run completed. Generated: ${r.generated_count}, Failed: ${r.failed_count}, Cost: $${(r.estimated_cost_usd || 0).toFixed(2)}`,
+      time: r.started_at,
+      color: r.generated_count > 0 ? 'text-success' : r.failed_count > 0 ? 'text-destructive' : 'text-warning',
+    }));
 
   return (
-    <div className="w-full space-y-4 min-w-0">
-      {/* ── NEEDS MY ACTION STRIP ── */}
-      <button
-        onClick={() => setFilterPendingOnly(!filterPendingOnly)}
-        className="w-full rounded-lg px-4 py-3 flex items-center gap-3 transition-colors"
-        style={{ backgroundColor: '#1a1a2e' }}
-      >
-        {metrics.pendingReview > 0 ? (
-          <>
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
-            <span className="text-white text-sm font-medium">
-              Needs My Action — <strong>{metrics.pendingReview}</strong> {metrics.pendingReview === 1 ? 'item' : 'items'} waiting for your review
-            </span>
-          </>
-        ) : (
-          <>
-            <CheckCircle2 size={16} className="text-green-400 shrink-0" />
-            <span className="text-white text-sm font-medium">You're all clear — no content needs your attention right now</span>
-          </>
-        )}
-      </button>
-
-      {/* ── METRIC TILES ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {METRIC_CARDS.map((m) => (
-          <div key={m.label} className="rounded-lg bg-white border border-border/50 shadow-sm p-3 flex items-center gap-3">
-            <m.icon size={18} style={{ color: m.color }} className="shrink-0" />
-            <div>
-              <p className="text-xl font-bold" style={{ color: '#111827' }}>{m.value}</p>
-              <p className="text-xs" style={{ color: '#6b7280' }}>{m.label}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── VIEW TOGGLE + BRIEF EMILY ── */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1 rounded-lg border border-border p-0.5">
-          <button
-            onClick={() => { setViewMode('pipeline'); setFilterPendingOnly(false); }}
-            className={cn(
-              'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors',
-              viewMode === 'pipeline' ? 'text-white' : 'text-muted-foreground hover:text-foreground'
-            )}
-            style={viewMode === 'pipeline' ? { backgroundColor: '#2563eb' } : {}}
-          >
-            <LayoutGrid size={14} /> Pipeline
-          </button>
-          <button
-            onClick={() => setViewMode('calendar')}
-            className={cn(
-              'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors',
-              viewMode === 'calendar' ? 'text-white' : 'text-muted-foreground hover:text-foreground'
-            )}
-            style={viewMode === 'calendar' ? { backgroundColor: '#2563eb' } : {}}
-          >
-            <CalendarDays size={14} /> Calendar
-          </button>
-        </div>
-        <Button onClick={() => { setEditingTaskId(null); setBriefTopic(''); setBriefCategory(''); setBriefType('decision_page'); setBriefOutputs(['seo_article']); setBriefPriority(60); setBriefDate(undefined); setBriefNotes(''); setBriefOpen(true); }} className="h-9 text-sm font-semibold gap-1.5" style={{ backgroundColor: '#2563eb' }}>
-          <Plus size={14} /> Brief Emily
-        </Button>
-      </div>
-
-      {/* ── MAIN CONTENT ── */}
-      {viewMode === 'pipeline' ? (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={rectIntersection}
-          onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
-          onDragEnd={handleDragEnd}
-        >
-          <div className="flex gap-3 pb-2 overflow-x-auto" style={{ minWidth: 0 }}>
-            {KANBAN_COLUMNS.map((col) => (
-              <KanbanDropColumn
-                key={col.id}
-                id={col.id}
-                label={col.label}
-                borderColor={col.borderColor}
-                count={kanbanData[col.id].length}
-              >
-                <SortableContext items={kanbanData[col.id].map(t => t.id)} strategy={verticalListSortingStrategy}>
-                {kanbanData[col.id].map(task => (
-                  <KanbanCard
-                    key={task.id}
-                    task={task}
-                    column={col.id}
-                    onOpen={col.id === 'queued' ? openEditBrief : openReview}
-                    onToggleOutput={toggleOutput}
-                  />
-                ))}
-                </SortableContext>
-                {kanbanData[col.id].length === 0 && (
-                  <div className="flex items-center justify-center h-16 text-[10px] text-muted-foreground/40">
-                    Empty
-                  </div>
-                )}
-              </KanbanDropColumn>
-            ))}
-          </div>
-          <DragOverlay>
-            {activeDragTask && (
-              <div className="rounded-lg border border-primary bg-white p-3 shadow-xl w-[240px] opacity-90">
-                <p className="text-sm font-semibold truncate" style={{ color: '#111827' }}>{activeDragTask.title}</p>
-              </div>
-            )}
-          </DragOverlay>
-        </DndContext>
-      ) : (
-        /* ── CALENDAR VIEW ── */
-        <div className="rounded-lg border border-border bg-white shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-border">
-            <h3 className="text-sm font-bold" style={{ color: '#111827' }}>14-Day Content Calendar</h3>
-          </div>
-          <div className="p-3 overflow-x-auto">
-            <div className="grid gap-1 min-w-[900px]" style={{ gridTemplateColumns: 'repeat(14, 1fr)' }}>
-              {calendarDays.map((day) => (
-                <div
-                  key={day.label}
-                  className="rounded-lg p-2 min-h-[100px] border border-border/30"
-                  style={{ backgroundColor: day.items.length > 0 ? '#ffffff' : '#f9fafb' }}
-                >
-                  <p className="text-[9px] font-bold uppercase" style={{ color: '#6b7280' }}>{day.dayLabel}</p>
-                  <p className="text-[11px] font-semibold mb-1" style={{ color: '#111827' }}>{day.label}</p>
-                  <div className="space-y-1">
-                    {day.items.map((item) => {
-                      const outputs = item.output_types || [];
-                      return (
-                        <button
-                          key={item.id}
-                          onClick={() => openReview(item)}
-                          className="w-full text-left rounded px-1.5 py-1 bg-primary/5 hover:bg-primary/10 transition-colors"
-                        >
-                          <p className="text-[10px] font-medium truncate" style={{ color: '#111827' }}>{item.title}</p>
-                          <div className="flex gap-0.5 mt-0.5">
-                            {outputs.map(o => {
-                              const cfg = OUTPUT_TYPE_CONFIG[o];
-                              return cfg ? (
-                                <span key={o} className="text-[8px]">{cfg.icon}</span>
-                              ) : null;
-                            })}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══════════════════ BRIEF EMILY SHEET ═══════════════════ */}
-      <Sheet open={briefOpen} onOpenChange={(open) => { setBriefOpen(open); if (!open) setEditingTaskId(null); }}>
-        <SheetContent className="w-full sm:w-[480px] sm:max-w-[480px] overflow-y-auto">
-          <SheetHeader className="mb-4">
-            <SheetTitle className="text-lg font-bold text-foreground text-left flex items-center gap-2">
-              {editingTaskId ? 'Edit Brief' : 'Brief Emily'}
-            </SheetTitle>
-          </SheetHeader>
-          <div className="space-y-5">
-            {/* Topic */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Topic / Working Title *</label>
-              <Input
-                placeholder="e.g. How to choose the right brake pads for a Toyota Hilux"
-                value={briefTopic}
-                onChange={(e) => setBriefTopic(e.target.value)}
-              />
-            </div>
-
-            {/* Category */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Category *</label>
-              <Select value={briefCategory} onValueChange={setBriefCategory}>
-                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                <SelectContent>
-                  {['Braking', 'Suspension', 'Engine', 'Drivetrain', 'Cooling', 'Electrical', 'Oil & Filtration', 'Regional', 'Other'].map(c =>
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Content Type */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Content Type *</label>
-              <Select value={briefType} onValueChange={setBriefType}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="decision_page">Decision Page</SelectItem>
-                  <SelectItem value="ai_article">AI Article</SelectItem>
-                  <SelectItem value="regional_seo">Regional SEO Page</SelectItem>
-                  <SelectItem value="social_campaign">Social Campaign</SelectItem>
-                  <SelectItem value="product_guide">Product Guide</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Output Types */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Output Types * (select at least one)</label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {OUTPUT_TYPE_KEYS.map(key => {
-                  const cfg = OUTPUT_TYPE_CONFIG[key];
-                  const active = briefOutputs.includes(key);
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => toggleBriefOutput(key)}
-                      className={cn(
-                        'text-left rounded-lg border p-2.5 transition-all',
-                        active ? cfg.activeColor + ' border-current' : 'border-border bg-muted/5 text-muted-foreground'
-                      )}
-                    >
-                      <span className="text-sm font-semibold">{cfg.icon} {cfg.label}</span>
-                      <p className="text-[10px] mt-0.5 leading-tight opacity-70">{BRIEF_OUTPUT_DESCRIPTIONS[key]}</p>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Priority */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Priority *</label>
-              <div className="flex gap-2">
-                {[
-                  { label: '🔴 High', value: 90 },
-                  { label: '🟡 Medium', value: 60 },
-                  { label: '⚪ Low', value: 30 },
-                ].map(p => (
-                  <button
-                    key={p.value}
-                    onClick={() => setBriefPriority(p.value)}
-                    className={cn(
-                      'text-sm font-semibold rounded-lg px-4 py-2 border transition-all flex-1',
-                      briefPriority === p.value ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground'
-                    )}
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Target Date */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Target Publish Date (optional)</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left font-normal">
-                    <CalendarIcon size={14} className="mr-2 shrink-0" />
-                    {briefDate ? format(briefDate, 'dd MMM yyyy') : 'Optional'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={briefDate} onSelect={setBriefDate} className="p-3 pointer-events-auto" />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {/* Notes */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Notes for Emily (optional)</label>
-              <Textarea
-                placeholder="Any specific angles, NZ references, competitor hooks, or requirements Emily should know about"
-                value={briefNotes}
-                onChange={(e) => setBriefNotes(e.target.value)}
-                rows={4}
-              />
-            </div>
-
-            <Button
-              onClick={handleBriefSubmit}
-              disabled={!briefTopic.trim() || briefOutputs.length === 0 || briefing}
-              className="w-full h-11 font-semibold text-sm"
-              style={{ backgroundColor: '#2563eb' }}
+    <div className="space-y-8 max-w-[1400px]">
+      {/* ═══ PHASE & WEIGHTS STRIP ═══ */}
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
+        <div className="flex-1">
+          <div className="flex items-center gap-3">
+            <h1
+              className="text-3xl font-bold tracking-tight animate-pulse-phase"
+              style={{ color: phaseConf.color }}
             >
-            {editingTaskId ? 'Save Changes →' : 'Add to Queue →'}
-            </Button>
+              {phase}
+            </h1>
+            <span className="text-sm text-muted-foreground">— {phaseConf.desc}</span>
+          </div>
+        </div>
 
-            {/* Delete with slide-to-confirm */}
-            {editingTaskId && (
-              <div className="mt-4 pt-4 border-t border-border">
-                <p className="text-xs text-muted-foreground mb-2 text-center">Hold and slide to delete this job</p>
-                <div
-                  className="relative w-full h-11 rounded-lg overflow-hidden select-none"
-                  style={{ backgroundColor: '#fee2e2' }}
-                  onMouseUp={() => { setDeleteHolding(false); if (deleteConfirmProgress < 100) setDeleteConfirmProgress(0); }}
-                  onMouseLeave={() => { setDeleteHolding(false); if (deleteConfirmProgress < 100) setDeleteConfirmProgress(0); }}
-                  onTouchEnd={() => { setDeleteHolding(false); if (deleteConfirmProgress < 100) setDeleteConfirmProgress(0); }}
-                >
-                  {/* Progress fill */}
-                  <div
-                    className="absolute inset-y-0 left-0 rounded-lg transition-all duration-100"
-                    style={{ width: `${deleteConfirmProgress}%`, backgroundColor: '#ef4444' }}
-                  />
-                  {/* Draggable thumb */}
-                  <div
-                    className="absolute inset-0 flex items-center cursor-grab active:cursor-grabbing"
-                    onMouseDown={(e) => {
-                      setDeleteHolding(true);
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const startX = e.clientX;
-                      const width = rect.width;
-                      const handleMove = (ev: MouseEvent) => {
-                        const delta = ev.clientX - startX;
-                        const pct = Math.max(0, Math.min(100, (delta / width) * 100));
-                        setDeleteConfirmProgress(pct);
-                        if (pct >= 95) {
-                          handleDeleteJob();
-                          document.removeEventListener('mousemove', handleMove);
-                          document.removeEventListener('mouseup', handleUp);
-                        }
-                      };
-                      const handleUp = () => {
-                        setDeleteHolding(false);
-                        setDeleteConfirmProgress(0);
-                        document.removeEventListener('mousemove', handleMove);
-                        document.removeEventListener('mouseup', handleUp);
-                      };
-                      document.addEventListener('mousemove', handleMove);
-                      document.addEventListener('mouseup', handleUp);
-                    }}
-                    onTouchStart={(e) => {
-                      setDeleteHolding(true);
-                      const touch = e.touches[0];
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const startX = touch.clientX;
-                      const width = rect.width;
-                      const handleMove = (ev: TouchEvent) => {
-                        const delta = ev.touches[0].clientX - startX;
-                        const pct = Math.max(0, Math.min(100, (delta / width) * 100));
-                        setDeleteConfirmProgress(pct);
-                        if (pct >= 95) {
-                          handleDeleteJob();
-                          document.removeEventListener('touchmove', handleMove);
-                          document.removeEventListener('touchend', handleUp);
-                        }
-                      };
-                      const handleUp = () => {
-                        setDeleteHolding(false);
-                        setDeleteConfirmProgress(0);
-                        document.removeEventListener('touchmove', handleMove);
-                        document.removeEventListener('touchend', handleUp);
-                      };
-                      document.addEventListener('touchmove', handleMove);
-                      document.addEventListener('touchend', handleUp);
-                    }}
-                  >
-                    <div className="relative z-10 w-full text-center">
-                      <span className={cn(
-                        'text-sm font-semibold transition-colors',
-                        deleteConfirmProgress > 50 ? 'text-white' : 'text-red-600'
-                      )}>
-                        {deleteConfirmProgress >= 95 ? 'Deleting...' : '⟶ Slide to Delete'}
-                      </span>
+        <div className="w-full lg:w-[340px] space-y-2">
+          {weightSum !== 100 && (
+            <Badge className="bg-warning/20 text-warning border-warning/30 text-xs">
+              <AlertTriangle size={12} className="mr-1" /> Weights unbalanced ({weightSum}%)
+            </Badge>
+          )}
+          {STREAM_CONFIG.map(s => {
+            const w = weights[s.key as keyof typeof weights];
+            return (
+              <div key={s.key} className="flex items-center gap-2 text-xs">
+                <span className="w-20 text-muted-foreground">{s.label}</span>
+                <div className="flex-1 h-2 rounded-full bg-secondary overflow-hidden">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${w}%`, backgroundColor: s.color }} />
+                </div>
+                <span className="w-8 text-right text-foreground font-medium">{w}%</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ═══ NEEDS YOUR ATTENTION ═══ */}
+      <section>
+        <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-3">Needs Your Attention</h2>
+        {attentionItems.length === 0 ? (
+          <Card>
+            <CardContent className="p-6 text-center">
+              <p className="text-foreground">All clear. No attention needed. 😊</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {attentionItems.slice(0, 5).map((item, i) => (
+              <Card key={i} className="border-border">
+                <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-start gap-3 flex-1">
+                    <Badge variant="outline" className={`${item.badgeColor} border-transparent text-[11px] font-semibold shrink-0`}>
+                      {item.badge}
+                    </Badge>
+                    <div>
+                      <p className="text-sm text-foreground">{item.text}</p>
+                      {item.timestamp && <p className="text-xs text-muted-foreground mt-0.5">{item.timestamp}</p>}
                     </div>
                   </div>
-                </div>
-              </div>
+                  <Button size="sm" variant="outline" onClick={() => navigate(item.link)} className="shrink-0 h-8 text-xs">
+                    {item.cta} <ArrowRight size={12} className="ml-1" />
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+            {attentionItems.length > 5 && (
+              <Button variant="ghost" size="sm" onClick={() => navigate('/approvals')} className="text-xs text-muted-foreground">
+                View all ({attentionItems.length}) →
+              </Button>
             )}
           </div>
-        </SheetContent>
-      </Sheet>
+        )}
+
+        {/* April 1 dismissible info */}
+        {!april1Dismissed && (
+          <Card className="mt-3 border-border">
+            <CardContent className="p-4 flex items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <Badge variant="outline" className="bg-muted/20 text-muted-foreground border-transparent text-[11px] font-semibold">INFO</Badge>
+                <p className="text-sm text-foreground">Note: April 1 produced 0 articles. Root cause under investigation.</p>
+              </div>
+              <Button size="sm" variant="ghost" className="text-xs text-muted-foreground shrink-0" onClick={() => {
+                localStorage.setItem('dismiss_april1', Date.now().toString());
+                setApril1Dismissed(true);
+              }}>
+                Dismiss
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </section>
+
+      {/* ═══ CHANNEL HEALTH GRID ═══ */}
+      <section>
+        <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-3">Channel Status</h2>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {CHANNEL_FLAGS.map(ch => {
+            const isOn = flags[ch.key] ?? false;
+            return (
+              <Card key={ch.key}>
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-foreground">{ch.label}</span>
+                    <span className={`h-2.5 w-2.5 rounded-full ${isOn ? 'bg-success' : 'bg-muted-foreground/40'}`} />
+                  </div>
+                  <p className="text-xs text-muted-foreground">{isOn ? 'Active' : 'Disabled'}</p>
+                </CardContent>
+              </Card>
+            );
+          })}
+          <Card>
+            <CardContent className="p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-foreground">Canva</span>
+                <Badge variant="outline" className="text-[10px] text-muted-foreground border-border">external</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">Visual Design</p>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      {/* ═══ INTELLIGENCE FEED + CHART ═══ */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Intelligence Feed */}
+        <div className="xl:col-span-1">
+          <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-3">Overnight Intelligence</h2>
+          <div className="space-y-2">
+            {signals.length === 0 ? (
+              <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">No recent signals.</p></CardContent></Card>
+            ) : (
+              signals.map((s, i) => (
+                <Card key={i}>
+                  <CardContent className="p-3 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Zap size={12} className={s.color} />
+                      <span className="text-[11px] text-muted-foreground">
+                        {formatDistanceToNow(new Date(s.time), { addSuffix: true })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-foreground">{s.text}</p>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+            {/* Placeholder signals */}
+            {['GA4 integration pending', 'Buffer integration pending', 'Bob conversation analysis pending', 'Competitor monitoring pending'].map(p => (
+              <Card key={p}><CardContent className="p-3">
+                <p className="text-xs text-muted-foreground italic">{p}</p>
+              </CardContent></Card>
+            ))}
+          </div>
+        </div>
+
+        {/* Emily Activity Chart */}
+        <div className="xl:col-span-2">
+          <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-3">Emily Activity (Last 7 Days)</h2>
+          <Card>
+            <CardContent className="p-4">
+              <div className="h-[240px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chartData}>
+                    <XAxis dataKey="date" tick={{ fill: 'hsl(215, 9%, 55%)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="left" tick={{ fill: 'hsl(215, 9%, 55%)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fill: 'hsl(215, 9%, 55%)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <RechartsTooltip contentStyle={{ background: 'hsl(215, 22%, 11%)', border: '1px solid hsl(215, 14%, 16%)', borderRadius: 8, color: 'hsl(213, 14%, 80%)', fontSize: 12 }} />
+                    <Bar yAxisId="left" dataKey="runs" fill="hsl(212, 100%, 67%)" radius={[4, 4, 0, 0]} barSize={32} name="Runs" />
+                    <Line yAxisId="right" type="monotone" dataKey="generated" stroke="hsl(142, 58%, 49%)" strokeWidth={2} dot={{ r: 3 }} name="Articles" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex gap-6 mt-4 text-xs text-muted-foreground">
+                <span>7-day avg: <strong className="text-foreground">{avgPerRun} articles/run</strong></span>
+                <span>Total generated: <strong className="text-foreground">{totalGenerated}</strong></span>
+                <span>Avg cost/run: <strong className="text-foreground">${recentRuns.length > 0 ? (totalCost / recentRuns.length).toFixed(2) : '0.00'}</strong></span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

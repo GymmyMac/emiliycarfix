@@ -2,9 +2,7 @@ import { Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import AppSidebar from './AppSidebar';
 import MobileNav from './MobileNav';
-import SparklesText from './SparklesText';
 import { LogOut } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 
 export default function AdminLayout() {
   const { session, user, loading, signOut } = useAuth();
@@ -27,13 +25,10 @@ export default function AdminLayout() {
     <div className="flex min-h-screen bg-background">
       <AppSidebar />
 
-      {/* Mobile header */}
       <header className="fixed top-0 left-0 right-0 z-40 flex h-14 items-center justify-between border-b border-border bg-card px-4 md:hidden">
-        <SparklesText text="CARFIX" className="text-2xl font-bold tracking-tight" />
+        <span className="text-xl font-bold text-foreground tracking-tight">CARFIX</span>
         <div className="flex items-center gap-2">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">{initial}</AvatarFallback>
-          </Avatar>
+          <span className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-semibold">{initial}</span>
           <button onClick={signOut} className="p-2 text-muted-foreground">
             <LogOut size={18} />
           </button>
