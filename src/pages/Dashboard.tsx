@@ -57,13 +57,14 @@ const STREAM_CONFIG = [
   { key: 'amplify', label: 'AMPLIFY', color: 'hsl(var(--stream-amplify))' },
 ];
 
-const CHANNEL_FLAGS = [
-  { key: 'facebook_enabled', label: 'Facebook' },
-  { key: 'instagram_enabled', label: 'Instagram' },
-  { key: 'tiktok_enabled', label: 'TikTok' },
-  { key: 'email_enabled', label: 'Email' },
-  { key: 'sms_enabled', label: 'SMS' },
-  { key: 'blog_aeo_enabled', label: 'Blog/AEO' },
+const CHANNEL_CONFIG = [
+  { key: 'channel_facebook', label: 'Facebook' },
+  { key: 'channel_instagram', label: 'Instagram' },
+  { key: 'channel_tiktok', label: 'TikTok' },
+  { key: 'channel_email', label: 'Email' },
+  { key: 'channel_sms', label: 'SMS' },
+  { key: 'channel_blog', label: 'Blog' },
+  { key: 'channel_aeo', label: 'AEO' },
 ];
 
 export default function Dashboard() {
