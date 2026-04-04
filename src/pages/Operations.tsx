@@ -83,7 +83,7 @@ export default function Operations() {
       fetchAppConfig(),
       supabase.from('feature_flags').select('flag_key, flag_value'),
       supabase.from('emily_runs').select('started_at, status, generated_count, failed_count').order('started_at', { ascending: false }).limit(1),
-      supabase.from('emily_openrouter_snapshots').select('checked_at, credits_remaining_usd, usage_usd').order('checked_at', { ascending: false }).limit(1),
+      supabase.from('emily_openrouter_snapshots').select('checked_at, credits_remaining_usd, usage_usd, limit_usd').order('checked_at', { ascending: false }).limit(1),
       supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'queued'),
       supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).not('draft_content', 'is', null).eq('james_approved', false),
       supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('james_approved', true),
