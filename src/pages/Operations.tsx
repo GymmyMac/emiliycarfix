@@ -380,24 +380,39 @@ export default function Operations() {
         )}
 
         {/* OpenRouter Balance */}
-        <Card className={`${orSnapshot?.credits_remaining_usd === null ? 'bg-warning/10 border-warning/30' : (orSnapshot?.credits_remaining_usd ?? 0) < 2 ? 'bg-destructive/10 border-destructive/30' : ''}`} style={{ background: 'hsl(var(--surface-raised))' }}>
+        <Card style={{ background: 'hsl(var(--surface-raised))' }}>
           <CardContent className="p-4 space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CreditCard size={18} className="text-primary" />
                 <span className="text-sm font-semibold text-foreground">OpenRouter Credit Balance</span>
               </div>
-              <Button size="sm" variant="outline" onClick={checkBalance} className="h-7 text-xs border-border">
-                <RefreshCw size={12} className="mr-1" /> Check Balance
+              <Button size="sm" variant="outline" onClick={refreshSnapshot} className="h-7 text-xs border-border">
+                <RefreshCw size={12} className="mr-1" /> Refresh
               </Button>
             </div>
-            {orSnapshot?.credits_remaining_usd !== null && orSnapshot?.credits_remaining_usd !== undefined ? (
-              <div>
-                <p className="text-3xl font-bold text-foreground">${orSnapshot.credits_remaining_usd.toFixed(2)}</p>
-                {orSnapshot.usage_usd != null && <p className="text-xs text-muted-foreground">Used this month: ${orSnapshot.usage_usd.toFixed(2)}</p>}
+            {!orSnapshot ? (
+              <p className="text-sm text-muted-foreground">No data yet</p>
+            ) : orSnapshot.limit_usd === null ? (
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-success" />
+                <p className="text-sm text-foreground font-medium">Prepaid account · <span className="text-xl font-bold">${(orSnapshot.usage_usd ?? 0).toFixed(2)}</span> spent</p>
               </div>
             ) : (
-              <p className="text-sm text-warning font-medium">Balance monitoring unavailable</p>
+              <div>
+                {(() => {
+                  const remaining = orSnapshot.credits_remaining_usd ?? 0;
+                  const limit = orSnapshot.limit_usd;
+                  const pct = limit > 0 ? (remaining / limit) * 100 : 0;
+                  const dotColor = pct > 30 ? 'bg-success' : pct > 10 ? 'bg-warning' : 'bg-destructive';
+                  return (
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${dotColor}`} />
+                      <p className="text-foreground"><span className="text-xl font-bold">${remaining.toFixed(2)}</span> <span className="text-sm text-muted-foreground">remaining of ${limit.toFixed(2)}</span></p>
+                    </div>
+                  );
+                })()}
+              </div>
             )}
             {orSnapshot?.checked_at && (
               <p className="text-xs text-muted-foreground">Last checked: {format(new Date(orSnapshot.checked_at), 'd MMM HH:mm')}</p>

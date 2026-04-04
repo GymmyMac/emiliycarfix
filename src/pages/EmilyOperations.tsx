@@ -364,10 +364,36 @@ export default function EmilyOperations() {
                 <CreditCard size={16} className="text-primary" />
                 <span className="text-xs font-medium text-muted-foreground">OpenRouter Credits</span>
               </div>
-              {creditBalance !== null ? (
-                <p className="text-xl font-bold text-foreground">${creditBalance.toFixed(2)}</p>
+              {!orSnapshot ? (
+                <Badge variant="secondary" className="text-xs">No data yet</Badge>
+              ) : orSnapshot.limit_usd === null ? (
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-success" />
+                    <span className="text-xs text-muted-foreground">Prepaid</span>
+                  </div>
+                  <p className="text-xl font-bold text-foreground">${(orSnapshot.usage_usd ?? 0).toFixed(2)} <span className="text-xs font-normal text-muted-foreground">spent</span></p>
+                </div>
               ) : (
-                <Badge variant="secondary" className="text-xs">Unavailable</Badge>
+                <div>
+                  {(() => {
+                    const remaining = orSnapshot.credits_remaining_usd ?? 0;
+                    const pct = orSnapshot.limit_usd > 0 ? (remaining / orSnapshot.limit_usd) * 100 : 0;
+                    const dotColor = pct > 30 ? 'bg-success' : pct > 10 ? 'bg-warning' : 'bg-destructive';
+                    return (
+                      <>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`h-2 w-2 rounded-full ${dotColor}`} />
+                          <span className="text-xs text-muted-foreground">{pct.toFixed(0)}% remaining</span>
+                        </div>
+                        <p className="text-xl font-bold text-foreground">${remaining.toFixed(2)}</p>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+              {orSnapshot?.checked_at && (
+                <p className="text-[10px] text-muted-foreground">Last: {format(new Date(orSnapshot.checked_at), 'd MMM HH:mm')}</p>
               )}
             </CardContent>
           </Card>
