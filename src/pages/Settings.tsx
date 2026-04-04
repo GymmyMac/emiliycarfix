@@ -98,7 +98,22 @@ export default function Settings() {
     }
   };
 
-  if (loading) {
+  const checkBalance = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('check-openrouter-balance');
+      if (error) throw error;
+      setOrBalance(data?.balance ?? null);
+      setOrCheckedAt(new Date().toISOString());
+      toast.success('Balance refreshed');
+    } catch { toast.error('Failed to check balance'); }
+  };
+
+  const copyProjectId = () => {
+    navigator.clipboard.writeText('flpzjbasdsfwoeruyxgp');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
     return (
       <div className="space-y-6 max-w-[1200px]">
         <Skeleton className="h-8 w-48" />
