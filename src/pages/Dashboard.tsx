@@ -85,9 +85,10 @@ export default function Dashboard() {
   });
 
   const fetchAll = useCallback(async () => {
+    const channelKeys = CHANNEL_CONFIG.map(c => c.key);
     const [
       appConfig, articlesRes, socialRes, lastRunRes, lastSuccessRes,
-      orRes, flagsRes, runsRes,
+      orRes, channelsRes, runsRes,
     ] = await Promise.all([
       fetchAppConfig(),
       supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('james_approved', false).not('draft_content', 'is', null),
@@ -95,7 +96,7 @@ export default function Dashboard() {
       supabase.from('emily_runs').select('*').order('started_at', { ascending: false }).limit(1),
       supabase.from('emily_runs').select('*').eq('status', 'success').order('started_at', { ascending: false }).limit(1),
       supabase.from('emily_openrouter_snapshots').select('*').order('checked_at', { ascending: false }).limit(1),
-      supabase.from('feature_flags').select('flag_key, flag_value'),
+      supabase.from('app_config').select('key, value').in('key', channelKeys),
       supabase.from('emily_runs').select('*').gte('started_at', subDays(new Date(), 7).toISOString()).order('started_at', { ascending: true }),
     ]);
 
@@ -105,10 +106,12 @@ export default function Dashboard() {
     if (lastRunRes.data?.[0]) setLastRun(lastRunRes.data[0]);
     if (lastSuccessRes.data?.[0]) setLastSuccessRun(lastSuccessRes.data[0]);
     if (orRes.data?.[0]) setOrSnapshot(orRes.data[0]);
-    if (flagsRes.data) {
-      const fm: Record<string, boolean> = {};
-      flagsRes.data.forEach((f: FeatureFlag) => { fm[f.flag_key] = f.flag_value; });
-      setFlags(fm);
+    if (channelsRes.data) {
+      const cm: Record<string, boolean> = {};
+      channelsRes.data.forEach((row: { key: string; value: string }) => {
+        cm[row.key] = row.value === 'true';
+      });
+      setChannels(cm);
     }
     if (runsRes.data) setRecentRuns(runsRes.data);
     setLoading(false);
