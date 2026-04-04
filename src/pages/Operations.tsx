@@ -47,9 +47,9 @@ const STREAMS = [
 ];
 
 const INITIATIVE_FLAGS = [
-  { key: 'initiative_sku_aeo_enrichment', label: 'SKU AEO Enrichment' },
-  { key: 'initiative_social_content', label: 'Social Content Generation' },
-  { key: 'initiative_email_sms', label: 'Email & SMS Generation' },
+  { key: 'feature_sku_aeo_enrichment', label: 'SKU AEO Enrichment' },
+  { key: 'feature_social_content', label: 'Social Content Generation' },
+  { key: 'feature_email_sms', label: 'Email & SMS Generation' },
 ];
 
 const PIPELINE_NODES = [
