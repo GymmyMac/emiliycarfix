@@ -290,6 +290,7 @@ export default function Approvals() {
           <TabsList className="bg-secondary">
             <TabsTrigger value="aeo">AEO Articles ({articles.length})</TabsTrigger>
             <TabsTrigger value="social">Social & Campaign ({socialItems.length})</TabsTrigger>
+            <TabsTrigger value="published">Published ({publishedArticles.length})</TabsTrigger>
           </TabsList>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
