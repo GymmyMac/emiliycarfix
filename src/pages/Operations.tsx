@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchAppConfig, updateAppConfigValues, type AppConfig } from '@/lib/appConfig';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,15 +17,6 @@ import {
 import { format } from 'date-fns';
 
 /* ─── Types ─── */
-interface AppConfig {
-  business_phase: string;
-  stream_weight_disrupt: number;
-  stream_weight_educate: number;
-  stream_weight_convert: number;
-  stream_weight_amplify: number;
-  phase_presets: Record<string, any> | null;
-}
-
 interface EmilyRun {
   started_at: string;
   status: string;
@@ -39,18 +31,18 @@ interface OpenRouterSnapshot {
 }
 
 const PHASES = [
-  { key: 'FORM', color: 'hsl(var(--phase-form))', desc: 'Foundational architecture' },
-  { key: 'LOAD', color: 'hsl(var(--phase-load))', desc: 'Content generation & testing' },
-  { key: 'LAUNCH', color: 'hsl(var(--phase-launch))', desc: 'Market entry & activation' },
-  { key: 'STORM', color: 'hsl(var(--phase-storm))', desc: 'Aggressive growth' },
-  { key: 'PERFORM', color: 'hsl(var(--phase-perform))', desc: 'Scale & retention' },
+  { key: 'form', label: 'FORM', color: 'hsl(var(--phase-form))', desc: 'Foundational architecture' },
+  { key: 'load', label: 'LOAD', color: 'hsl(var(--phase-load))', desc: 'Content generation & testing' },
+  { key: 'launch', label: 'LAUNCH', color: 'hsl(var(--phase-launch))', desc: 'Market entry & activation' },
+  { key: 'storm', label: 'STORM', color: 'hsl(var(--phase-storm))', desc: 'Aggressive growth' },
+  { key: 'perform', label: 'PERFORM', color: 'hsl(var(--phase-perform))', desc: 'Scale & retention' },
 ];
 
 const STREAMS = [
-  { key: 'disrupt', label: 'DISRUPT', audience: 'Cold awareness', configKey: 'stream_weight_disrupt' },
-  { key: 'educate', label: 'EDUCATE', audience: 'Warm consideration', configKey: 'stream_weight_educate' },
-  { key: 'convert', label: 'CONVERT', audience: 'Activation', configKey: 'stream_weight_convert' },
-  { key: 'amplify', label: 'AMPLIFY', audience: 'Advocacy', configKey: 'stream_weight_amplify' },
+  { key: 'disrupt', label: 'DISRUPT', audience: 'Cold awareness', configKey: 'stream_weight_disrupt' as const },
+  { key: 'educate', label: 'EDUCATE', audience: 'Warm consideration', configKey: 'stream_weight_educate' as const },
+  { key: 'convert', label: 'CONVERT', audience: 'Activation', configKey: 'stream_weight_convert' as const },
+  { key: 'amplify', label: 'AMPLIFY', audience: 'Advocacy', configKey: 'stream_weight_amplify' as const },
 ];
 
 const INITIATIVE_FLAGS = [
@@ -76,7 +68,7 @@ export default function Operations() {
   const [phaseChangeTarget, setPhaseChangeTarget] = useState<string | null>(null);
 
   // Weight editing
-  const [editWeights, setEditWeights] = useState<Record<string, number>>({});
+  const [editWeights, setEditWeights] = useState<Record<string, number>>({ disrupt: 0, educate: 0, convert: 0, amplify: 0 });
   const [weightsChanged, setWeightsChanged] = useState(false);
 
   // Pipeline counts
@@ -86,8 +78,8 @@ export default function Operations() {
   const [runningEmily, setRunningEmily] = useState(false);
 
   const fetchAll = useCallback(async () => {
-    const [configRes, flagsRes, lastRunRes, orRes, queuedRes, generatedRes, approvedRes, publishedRes, reviewSeoRes, reviewContentRes] = await Promise.all([
-      supabase.from('app_config').select('*').limit(1).single(),
+    const [appConfig, flagsRes, lastRunRes, orRes, queuedRes, generatedRes, approvedRes, publishedRes, reviewSeoRes, reviewContentRes] = await Promise.all([
+      fetchAppConfig(),
       supabase.from('feature_flags').select('flag_key, flag_value'),
       supabase.from('emily_runs').select('started_at, status, generated_count, failed_count').order('started_at', { ascending: false }).limit(1),
       supabase.from('emily_openrouter_snapshots').select('checked_at, credits_remaining_usd, usage_usd').order('checked_at', { ascending: false }).limit(1),
@@ -99,13 +91,13 @@ export default function Operations() {
       supabase.from('mkt_content_queue').select('id', { count: 'exact', head: true }).eq('status', 'draft'),
     ]);
 
-    if (configRes.data) {
-      setConfig(configRes.data);
+    if (appConfig) {
+      setConfig(appConfig);
       setEditWeights({
-        disrupt: configRes.data.stream_weight_disrupt,
-        educate: configRes.data.stream_weight_educate,
-        convert: configRes.data.stream_weight_convert,
-        amplify: configRes.data.stream_weight_amplify,
+        disrupt: appConfig.stream_weight_disrupt,
+        educate: appConfig.stream_weight_educate,
+        convert: appConfig.stream_weight_convert,
+        amplify: appConfig.stream_weight_amplify,
       });
     }
     if (flagsRes.data) {
@@ -115,9 +107,6 @@ export default function Operations() {
     }
     if (lastRunRes.data?.[0]) setLastRun(lastRunRes.data[0]);
     if (orRes.data?.[0]) setOrSnapshot(orRes.data[0]);
-
-    const qCount = (queuedRes.count || 0) + (supabase ? 0 : 0);
-    const draftCount = (reviewContentRes.count || 0);
 
     setPipelineCounts({
       queued: queuedRes.count || 0,
@@ -155,21 +144,46 @@ export default function Operations() {
   const saveWeights = async () => {
     const sum = Object.values(editWeights).reduce((a, b) => a + b, 0);
     if (sum !== 100) { toast.error(`Weights must sum to 100% (current: ${sum}%)`); return; }
-    const { error } = await supabase.from('app_config').update({
-      stream_weight_disrupt: editWeights.disrupt,
-      stream_weight_educate: editWeights.educate,
-      stream_weight_convert: editWeights.convert,
-      stream_weight_amplify: editWeights.amplify,
-    }).not('business_phase', 'is', null); // Update all rows
-    if (error) { toast.error('Failed to save weights'); }
+    const ok = await updateAppConfigValues([
+      { key: 'stream_weight_disrupt', value: String(editWeights.disrupt) },
+      { key: 'stream_weight_educate', value: String(editWeights.educate) },
+      { key: 'stream_weight_convert', value: String(editWeights.convert) },
+      { key: 'stream_weight_amplify', value: String(editWeights.amplify) },
+    ]);
+    if (!ok) { toast.error('Failed to save weights'); }
     else { toast.success('Stream weights updated'); setWeightsChanged(false); fetchAll(); }
   };
 
   const confirmPhaseChange = async () => {
     if (!phaseChangeTarget) return;
-    const { error } = await supabase.from('app_config').update({ business_phase: phaseChangeTarget }).not('business_phase', 'is', null);
-    if (error) toast.error('Failed to change phase');
-    else { toast.success(`Phase changed to ${phaseChangeTarget}`); fetchAll(); }
+
+    // Update phase
+    const ok = await updateAppConfigValues([
+      { key: 'business_phase', value: phaseChangeTarget },
+    ]);
+
+    if (!ok) { toast.error('Failed to change phase'); setPhaseChangeTarget(null); return; }
+
+    // Auto-fill weights from phase_presets if available
+    const presets = config?.phase_presets;
+    const preset = presets?.[phaseChangeTarget];
+    if (preset) {
+      await updateAppConfigValues([
+        { key: 'stream_weight_disrupt', value: String(preset.disrupt ?? 0) },
+        { key: 'stream_weight_educate', value: String(preset.educate ?? 0) },
+        { key: 'stream_weight_convert', value: String(preset.convert ?? 0) },
+        { key: 'stream_weight_amplify', value: String(preset.amplify ?? 0) },
+      ]);
+      setEditWeights({
+        disrupt: preset.disrupt ?? 0,
+        educate: preset.educate ?? 0,
+        convert: preset.convert ?? 0,
+        amplify: preset.amplify ?? 0,
+      });
+    }
+
+    toast.success(`Phase changed to ${phaseChangeTarget.toUpperCase()}`);
+    fetchAll();
     setPhaseChangeTarget(null);
   };
 
@@ -190,10 +204,13 @@ export default function Operations() {
   };
 
   const weightSum = Object.values(editWeights).reduce((a, b) => a + b, 0);
-  const activePhase = config?.business_phase?.toUpperCase() || 'LOAD';
+  const activePhase = config?.business_phase?.toLowerCase() || 'load';
   const globalActive = flags['emily_global_active'] ?? false;
   const canRun = globalActive && (orSnapshot?.credits_remaining_usd ?? 0) > 2;
   const runDisabledReason = !globalActive ? 'Emily is OFF' : (orSnapshot?.credits_remaining_usd ?? 0) <= 2 ? 'OpenRouter balance low' : '';
+
+  // Get preset weights for the phase change confirmation dialog
+  const presetForTarget = config?.phase_presets?.[phaseChangeTarget || ''];
 
   if (loading) {
     return (
@@ -223,13 +240,14 @@ export default function Operations() {
                 onClick={() => !isActive && setPhaseChangeTarget(p.key)}
                 className={`rounded-lg border-2 p-4 text-left transition-all ${
                   isActive
-                    ? 'border-current bg-card animate-pulse-phase'
+                    ? 'border-current bg-card'
                     : 'border-border bg-card hover:border-muted-foreground/30 cursor-pointer'
                 }`}
                 style={isActive ? { borderColor: p.color, color: p.color } : {}}
               >
-                <div className="text-lg font-bold" style={isActive ? { color: p.color } : { color: 'hsl(var(--foreground))' }}>{p.key}</div>
+                <div className="text-lg font-bold" style={isActive ? { color: p.color } : { color: 'hsl(var(--foreground))' }}>{p.label}</div>
                 <p className="text-[11px] text-muted-foreground mt-1">{p.desc}</p>
+                {isActive && <Badge className="mt-2 text-[10px] bg-primary/20 text-primary border-0">Active</Badge>}
               </button>
             );
           })}
@@ -239,7 +257,7 @@ export default function Operations() {
         <div className="space-y-3">
           <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Stream Weights</h3>
           {STREAMS.map(s => {
-            const defaultVal = config ? (config as any)[s.configKey] : 0;
+            const savedVal = config ? config[s.configKey] : 0;
             return (
               <div key={s.key} className="flex items-center gap-3">
                 <span className="w-20 text-sm text-foreground font-medium">{s.label}</span>
@@ -255,18 +273,51 @@ export default function Operations() {
                   }}
                   className="w-20 h-8 text-xs text-center bg-background border-border"
                 />
-                <span className="text-xs text-muted-foreground hidden sm:block">Default: {defaultVal}%</span>
+                <span className="text-xs text-muted-foreground hidden sm:block">Saved: {savedVal}%</span>
                 <div className="flex-1 h-2 rounded-full bg-secondary overflow-hidden hidden sm:block">
                   <div className="h-full rounded-full transition-all" style={{ width: `${editWeights[s.key] ?? 0}%`, backgroundColor: `hsl(var(--stream-${s.key}))` }} />
                 </div>
               </div>
             );
           })}
+
+          {/* Weight distribution bar chart */}
+          <div className="mt-4">
+            <p className="text-xs text-muted-foreground mb-2">Weight Distribution</p>
+            <div className="flex h-6 rounded-md overflow-hidden border border-border">
+              {STREAMS.map(s => {
+                const pct = editWeights[s.key] ?? 0;
+                if (pct === 0) return null;
+                return (
+                  <Tooltip key={s.key}>
+                    <TooltipTrigger asChild>
+                      <div
+                        className="h-full flex items-center justify-center text-[10px] font-bold text-white transition-all"
+                        style={{
+                          width: `${pct}%`,
+                          backgroundColor: `hsl(var(--stream-${s.key}))`,
+                          minWidth: pct > 0 ? '24px' : 0,
+                        }}
+                      >
+                        {pct > 8 ? `${pct}%` : ''}
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent className="bg-card border-border text-foreground">
+                      {s.label}: {pct}%
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })}
+            </div>
+          </div>
+
           {weightSum !== 100 && (
             <p className="text-xs text-warning">Weights must sum to 100% (current: {weightSum}%)</p>
           )}
           {weightsChanged && (
-            <Button size="sm" onClick={saveWeights} className="h-8 text-xs bg-primary text-primary-foreground">Save Weights</Button>
+            <Button size="sm" onClick={saveWeights} disabled={weightSum !== 100} className="h-8 text-xs bg-primary text-primary-foreground">
+              Save Weights
+            </Button>
           )}
         </div>
       </section>
@@ -411,10 +462,20 @@ export default function Operations() {
       {/* ─── Phase Change Dialog ─── */}
       <Dialog open={!!phaseChangeTarget} onOpenChange={() => setPhaseChangeTarget(null)}>
         <DialogContent className="bg-card border-border">
-          <DialogHeader><DialogTitle className="text-foreground">Change phase to {phaseChangeTarget}?</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">
-            Current weights: DISRUPT {editWeights.disrupt}%, EDUCATE {editWeights.educate}%, CONVERT {editWeights.convert}%, AMPLIFY {editWeights.amplify}%
-          </p>
+          <DialogHeader><DialogTitle className="text-foreground">Change phase to {phaseChangeTarget?.toUpperCase()}?</DialogTitle></DialogHeader>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              Current weights: DISRUPT {editWeights.disrupt}%, EDUCATE {editWeights.educate}%, CONVERT {editWeights.convert}%, AMPLIFY {editWeights.amplify}%
+            </p>
+            {presetForTarget && (
+              <p className="text-sm text-foreground">
+                New weights will be: DISRUPT {presetForTarget.disrupt}%, EDUCATE {presetForTarget.educate}%, CONVERT {presetForTarget.convert}%, AMPLIFY {presetForTarget.amplify}%
+              </p>
+            )}
+            {!presetForTarget && (
+              <p className="text-xs text-muted-foreground italic">No preset weights found for this phase. Weights will remain unchanged.</p>
+            )}
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPhaseChangeTarget(null)} className="border-border">Cancel</Button>
             <Button onClick={confirmPhaseChange} className="bg-primary text-primary-foreground">Change Phase</Button>
