@@ -6,6 +6,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
+import { toast } from 'sonner';
 import {
   AlertTriangle, CheckCircle2, XCircle, Info, Clock,
   ArrowRight, Zap, RefreshCw,
@@ -34,12 +36,6 @@ interface OpenRouterSnapshot {
   is_low_balance: boolean | null;
 }
 
-interface FeatureFlag {
-  flag_key: string;
-  flag_value: boolean;
-}
-
-/* ─── Phase config ─── */
 const PHASE_CONFIG: Record<string, { color: string; cssVar: string; desc: string }> = {
   FORM: { color: 'hsl(var(--phase-form))', cssVar: 'phase-form', desc: 'Foundational architecture & brand definition' },
   LOAD: { color: 'hsl(var(--phase-load))', cssVar: 'phase-load', desc: 'Cold awareness & narrative disruption pipeline' },
@@ -55,13 +51,14 @@ const STREAM_CONFIG = [
   { key: 'amplify', label: 'AMPLIFY', color: 'hsl(var(--stream-amplify))' },
 ];
 
-const CHANNEL_FLAGS = [
-  { key: 'facebook_enabled', label: 'Facebook' },
-  { key: 'instagram_enabled', label: 'Instagram' },
-  { key: 'tiktok_enabled', label: 'TikTok' },
-  { key: 'email_enabled', label: 'Email' },
-  { key: 'sms_enabled', label: 'SMS' },
-  { key: 'blog_aeo_enabled', label: 'Blog/AEO' },
+const CHANNEL_CONFIG = [
+  { key: 'channel_facebook', label: 'Facebook' },
+  { key: 'channel_instagram', label: 'Instagram' },
+  { key: 'channel_tiktok', label: 'TikTok' },
+  { key: 'channel_email', label: 'Email' },
+  { key: 'channel_sms', label: 'SMS' },
+  { key: 'channel_blog', label: 'Blog' },
+  { key: 'channel_aeo', label: 'AEO' },
 ];
 
 export default function Dashboard() {
@@ -73,7 +70,7 @@ export default function Dashboard() {
   const [lastRun, setLastRun] = useState<EmilyRun | null>(null);
   const [lastSuccessRun, setLastSuccessRun] = useState<EmilyRun | null>(null);
   const [orSnapshot, setOrSnapshot] = useState<OpenRouterSnapshot | null>(null);
-  const [flags, setFlags] = useState<Record<string, boolean>>({});
+  const [channels, setChannels] = useState<Record<string, boolean>>({});
   const [recentRuns, setRecentRuns] = useState<EmilyRun[]>([]);
   const [april1Dismissed, setApril1Dismissed] = useState(() => {
     const d = localStorage.getItem('dismiss_april1');
@@ -82,9 +79,10 @@ export default function Dashboard() {
   });
 
   const fetchAll = useCallback(async () => {
+    const channelKeys = CHANNEL_CONFIG.map(c => c.key);
     const [
       appConfig, articlesRes, socialRes, lastRunRes, lastSuccessRes,
-      orRes, flagsRes, runsRes,
+      orRes, channelsRes, runsRes,
     ] = await Promise.all([
       fetchAppConfig(),
       supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('james_approved', false).not('draft_content', 'is', null),
@@ -92,7 +90,7 @@ export default function Dashboard() {
       supabase.from('emily_runs').select('*').order('started_at', { ascending: false }).limit(1),
       supabase.from('emily_runs').select('*').eq('status', 'success').order('started_at', { ascending: false }).limit(1),
       supabase.from('emily_openrouter_snapshots').select('*').order('checked_at', { ascending: false }).limit(1),
-      supabase.from('feature_flags').select('flag_key, flag_value'),
+      supabase.from('app_config').select('key, value').in('key', channelKeys),
       supabase.from('emily_runs').select('*').gte('started_at', subDays(new Date(), 7).toISOString()).order('started_at', { ascending: true }),
     ]);
 
@@ -102,10 +100,12 @@ export default function Dashboard() {
     if (lastRunRes.data?.[0]) setLastRun(lastRunRes.data[0]);
     if (lastSuccessRes.data?.[0]) setLastSuccessRun(lastSuccessRes.data[0]);
     if (orRes.data?.[0]) setOrSnapshot(orRes.data[0]);
-    if (flagsRes.data) {
-      const fm: Record<string, boolean> = {};
-      flagsRes.data.forEach((f: FeatureFlag) => { fm[f.flag_key] = f.flag_value; });
-      setFlags(fm);
+    if (channelsRes.data) {
+      const cm: Record<string, boolean> = {};
+      channelsRes.data.forEach((row: { key: string; value: string }) => {
+        cm[row.key] = row.value === 'true';
+      });
+      setChannels(cm);
     }
     if (runsRes.data) setRecentRuns(runsRes.data);
     setLoading(false);
@@ -121,7 +121,23 @@ export default function Dashboard() {
     return () => { supabase.removeChannel(ch); };
   }, [fetchAll]);
 
-  if (loading) {
+  const handleChannelToggle = async (key: string, label: string, checked: boolean) => {
+    // Optimistic update
+    setChannels(prev => ({ ...prev, [key]: checked }));
+
+    const { error } = await supabase
+      .from('app_config')
+      .upsert({ key, value: String(checked), updated_at: new Date().toISOString() }, { onConflict: 'key' });
+
+    if (error) {
+      // Revert on failure
+      setChannels(prev => ({ ...prev, [key]: !checked }));
+      toast.error(`Failed to update ${label}`);
+    } else {
+      toast.success(`${label} ${checked ? 'enabled' : 'disabled'}`);
+    }
+  };
+
     return (
       <div className="space-y-6 max-w-[1400px]">
         <Skeleton className="h-20 w-full" />
@@ -328,16 +344,21 @@ export default function Dashboard() {
       <section>
         <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-3">Channel Status</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {CHANNEL_FLAGS.map(ch => {
-            const isOn = flags[ch.key] ?? false;
+          {CHANNEL_CONFIG.map(ch => {
+            const isOn = channels[ch.key] ?? false;
             return (
               <Card key={ch.key}>
                 <CardContent className="p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-foreground">{ch.label}</span>
-                    <span className={`h-2.5 w-2.5 rounded-full ${isOn ? 'bg-success' : 'bg-muted-foreground/40'}`} />
+                    <Switch
+                      checked={isOn}
+                      onCheckedChange={(checked) => handleChannelToggle(ch.key, ch.label, checked)}
+                    />
                   </div>
-                  <p className="text-xs text-muted-foreground">{isOn ? 'Active' : 'Disabled'}</p>
+                  <p className={`text-xs ${isOn ? 'text-success' : 'text-muted-foreground'}`}>
+                    {isOn ? 'Active' : 'Disabled'}
+                  </p>
                 </CardContent>
               </Card>
             );
