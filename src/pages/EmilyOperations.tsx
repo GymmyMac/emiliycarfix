@@ -145,13 +145,10 @@ export default function EmilyOperations() {
     setLoading(false);
   }, []);
 
-  // OpenRouter balance
+  // OpenRouter balance from snapshot table
   const fetchCredits = useCallback(async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('check-openrouter-balance');
-      if (error) return;
-      setCreditBalance(data?.balance ?? data?.credits ?? null);
-    } catch { /* silent */ }
+    const { data } = await supabase.from('emily_openrouter_snapshots').select('checked_at, credits_remaining_usd, usage_usd, limit_usd').order('checked_at', { ascending: false }).limit(1);
+    if (data?.[0]) setOrSnapshot(data[0]);
   }, []);
 
   useEffect(() => {
