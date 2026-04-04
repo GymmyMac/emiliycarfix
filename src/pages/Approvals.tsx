@@ -129,8 +129,10 @@ export default function Approvals() {
   const [loading, setLoading] = useState(true);
   const [articles, setArticles] = useState<AeoArticle[]>([]);
   const [socialItems, setSocialItems] = useState<SocialItem[]>([]);
+  const [publishedArticles, setPublishedArticles] = useState<AeoArticle[]>([]);
   const [search, setSearch] = useState('');
   const [streamFilter, setStreamFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('priority');
   const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set());
 
@@ -147,7 +149,7 @@ export default function Approvals() {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
-    const [aeoRes, socialRes] = await Promise.all([
+    const [aeoRes, socialRes, publishedRes] = await Promise.all([
       supabase.from('mkt_seo_queue')
         .select('*')
         .eq('james_approved', false)
@@ -157,9 +159,14 @@ export default function Approvals() {
         .select('*')
         .eq('status', 'draft')
         .order('created_at', { ascending: false }),
+      supabase.from('mkt_seo_queue')
+        .select('*')
+        .eq('status', 'published')
+        .order('updated_at', { ascending: false }),
     ]);
     if (aeoRes.data) setArticles(aeoRes.data);
     if (socialRes.data) setSocialItems(socialRes.data);
+    if (publishedRes.data) setPublishedArticles(publishedRes.data);
     setLoading(false);
   }, []);
 
