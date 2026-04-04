@@ -6,6 +6,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
+import { toast } from 'sonner';
 import {
   AlertTriangle, CheckCircle2, XCircle, Info, Clock,
   ArrowRight, Zap, RefreshCw,
