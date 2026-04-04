@@ -14,9 +14,9 @@ import { Calendar } from '@/components/ui/calendar';
 import { toast } from 'sonner';
 import {
   CheckCircle2, XCircle, SkipForward, Pencil, Search,
-  CalendarIcon, Image as ImageIcon, ChevronDown,
+  CalendarIcon, Image as ImageIcon, ChevronDown, ExternalLink,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 
 /* ─── Social Card Component ─── */
 function SocialCard({ item, onApprove, onReject, onEdit, onLightbox }: {
@@ -78,6 +78,7 @@ function SocialCard({ item, onApprove, onReject, onEdit, onLightbox }: {
 interface AeoArticle {
   id: string;
   title: string;
+  slug: string | null;
   category: string | null;
   target_keyword: string | null;
   psyops_stream: string | null;
@@ -128,8 +129,10 @@ export default function Approvals() {
   const [loading, setLoading] = useState(true);
   const [articles, setArticles] = useState<AeoArticle[]>([]);
   const [socialItems, setSocialItems] = useState<SocialItem[]>([]);
+  const [publishedArticles, setPublishedArticles] = useState<AeoArticle[]>([]);
   const [search, setSearch] = useState('');
   const [streamFilter, setStreamFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('priority');
   const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set());
 
@@ -146,7 +149,7 @@ export default function Approvals() {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
-    const [aeoRes, socialRes] = await Promise.all([
+    const [aeoRes, socialRes, publishedRes] = await Promise.all([
       supabase.from('mkt_seo_queue')
         .select('*')
         .eq('james_approved', false)
@@ -156,9 +159,14 @@ export default function Approvals() {
         .select('*')
         .eq('status', 'draft')
         .order('created_at', { ascending: false }),
+      supabase.from('mkt_seo_queue')
+        .select('*')
+        .eq('status', 'published')
+        .order('updated_at', { ascending: false }),
     ]);
     if (aeoRes.data) setArticles(aeoRes.data);
     if (socialRes.data) setSocialItems(socialRes.data);
+    if (publishedRes.data) setPublishedArticles(publishedRes.data);
     setLoading(false);
   }, []);
 
@@ -250,6 +258,19 @@ export default function Approvals() {
     .filter(s => streamFilter === 'all' || s.psyops_stream?.toLowerCase() === streamFilter)
     .filter(s => !search || s.draft_copy?.toLowerCase().includes(search.toLowerCase()));
 
+  const filterPublished = publishedArticles
+    .filter(a => streamFilter === 'all' || a.psyops_stream?.toLowerCase() === streamFilter)
+    .filter(a => categoryFilter === 'all' || a.category?.toLowerCase() === categoryFilter)
+    .filter(a => !search || [a.title, a.target_keyword, a.category].some(f => f?.toLowerCase().includes(search.toLowerCase())));
+
+  const publishedCategories = [...new Set(publishedArticles.map(a => a.category).filter(Boolean))] as string[];
+  const streamCounts = publishedArticles.reduce<Record<string, number>>((acc, a) => {
+    const s = a.psyops_stream?.toLowerCase() || 'unknown';
+    acc[s] = (acc[s] || 0) + 1;
+    return acc;
+  }, {});
+  const totalPublishedWords = publishedArticles.reduce((sum, a) => sum + wordCount(a.draft_content), 0);
+
   if (loading) {
     return (
       <div className="space-y-4 max-w-[1400px]">
@@ -269,6 +290,7 @@ export default function Approvals() {
           <TabsList className="bg-secondary">
             <TabsTrigger value="aeo">AEO Articles ({articles.length})</TabsTrigger>
             <TabsTrigger value="social">Social & Campaign ({socialItems.length})</TabsTrigger>
+            <TabsTrigger value="published">Published ({publishedArticles.length})</TabsTrigger>
           </TabsList>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -379,6 +401,112 @@ export default function Approvals() {
                 onApprove={approveSocial} onReject={rejectSocial}
                 onEdit={openEditSocial} onLightbox={setLightboxUrl} />
             ))
+          )}
+        </TabsContent>
+
+        {/* ═══ PUBLISHED TAB ═══ */}
+        <TabsContent value="published" className="space-y-4">
+          {/* Summary stats */}
+          <Card className="border-border bg-secondary/50">
+            <CardContent className="p-4">
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                <span className="text-foreground font-semibold">{publishedArticles.length} published</span>
+                <span className="text-muted-foreground">·</span>
+                {Object.entries(streamCounts).map(([stream, count]) => {
+                  const badgeClass = STREAM_BADGE[stream] || 'bg-muted/20 text-muted-foreground';
+                  return (
+                    <span key={stream} className="flex items-center gap-1">
+                      <Badge variant="outline" className={`${badgeClass} border-transparent text-[10px] font-semibold`}>{stream.toUpperCase()}</Badge>
+                      <span className="text-xs text-muted-foreground">{count}</span>
+                    </span>
+                  );
+                })}
+                <span className="text-muted-foreground">·</span>
+                <span className="text-xs text-muted-foreground">{totalPublishedWords.toLocaleString()} total words</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Category filter (published-only) */}
+          {publishedCategories.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-40 h-8 text-xs bg-secondary border-border">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {publishedCategories.map(cat => (
+                    <SelectItem key={cat} value={cat.toLowerCase()}>{cat}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {filterPublished.length === 0 ? (
+            <Card><CardContent className="p-8 text-center">
+              <p className="text-foreground">No published articles yet.</p>
+            </CardContent></Card>
+          ) : (
+            <div className="border border-border rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-secondary/70 text-muted-foreground text-xs">
+                      <th className="text-left p-3 font-medium">Title</th>
+                      <th className="text-left p-3 font-medium">Stream</th>
+                      <th className="text-left p-3 font-medium">Category</th>
+                      <th className="text-right p-3 font-medium">Words</th>
+                      <th className="text-left p-3 font-medium">Published</th>
+                      <th className="text-center p-3 font-medium">Live</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filterPublished.map(article => {
+                      const stream = article.psyops_stream?.toLowerCase() || '';
+                      const badgeClass = STREAM_BADGE[stream] || 'bg-muted/20 text-muted-foreground';
+                      const liveUrl = article.slug ? `https://carfix.co.nz/guides/${article.slug}` : null;
+                      return (
+                        <tr key={article.id} className="hover:bg-secondary/30">
+                          <td className="p-3">
+                            {liveUrl ? (
+                              <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium line-clamp-1">
+                                {article.title}
+                              </a>
+                            ) : (
+                              <span className="text-foreground font-medium line-clamp-1">{article.title}</span>
+                            )}
+                            {article.target_keyword && (
+                              <p className="text-[11px] text-muted-foreground mt-0.5">{article.target_keyword}</p>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            {stream && <Badge variant="outline" className={`${badgeClass} border-transparent text-[10px] font-semibold`}>{stream.toUpperCase()}</Badge>}
+                          </td>
+                          <td className="p-3 text-muted-foreground text-xs">{article.category || '—'}</td>
+                          <td className="p-3 text-right text-muted-foreground text-xs">{wordCount(article.draft_content).toLocaleString()}</td>
+                          <td className="p-3 text-muted-foreground text-xs">
+                            {article.updated_at ? formatDistanceToNow(new Date(article.updated_at), { addSuffix: true }) : '—'}
+                          </td>
+                          <td className="p-3 text-center">
+                            {liveUrl ? (
+                              <a href={liveUrl} target="_blank" rel="noopener noreferrer">
+                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary">
+                                  <ExternalLink size={14} />
+                                </Button>
+                              </a>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
         </TabsContent>
       </Tabs>
