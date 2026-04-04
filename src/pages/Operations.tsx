@@ -79,9 +79,10 @@ export default function Operations() {
   const [runningEmily, setRunningEmily] = useState(false);
 
   const fetchAll = useCallback(async () => {
+    const allFlagKeys = ['emily_global_active', ...INITIATIVE_FLAGS.map(f => f.key)];
     const [appConfig, flagsRes, lastRunRes, orRes, queuedRes, generatedRes, approvedRes, publishedRes, reviewSeoRes, reviewContentRes] = await Promise.all([
       fetchAppConfig(),
-      supabase.from('feature_flags').select('flag_key, flag_value'),
+      supabase.from('app_config').select('key, value').in('key', allFlagKeys),
       supabase.from('emily_runs').select('started_at, status, generated_count, failed_count').order('started_at', { ascending: false }).limit(1),
       supabase.from('emily_openrouter_snapshots').select('checked_at, credits_remaining_usd, usage_usd, limit_usd').order('checked_at', { ascending: false }).limit(1),
       supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'queued'),
@@ -103,7 +104,7 @@ export default function Operations() {
     }
     if (flagsRes.data) {
       const fm: Record<string, boolean> = {};
-      flagsRes.data.forEach((f: any) => { fm[f.flag_key] = f.flag_value; });
+      flagsRes.data.forEach((row: { key: string; value: string }) => { fm[row.key] = row.value === 'true'; });
       setFlags(fm);
     }
     if (lastRunRes.data?.[0]) setLastRun(lastRunRes.data[0]);
