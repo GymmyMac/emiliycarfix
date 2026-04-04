@@ -334,16 +334,21 @@ export default function Dashboard() {
       <section>
         <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-3">Channel Status</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {CHANNEL_FLAGS.map(ch => {
-            const isOn = flags[ch.key] ?? false;
+          {CHANNEL_CONFIG.map(ch => {
+            const isOn = channels[ch.key] ?? false;
             return (
               <Card key={ch.key}>
                 <CardContent className="p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium text-foreground">{ch.label}</span>
-                    <span className={`h-2.5 w-2.5 rounded-full ${isOn ? 'bg-success' : 'bg-muted-foreground/40'}`} />
+                    <Switch
+                      checked={isOn}
+                      onCheckedChange={(checked) => handleChannelToggle(ch.key, ch.label, checked)}
+                    />
                   </div>
-                  <p className="text-xs text-muted-foreground">{isOn ? 'Active' : 'Disabled'}</p>
+                  <p className={`text-xs ${isOn ? 'text-success' : 'text-muted-foreground'}`}>
+                    {isOn ? 'Active' : 'Disabled'}
+                  </p>
                 </CardContent>
               </Card>
             );
