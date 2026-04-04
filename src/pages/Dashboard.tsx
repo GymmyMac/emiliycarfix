@@ -76,7 +76,7 @@ export default function Dashboard() {
   const [lastRun, setLastRun] = useState<EmilyRun | null>(null);
   const [lastSuccessRun, setLastSuccessRun] = useState<EmilyRun | null>(null);
   const [orSnapshot, setOrSnapshot] = useState<OpenRouterSnapshot | null>(null);
-  const [flags, setFlags] = useState<Record<string, boolean>>({});
+  const [channels, setChannels] = useState<Record<string, boolean>>({});
   const [recentRuns, setRecentRuns] = useState<EmilyRun[]>([]);
   const [april1Dismissed, setApril1Dismissed] = useState(() => {
     const d = localStorage.getItem('dismiss_april1');
