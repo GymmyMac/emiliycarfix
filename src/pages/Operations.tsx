@@ -79,9 +79,10 @@ export default function Operations() {
   const [runningEmily, setRunningEmily] = useState(false);
 
   const fetchAll = useCallback(async () => {
+    const allFlagKeys = ['emily_global_active', ...INITIATIVE_FLAGS.map(f => f.key)];
     const [appConfig, flagsRes, lastRunRes, orRes, queuedRes, generatedRes, approvedRes, publishedRes, reviewSeoRes, reviewContentRes] = await Promise.all([
       fetchAppConfig(),
-      supabase.from('feature_flags').select('flag_key, flag_value'),
+      supabase.from('app_config').select('key, value').in('key', allFlagKeys),
       supabase.from('emily_runs').select('started_at, status, generated_count, failed_count').order('started_at', { ascending: false }).limit(1),
       supabase.from('emily_openrouter_snapshots').select('checked_at, credits_remaining_usd, usage_usd, limit_usd').order('checked_at', { ascending: false }).limit(1),
       supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'queued'),
@@ -103,7 +104,7 @@ export default function Operations() {
     }
     if (flagsRes.data) {
       const fm: Record<string, boolean> = {};
-      flagsRes.data.forEach((f: any) => { fm[f.flag_key] = f.flag_value; });
+      flagsRes.data.forEach((row: { key: string; value: string }) => { fm[row.key] = row.value === 'true'; });
       setFlags(fm);
     }
     if (lastRunRes.data?.[0]) setLastRun(lastRunRes.data[0]);
@@ -125,7 +126,6 @@ export default function Operations() {
   // Realtime
   useEffect(() => {
     const ch = supabase.channel('ops-flags')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'feature_flags' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'app_config' }, () => fetchAll())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -133,7 +133,9 @@ export default function Operations() {
 
   const toggleFlag = async (key: string, newValue: boolean) => {
     setFlags(prev => ({ ...prev, [key]: newValue }));
-    const { error } = await supabase.from('feature_flags').update({ flag_value: newValue }).eq('flag_key', key);
+    const { error } = await supabase
+      .from('app_config')
+      .upsert({ key, value: String(newValue), updated_at: new Date().toISOString() }, { onConflict: 'key' });
     if (error) {
       setFlags(prev => ({ ...prev, [key]: !newValue }));
       toast.error('Failed to update flag');
