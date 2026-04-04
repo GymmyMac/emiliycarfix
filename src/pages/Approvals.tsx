@@ -78,6 +78,7 @@ function SocialCard({ item, onApprove, onReject, onEdit, onLightbox }: {
 interface AeoArticle {
   id: string;
   title: string;
+  slug: string | null;
   category: string | null;
   target_keyword: string | null;
   psyops_stream: string | null;
