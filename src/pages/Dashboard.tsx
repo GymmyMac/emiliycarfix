@@ -251,6 +251,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8 max-w-[1400px]">
+      <CompetitorRefreshBanner />
       {/* ═══ PHASE & WEIGHTS STRIP ═══ */}
       <div className="flex flex-col lg:flex-row gap-6 items-start">
         <div className="flex-1">
