@@ -189,17 +189,10 @@ export default function Operations() {
 
   const checkBalance = async () => {
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const jwt = sessionData?.session?.access_token;
-      if (!jwt) return;
-      const res = await fetch('https://flpzjbasdsfwoeruyxgp.supabase.co/functions/v1/check-openrouter-balance', {
-        headers: { Authorization: `Bearer ${jwt}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setOrSnapshot(prev => prev ? { ...prev, credits_remaining_usd: data.balance ?? null, checked_at: new Date().toISOString() } : null);
-        toast.success('Balance refreshed');
-      }
+      const { data, error } = await supabase.functions.invoke('check-openrouter-balance');
+      if (error) throw error;
+      setOrSnapshot(prev => prev ? { ...prev, credits_remaining_usd: data?.balance ?? null, checked_at: new Date().toISOString() } : null);
+      toast.success('Balance refreshed');
     } catch { toast.error('Failed to check balance'); }
   };
 
