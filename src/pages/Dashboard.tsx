@@ -138,6 +138,7 @@ export default function Dashboard() {
     }
   };
 
+  if (loading) {
     return (
       <div className="space-y-6 max-w-[1400px]">
         <Skeleton className="h-20 w-full" />
