@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { fetchAppConfig, type AppConfig } from '@/lib/appConfig';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,15 +15,6 @@ import {
   BarChart, Bar, Line, ComposedChart, XAxis, YAxis,
   Tooltip as RechartsTooltip, ResponsiveContainer,
 } from 'recharts';
-
-/* ─── Types ─── */
-interface AppConfig {
-  business_phase: string;
-  stream_weight_disrupt: number;
-  stream_weight_educate: number;
-  stream_weight_convert: number;
-  stream_weight_amplify: number;
-}
 
 interface EmilyRun {
   id: string;
@@ -90,10 +82,10 @@ export default function Dashboard() {
 
   const fetchAll = useCallback(async () => {
     const [
-      configRes, articlesRes, socialRes, lastRunRes, lastSuccessRes,
+      appConfig, articlesRes, socialRes, lastRunRes, lastSuccessRes,
       orRes, flagsRes, runsRes,
     ] = await Promise.all([
-      supabase.from('app_config').select('business_phase, stream_weight_disrupt, stream_weight_educate, stream_weight_convert, stream_weight_amplify').limit(1).single(),
+      fetchAppConfig(),
       supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('james_approved', false).not('draft_content', 'is', null),
       supabase.from('mkt_content_queue').select('id', { count: 'exact', head: true }).eq('status', 'draft'),
       supabase.from('emily_runs').select('*').order('started_at', { ascending: false }).limit(1),
@@ -103,7 +95,7 @@ export default function Dashboard() {
       supabase.from('emily_runs').select('*').gte('started_at', subDays(new Date(), 7).toISOString()).order('started_at', { ascending: true }),
     ]);
 
-    if (configRes.data) setConfig(configRes.data);
+    if (appConfig) setConfig(appConfig);
     setPendingArticles(articlesRes.count || 0);
     setPendingSocial(socialRes.count || 0);
     if (lastRunRes.data?.[0]) setLastRun(lastRunRes.data[0]);
