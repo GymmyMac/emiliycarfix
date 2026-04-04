@@ -9,3 +9,6 @@ verify_jwt = false
 
 [functions.idea-embed]
 verify_jwt = false
+
+[functions.check-openrouter-balance]
+verify_jwt = false
