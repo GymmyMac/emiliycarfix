@@ -283,6 +283,9 @@ export default function CompetitorIntelligence() {
         })}
       </div>
 
+      {/* Target Analysis */}
+      <TargetAnalysisPanel />
+
       {/* Summary Table */}
       <Card>
         <CardHeader>
