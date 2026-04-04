@@ -258,6 +258,19 @@ export default function Approvals() {
     .filter(s => streamFilter === 'all' || s.psyops_stream?.toLowerCase() === streamFilter)
     .filter(s => !search || s.draft_copy?.toLowerCase().includes(search.toLowerCase()));
 
+  const filterPublished = publishedArticles
+    .filter(a => streamFilter === 'all' || a.psyops_stream?.toLowerCase() === streamFilter)
+    .filter(a => categoryFilter === 'all' || a.category?.toLowerCase() === categoryFilter)
+    .filter(a => !search || [a.title, a.target_keyword, a.category].some(f => f?.toLowerCase().includes(search.toLowerCase())));
+
+  const publishedCategories = [...new Set(publishedArticles.map(a => a.category).filter(Boolean))] as string[];
+  const streamCounts = publishedArticles.reduce<Record<string, number>>((acc, a) => {
+    const s = a.psyops_stream?.toLowerCase() || 'unknown';
+    acc[s] = (acc[s] || 0) + 1;
+    return acc;
+  }, {});
+  const totalPublishedWords = publishedArticles.reduce((sum, a) => sum + wordCount(a.draft_content), 0);
+
   if (loading) {
     return (
       <div className="space-y-4 max-w-[1400px]">
