@@ -77,9 +77,11 @@ function SocialCard({ item, onApprove, onReject, onEdit, onLightbox }: {
 /* ─── Types ─── */
 interface AeoArticle {
   id: string;
+  task_id?: string | null;
   title: string;
   slug: string | null;
   category: string | null;
+  content_type: string | null;
   target_keyword: string | null;
   psyops_stream: string | null;
   status: string;
@@ -120,6 +122,17 @@ const PLATFORM_COLORS: Record<string, string> = {
   sms: 'bg-success/20 text-success',
 };
 
+const CONTENT_TYPE_LABELS: Record<string, string> = {
+  seo_article: 'SEO Article',
+  ai_article: 'AI Article',
+  regional_seo: 'Regional SEO',
+  decision_page: 'Fitment Guide',
+  fitment_guide: 'Fitment Guide',
+  video_script: 'Video Script',
+  social: 'Social',
+  tiktok: 'TikTok',
+};
+
 function wordCount(text: string | null) {
   if (!text) return 0;
   return text.trim().split(/\s+/).filter(Boolean).length;
@@ -127,12 +140,15 @@ function wordCount(text: string | null) {
 
 export default function Approvals() {
   const [loading, setLoading] = useState(true);
+  const [queuedArticles, setQueuedArticles] = useState<AeoArticle[]>([]);
   const [articles, setArticles] = useState<AeoArticle[]>([]);
+  const [approvedArticles, setApprovedArticles] = useState<AeoArticle[]>([]);
   const [socialItems, setSocialItems] = useState<SocialItem[]>([]);
   const [publishedArticles, setPublishedArticles] = useState<AeoArticle[]>([]);
   const [search, setSearch] = useState('');
   const [streamFilter, setStreamFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [contentTypeFilter, setContentTypeFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('priority');
   const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set());
 
@@ -149,12 +165,20 @@ export default function Approvals() {
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
-    const [aeoRes, socialRes, publishedRes] = await Promise.all([
+    const [queuedRes, aeoRes, approvedRes, socialRes, publishedRes] = await Promise.all([
+      supabase.from('mkt_seo_queue')
+        .select('*')
+        .eq('status', 'pending')
+        .order('priority_score', { ascending: false }),
       supabase.from('mkt_seo_queue')
         .select('*')
         .eq('james_approved', false)
         .not('draft_content', 'is', null)
         .order('priority_score', { ascending: false }),
+      supabase.from('mkt_seo_queue')
+        .select('*')
+        .eq('status', 'approved')
+        .order('updated_at', { ascending: false }),
       supabase.from('mkt_content_queue')
         .select('*')
         .eq('status', 'draft')
@@ -164,7 +188,9 @@ export default function Approvals() {
         .eq('status', 'published')
         .order('updated_at', { ascending: false }),
     ]);
+    if (queuedRes.data) setQueuedArticles(queuedRes.data);
     if (aeoRes.data) setArticles(aeoRes.data);
+    if (approvedRes.data) setApprovedArticles(approvedRes.data);
     if (socialRes.data) setSocialItems(socialRes.data);
     if (publishedRes.data) setPublishedArticles(publishedRes.data);
     setLoading(false);
@@ -249,10 +275,21 @@ export default function Approvals() {
   };
 
   /* ─── Filtering ─── */
+  const filterQueued = queuedArticles
+    .filter(a => streamFilter === 'all' || a.psyops_stream?.toLowerCase() === streamFilter)
+    .filter(a => categoryFilter === 'all' || a.category?.toLowerCase() === categoryFilter)
+    .filter(a => contentTypeFilter === 'all' || a.content_type?.toLowerCase() === contentTypeFilter)
+    .filter(a => !search || [a.title, a.target_keyword, a.category].some(f => f?.toLowerCase().includes(search.toLowerCase())));
+
   const filterArticles = articles
     .filter(a => !skippedIds.has(a.id))
     .filter(a => streamFilter === 'all' || a.psyops_stream?.toLowerCase() === streamFilter)
     .filter(a => !search || [a.title, a.target_keyword, a.answer_first].some(f => f?.toLowerCase().includes(search.toLowerCase())));
+
+  const filterApproved = approvedArticles
+    .filter(a => streamFilter === 'all' || a.psyops_stream?.toLowerCase() === streamFilter)
+    .filter(a => categoryFilter === 'all' || a.category?.toLowerCase() === categoryFilter)
+    .filter(a => !search || [a.title, a.target_keyword, a.category].some(f => f?.toLowerCase().includes(search.toLowerCase())));
 
   const filterSocial = socialItems
     .filter(s => streamFilter === 'all' || s.psyops_stream?.toLowerCase() === streamFilter)
@@ -271,6 +308,16 @@ export default function Approvals() {
   }, {});
   const totalPublishedWords = publishedArticles.reduce((sum, a) => sum + wordCount(a.draft_content), 0);
 
+  // Queue stats
+  const queuedCategories = [...new Set(queuedArticles.map(a => a.category).filter(Boolean))] as string[];
+  const queuedContentTypes = [...new Set(queuedArticles.map(a => a.content_type).filter(Boolean))] as string[];
+  const queuedByType = queuedArticles.reduce<Record<string, number>>((acc, a) => {
+    const t = a.content_type || 'unknown';
+    acc[t] = (acc[t] || 0) + 1;
+    return acc;
+  }, {});
+  const estimatedDays = Math.ceil(queuedArticles.length / 11); // ~10-12/day avg
+
   if (loading) {
     return (
       <div className="space-y-4 max-w-[1400px]">
@@ -283,13 +330,14 @@ export default function Approvals() {
 
   return (
     <div className="space-y-6 max-w-[1400px]">
-      <h1 className="text-2xl font-bold text-foreground">Approvals</h1>
+      <h1 className="text-2xl font-bold text-foreground">Pipeline</h1>
 
-      <Tabs defaultValue="aeo" className="w-full">
+      <Tabs defaultValue="queue" className="w-full">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
           <TabsList className="bg-secondary">
-            <TabsTrigger value="aeo">AEO Articles ({articles.length})</TabsTrigger>
-            <TabsTrigger value="social">Social & Campaign ({socialItems.length})</TabsTrigger>
+            <TabsTrigger value="queue">Queue ({queuedArticles.length})</TabsTrigger>
+            <TabsTrigger value="signoff">Sign-off ({articles.length})</TabsTrigger>
+            <TabsTrigger value="approved">Approved ({approvedArticles.length})</TabsTrigger>
             <TabsTrigger value="published">Published ({publishedArticles.length})</TabsTrigger>
           </TabsList>
 
@@ -318,8 +366,116 @@ export default function Approvals() {
           </div>
         </div>
 
-        {/* ═══ AEO ARTICLES TAB ═══ */}
-        <TabsContent value="aeo" className="space-y-4">
+        {/* ═══ QUEUE TAB ═══ */}
+        <TabsContent value="queue" className="space-y-4">
+          {/* Summary stats */}
+          <Card className="border-border bg-secondary/50">
+            <CardContent className="p-4 space-y-2">
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                <span className="text-foreground font-semibold">{queuedArticles.length} queued</span>
+                <span className="text-muted-foreground">·</span>
+                <span className="text-xs text-muted-foreground">~{estimatedDays} days at current rate</span>
+              </div>
+              {Object.keys(queuedByType).length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  {Object.entries(queuedByType)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([type, count]) => (
+                      <span key={type}>{count} {CONTENT_TYPE_LABELS[type] || type}</span>
+                    ))
+                    .reduce<React.ReactNode[]>((acc, el, i) => {
+                      if (i > 0) acc.push(<span key={`sep-${i}`}>·</span>);
+                      acc.push(el);
+                      return acc;
+                    }, [])}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Queue filters */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Select value={contentTypeFilter} onValueChange={setContentTypeFilter}>
+              <SelectTrigger className="w-40 h-8 text-xs bg-secondary border-border">
+                <SelectValue placeholder="Content Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                {queuedContentTypes.map(ct => (
+                  <SelectItem key={ct} value={ct.toLowerCase()}>{CONTENT_TYPE_LABELS[ct] || ct}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-40 h-8 text-xs bg-secondary border-border">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {queuedCategories.map(cat => (
+                  <SelectItem key={cat} value={cat.toLowerCase()}>{cat}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {filterQueued.length === 0 ? (
+            <Card><CardContent className="p-8 text-center">
+              <p className="text-foreground">No articles in the queue. The pipeline is clear.</p>
+            </CardContent></Card>
+          ) : (
+            <div className="border border-border rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-secondary/70 text-muted-foreground text-xs">
+                      <th className="text-left p-3 font-medium w-12">ID</th>
+                      <th className="text-left p-3 font-medium">Title</th>
+                      <th className="text-left p-3 font-medium">Type</th>
+                      <th className="text-left p-3 font-medium">Category</th>
+                      <th className="text-right p-3 font-medium">Priority</th>
+                      <th className="text-left p-3 font-medium">Stream</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filterQueued.map(article => {
+                      const stream = article.psyops_stream?.toLowerCase() || '';
+                      const badgeClass = STREAM_BADGE[stream] || 'bg-muted/20 text-muted-foreground';
+                      const typeLabel = CONTENT_TYPE_LABELS[article.content_type || ''] || article.content_type || '—';
+                      return (
+                        <tr key={article.id} className="hover:bg-secondary/30">
+                          <td className="p-3 text-xs text-muted-foreground font-mono">
+                            {article.task_id ? article.task_id.slice(0, 8) : article.id.slice(0, 8)}
+                          </td>
+                          <td className="p-3">
+                            <span className="text-foreground font-medium line-clamp-1">{article.title}</span>
+                          </td>
+                          <td className="p-3">
+                            <Badge variant="outline" className="text-[10px] border-border font-normal">{typeLabel}</Badge>
+                          </td>
+                          <td className="p-3 text-muted-foreground text-xs">{article.category || '—'}</td>
+                          <td className="p-3 text-right">
+                            {article.priority_score != null ? (
+                              <span className="text-xs font-bold text-foreground bg-secondary px-2 py-0.5 rounded">{article.priority_score}</span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            {stream && <Badge variant="outline" className={`${badgeClass} border-transparent text-[10px] font-semibold`}>{stream.toUpperCase()}</Badge>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ═══ SIGN-OFF TAB ═══ */}
+        <TabsContent value="signoff" className="space-y-4">
           {filterArticles.length === 0 ? (
             <Card><CardContent className="p-8 text-center">
               <p className="text-foreground">No articles awaiting approval. Emily's next run will populate this queue.</p>
@@ -389,20 +545,73 @@ export default function Approvals() {
           )}
         </TabsContent>
 
-        {/* ═══ SOCIAL & CAMPAIGN TAB ═══ */}
-        <TabsContent value="social" className="space-y-4">
-          {filterSocial.length === 0 ? (
+        {/* ═══ APPROVED TAB ═══ */}
+        <TabsContent value="approved" className="space-y-4">
+          {/* Category filter */}
+          {queuedCategories.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-40 h-8 text-xs bg-secondary border-border">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {[...new Set(approvedArticles.map(a => a.category).filter(Boolean))].map(cat => (
+                    <SelectItem key={cat as string} value={(cat as string).toLowerCase()}>{cat as string}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {filterApproved.length === 0 ? (
             <Card><CardContent className="p-8 text-center">
-              <p className="text-foreground">No social or campaign items to approve. Emily's next run will populate this queue.</p>
+              <p className="text-foreground">No approved articles waiting to be published.</p>
             </CardContent></Card>
           ) : (
-            filterSocial.map(item => (
-              <SocialCard key={item.id} item={item}
-                onApprove={approveSocial} onReject={rejectSocial}
-                onEdit={openEditSocial} onLightbox={setLightboxUrl} />
-            ))
+            <div className="border border-border rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-secondary/70 text-muted-foreground text-xs">
+                      <th className="text-left p-3 font-medium">Title</th>
+                      <th className="text-left p-3 font-medium">Stream</th>
+                      <th className="text-left p-3 font-medium">Category</th>
+                      <th className="text-right p-3 font-medium">Words</th>
+                      <th className="text-left p-3 font-medium">Approved</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filterApproved.map(article => {
+                      const stream = article.psyops_stream?.toLowerCase() || '';
+                      const badgeClass = STREAM_BADGE[stream] || 'bg-muted/20 text-muted-foreground';
+                      return (
+                        <tr key={article.id} className="hover:bg-secondary/30">
+                          <td className="p-3">
+                            <span className="text-foreground font-medium line-clamp-1">{article.title}</span>
+                            {article.target_keyword && (
+                              <p className="text-[11px] text-muted-foreground mt-0.5">{article.target_keyword}</p>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            {stream && <Badge variant="outline" className={`${badgeClass} border-transparent text-[10px] font-semibold`}>{stream.toUpperCase()}</Badge>}
+                          </td>
+                          <td className="p-3 text-muted-foreground text-xs">{article.category || '—'}</td>
+                          <td className="p-3 text-right text-muted-foreground text-xs">{wordCount(article.draft_content).toLocaleString()}</td>
+                          <td className="p-3 text-muted-foreground text-xs">
+                            {article.updated_at ? formatDistanceToNow(new Date(article.updated_at), { addSuffix: true }) : '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
         </TabsContent>
+
+        {/* ═══ SOCIAL & CAMPAIGN (hidden but kept for social tab access) ═══ */}
 
         {/* ═══ PUBLISHED TAB ═══ */}
         <TabsContent value="published" className="space-y-4">
