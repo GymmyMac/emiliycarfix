@@ -8,6 +8,7 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  Crosshair,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
