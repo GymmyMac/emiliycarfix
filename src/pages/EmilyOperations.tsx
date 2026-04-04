@@ -92,7 +92,7 @@ export default function EmilyOperations() {
   const [ga4Data, setGa4Data] = useState<GA4Row[]>([]);
   const [flags, setFlags] = useState<Record<string, boolean>>({});
   const [flagIds, setFlagIds] = useState<Record<string, string>>({});
-  const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  const [orSnapshot, setOrSnapshot] = useState<{ checked_at: string; usage_usd: number | null; limit_usd: number | null; credits_remaining_usd: number | null } | null>(null);
   const [batchProgress, setBatchProgress] = useState<{ running: number; total: number }>({ running: 0, total: 0 });
   const [avgConfidence, setAvgConfidence] = useState<number | null>(null);
   const [seoQueue, setSeoQueue] = useState<SeoQueueItem[]>([]);
@@ -145,13 +145,10 @@ export default function EmilyOperations() {
     setLoading(false);
   }, []);
 
-  // OpenRouter balance
+  // OpenRouter balance from snapshot table
   const fetchCredits = useCallback(async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('check-openrouter-balance');
-      if (error) return;
-      setCreditBalance(data?.balance ?? data?.credits ?? null);
-    } catch { /* silent */ }
+    const { data } = await supabase.from('emily_openrouter_snapshots').select('checked_at, credits_remaining_usd, usage_usd, limit_usd').order('checked_at', { ascending: false }).limit(1);
+    if (data?.[0]) setOrSnapshot(data[0]);
   }, []);
 
   useEffect(() => {
@@ -367,10 +364,36 @@ export default function EmilyOperations() {
                 <CreditCard size={16} className="text-primary" />
                 <span className="text-xs font-medium text-muted-foreground">OpenRouter Credits</span>
               </div>
-              {creditBalance !== null ? (
-                <p className="text-xl font-bold text-foreground">${creditBalance.toFixed(2)}</p>
+              {!orSnapshot ? (
+                <Badge variant="secondary" className="text-xs">No data yet</Badge>
+              ) : orSnapshot.limit_usd === null ? (
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-success" />
+                    <span className="text-xs text-muted-foreground">Prepaid</span>
+                  </div>
+                  <p className="text-xl font-bold text-foreground">${(orSnapshot.usage_usd ?? 0).toFixed(2)} <span className="text-xs font-normal text-muted-foreground">spent</span></p>
+                </div>
               ) : (
-                <Badge variant="secondary" className="text-xs">Unavailable</Badge>
+                <div>
+                  {(() => {
+                    const remaining = orSnapshot.credits_remaining_usd ?? 0;
+                    const pct = orSnapshot.limit_usd > 0 ? (remaining / orSnapshot.limit_usd) * 100 : 0;
+                    const dotColor = pct > 30 ? 'bg-success' : pct > 10 ? 'bg-warning' : 'bg-destructive';
+                    return (
+                      <>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`h-2 w-2 rounded-full ${dotColor}`} />
+                          <span className="text-xs text-muted-foreground">{pct.toFixed(0)}% remaining</span>
+                        </div>
+                        <p className="text-xl font-bold text-foreground">${remaining.toFixed(2)}</p>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+              {orSnapshot?.checked_at && (
+                <p className="text-[10px] text-muted-foreground">Last: {format(new Date(orSnapshot.checked_at), 'd MMM HH:mm')}</p>
               )}
             </CardContent>
           </Card>

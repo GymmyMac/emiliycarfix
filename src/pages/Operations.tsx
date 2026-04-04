@@ -28,6 +28,7 @@ interface OpenRouterSnapshot {
   checked_at: string;
   credits_remaining_usd: number | null;
   usage_usd: number | null;
+  limit_usd: number | null;
 }
 
 const PHASES = [
@@ -82,7 +83,7 @@ export default function Operations() {
       fetchAppConfig(),
       supabase.from('feature_flags').select('flag_key, flag_value'),
       supabase.from('emily_runs').select('started_at, status, generated_count, failed_count').order('started_at', { ascending: false }).limit(1),
-      supabase.from('emily_openrouter_snapshots').select('checked_at, credits_remaining_usd, usage_usd').order('checked_at', { ascending: false }).limit(1),
+      supabase.from('emily_openrouter_snapshots').select('checked_at, credits_remaining_usd, usage_usd, limit_usd').order('checked_at', { ascending: false }).limit(1),
       supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'queued'),
       supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).not('draft_content', 'is', null).eq('james_approved', false),
       supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('james_approved', true),
@@ -187,20 +188,17 @@ export default function Operations() {
     setPhaseChangeTarget(null);
   };
 
-  const checkBalance = async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('check-openrouter-balance');
-      if (error) throw error;
-      setOrSnapshot(prev => prev ? { ...prev, credits_remaining_usd: data?.balance ?? null, checked_at: new Date().toISOString() } : null);
-      toast.success('Balance refreshed');
-    } catch { toast.error('Failed to check balance'); }
+  const refreshSnapshot = async () => {
+    const { data } = await supabase.from('emily_openrouter_snapshots').select('checked_at, credits_remaining_usd, usage_usd, limit_usd').order('checked_at', { ascending: false }).limit(1);
+    if (data?.[0]) { setOrSnapshot(data[0]); toast.success('Balance refreshed'); }
+    else { toast.error('No snapshot data'); }
   };
 
   const weightSum = Object.values(editWeights).reduce((a, b) => a + b, 0);
   const activePhase = config?.business_phase?.toLowerCase() || 'load';
   const globalActive = flags['emily_global_active'] ?? false;
-  const canRun = globalActive && (orSnapshot?.credits_remaining_usd ?? 0) > 2;
-  const runDisabledReason = !globalActive ? 'Emily is OFF' : (orSnapshot?.credits_remaining_usd ?? 0) <= 2 ? 'OpenRouter balance low' : '';
+  const canRun = globalActive;
+  const runDisabledReason = !globalActive ? 'Emily is OFF' : '';
 
   // Get preset weights for the phase change confirmation dialog
   const presetForTarget = config?.phase_presets?.[phaseChangeTarget || ''];
@@ -382,24 +380,39 @@ export default function Operations() {
         )}
 
         {/* OpenRouter Balance */}
-        <Card className={`${orSnapshot?.credits_remaining_usd === null ? 'bg-warning/10 border-warning/30' : (orSnapshot?.credits_remaining_usd ?? 0) < 2 ? 'bg-destructive/10 border-destructive/30' : ''}`} style={{ background: 'hsl(var(--surface-raised))' }}>
+        <Card style={{ background: 'hsl(var(--surface-raised))' }}>
           <CardContent className="p-4 space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CreditCard size={18} className="text-primary" />
                 <span className="text-sm font-semibold text-foreground">OpenRouter Credit Balance</span>
               </div>
-              <Button size="sm" variant="outline" onClick={checkBalance} className="h-7 text-xs border-border">
-                <RefreshCw size={12} className="mr-1" /> Check Balance
+              <Button size="sm" variant="outline" onClick={refreshSnapshot} className="h-7 text-xs border-border">
+                <RefreshCw size={12} className="mr-1" /> Refresh
               </Button>
             </div>
-            {orSnapshot?.credits_remaining_usd !== null && orSnapshot?.credits_remaining_usd !== undefined ? (
-              <div>
-                <p className="text-3xl font-bold text-foreground">${orSnapshot.credits_remaining_usd.toFixed(2)}</p>
-                {orSnapshot.usage_usd != null && <p className="text-xs text-muted-foreground">Used this month: ${orSnapshot.usage_usd.toFixed(2)}</p>}
+            {!orSnapshot ? (
+              <p className="text-sm text-muted-foreground">No data yet</p>
+            ) : orSnapshot.limit_usd === null ? (
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-success" />
+                <p className="text-sm text-foreground font-medium">Prepaid account · <span className="text-xl font-bold">${(orSnapshot.usage_usd ?? 0).toFixed(2)}</span> spent</p>
               </div>
             ) : (
-              <p className="text-sm text-warning font-medium">Balance monitoring unavailable</p>
+              <div>
+                {(() => {
+                  const remaining = orSnapshot.credits_remaining_usd ?? 0;
+                  const limit = orSnapshot.limit_usd;
+                  const pct = limit > 0 ? (remaining / limit) * 100 : 0;
+                  const dotColor = pct > 30 ? 'bg-success' : pct > 10 ? 'bg-warning' : 'bg-destructive';
+                  return (
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${dotColor}`} />
+                      <p className="text-foreground"><span className="text-xl font-bold">${remaining.toFixed(2)}</span> <span className="text-sm text-muted-foreground">remaining of ${limit.toFixed(2)}</span></p>
+                    </div>
+                  );
+                })()}
+              </div>
             )}
             {orSnapshot?.checked_at && (
               <p className="text-xs text-muted-foreground">Last checked: {format(new Date(orSnapshot.checked_at), 'd MMM HH:mm')}</p>

@@ -30,6 +30,7 @@ interface OpenRouterSnapshot {
   checked_at: string;
   credits_remaining_usd: number | null;
   usage_usd: number | null;
+  limit_usd: number | null;
   is_low_balance: boolean | null;
 }
 
@@ -175,16 +176,28 @@ export default function Dashboard() {
       timestamp: lastSuccessRun.started_at ? `Run completed: ${format(new Date(lastSuccessRun.started_at), 'd MMM HH:mm')}` : '',
     });
   }
-  if (orSnapshot && (orSnapshot.credits_remaining_usd === null || orSnapshot.credits_remaining_usd < 2)) {
-    const isNull = orSnapshot.credits_remaining_usd === null;
-    attentionItems.push({
-      type: 'warning', badge: 'BALANCE', badgeColor: 'bg-warning/20 text-warning',
-      text: isNull
-        ? `Balance monitoring unavailable. Last checked: ${orSnapshot.checked_at ? format(new Date(orSnapshot.checked_at), 'd MMM HH:mm') : 'never'}`
-        : `Low OpenRouter credit balance: $${orSnapshot.credits_remaining_usd?.toFixed(2)}. Recharge recommended.`,
-      cta: 'View Balance', link: '/operations',
-      timestamp: orSnapshot.checked_at ? `Last checked: ${format(new Date(orSnapshot.checked_at), 'd MMM HH:mm')}` : '',
-    });
+  if (orSnapshot) {
+    const isPrepaid = orSnapshot.limit_usd === null;
+    if (isPrepaid) {
+      // Prepaid account — no warning needed, just informational
+    } else if (orSnapshot.credits_remaining_usd !== null && orSnapshot.limit_usd !== null) {
+      const pct = orSnapshot.limit_usd > 0 ? (orSnapshot.credits_remaining_usd / orSnapshot.limit_usd) * 100 : 0;
+      if (pct < 10) {
+        attentionItems.push({
+          type: 'error', badge: 'BALANCE', badgeColor: 'bg-destructive/20 text-destructive',
+          text: `Critical: OpenRouter balance $${orSnapshot.credits_remaining_usd.toFixed(2)} remaining of $${orSnapshot.limit_usd.toFixed(2)}`,
+          cta: 'View Balance', link: '/operations',
+          timestamp: orSnapshot.checked_at ? `Last checked: ${format(new Date(orSnapshot.checked_at), 'd MMM HH:mm')}` : '',
+        });
+      } else if (pct < 30) {
+        attentionItems.push({
+          type: 'warning', badge: 'BALANCE', badgeColor: 'bg-warning/20 text-warning',
+          text: `Low OpenRouter balance: $${orSnapshot.credits_remaining_usd.toFixed(2)} remaining of $${orSnapshot.limit_usd.toFixed(2)}`,
+          cta: 'View Balance', link: '/operations',
+          timestamp: orSnapshot.checked_at ? `Last checked: ${format(new Date(orSnapshot.checked_at), 'd MMM HH:mm')}` : '',
+        });
+      }
+    }
   }
 
   // Chart data
