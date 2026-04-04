@@ -30,6 +30,7 @@ interface OpenRouterSnapshot {
   checked_at: string;
   credits_remaining_usd: number | null;
   usage_usd: number | null;
+  limit_usd: number | null;
   is_low_balance: boolean | null;
 }
 
