@@ -127,7 +127,23 @@ export default function Dashboard() {
     return () => { supabase.removeChannel(ch); };
   }, [fetchAll]);
 
-  if (loading) {
+  const handleChannelToggle = async (key: string, label: string, checked: boolean) => {
+    // Optimistic update
+    setChannels(prev => ({ ...prev, [key]: checked }));
+
+    const { error } = await supabase
+      .from('app_config')
+      .upsert({ key, value: String(checked), updated_at: new Date().toISOString() }, { onConflict: 'key' });
+
+    if (error) {
+      // Revert on failure
+      setChannels(prev => ({ ...prev, [key]: !checked }));
+      toast.error(`Failed to update ${label}`);
+    } else {
+      toast.success(`${label} ${checked ? 'enabled' : 'disabled'}`);
+    }
+  };
+
     return (
       <div className="space-y-6 max-w-[1400px]">
         <Skeleton className="h-20 w-full" />
