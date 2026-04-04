@@ -156,7 +156,7 @@ export default function Settings() {
             <Card key={f.key}>
               <CardContent className="p-3 flex items-center justify-between">
                 <span className="text-sm text-foreground">{f.label}</span>
-                <Switch checked={flagValue(f.key)} onCheckedChange={v => toggleFlag(f.key, v)} />
+                <Switch checked={toggles[f.key] ?? false} onCheckedChange={v => toggleFlag(f.key, f.label, v)} />
               </CardContent>
             </Card>
           ))}
@@ -168,28 +168,11 @@ export default function Settings() {
             <Card key={f.key}>
               <CardContent className="p-3 flex items-center justify-between">
                 <span className="text-sm text-foreground">{f.label}</span>
-                <Switch checked={flagValue(f.key)} onCheckedChange={v => toggleFlag(f.key, v)} />
+                <Switch checked={toggles[f.key] ?? false} onCheckedChange={v => toggleFlag(f.key, f.label, v)} />
               </CardContent>
             </Card>
           ))}
         </div>
-
-        {experimentalFlags.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Other</p>
-            {experimentalFlags.map(f => (
-              <Card key={f.flag_key}>
-                <CardContent className="p-3 flex items-center justify-between">
-                  <div>
-                    <span className="text-sm text-foreground">{f.description || f.flag_key}</span>
-                    <p className="text-xs text-muted-foreground font-mono">{f.flag_key}</p>
-                  </div>
-                  <Switch checked={f.flag_value} onCheckedChange={v => toggleFlag(f.flag_key, v)} />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
       </section>
 
       {/* ═══ SECTION C: KNOWLEDGE BASE ═══ */}
