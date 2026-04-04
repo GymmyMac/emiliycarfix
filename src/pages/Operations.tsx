@@ -126,7 +126,6 @@ export default function Operations() {
   // Realtime
   useEffect(() => {
     const ch = supabase.channel('ops-flags')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'feature_flags' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'app_config' }, () => fetchAll())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
@@ -134,7 +133,9 @@ export default function Operations() {
 
   const toggleFlag = async (key: string, newValue: boolean) => {
     setFlags(prev => ({ ...prev, [key]: newValue }));
-    const { error } = await supabase.from('feature_flags').update({ flag_value: newValue }).eq('flag_key', key);
+    const { error } = await supabase
+      .from('app_config')
+      .upsert({ key, value: String(newValue), updated_at: new Date().toISOString() }, { onConflict: 'key' });
     if (error) {
       setFlags(prev => ({ ...prev, [key]: !newValue }));
       toast.error('Failed to update flag');
