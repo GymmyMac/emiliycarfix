@@ -92,7 +92,7 @@ export default function EmilyOperations() {
   const [ga4Data, setGa4Data] = useState<GA4Row[]>([]);
   const [flags, setFlags] = useState<Record<string, boolean>>({});
   const [flagIds, setFlagIds] = useState<Record<string, string>>({});
-  const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  const [orSnapshot, setOrSnapshot] = useState<{ checked_at: string; usage_usd: number | null; limit_usd: number | null; credits_remaining_usd: number | null } | null>(null);
   const [batchProgress, setBatchProgress] = useState<{ running: number; total: number }>({ running: 0, total: 0 });
   const [avgConfidence, setAvgConfidence] = useState<number | null>(null);
   const [seoQueue, setSeoQueue] = useState<SeoQueueItem[]>([]);
