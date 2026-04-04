@@ -9,14 +9,6 @@ import { toast } from 'sonner';
 import { RefreshCw, Copy, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 
-/* ─── Types ─── */
-interface FeatureFlag {
-  id: string;
-  flag_key: string;
-  flag_value: boolean;
-  description: string | null;
-}
-
 function StatusDot({ status }: { status: 'green' | 'amber' | 'red' | 'grey' }) {
   const colors = { green: 'bg-success', amber: 'bg-warning', red: 'bg-destructive', grey: 'bg-muted-foreground/40' };
   return <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${colors[status]}`} />;
@@ -31,17 +23,20 @@ const INTEGRATIONS = [
 
 const CORE_FLAGS = [
   { key: 'emily_global_active', label: 'Emily Global Active' },
-  { key: 'initiative_sku_aeo_enrichment', label: 'SKU AEO Enrichment' },
-  { key: 'initiative_social_content', label: 'Social Content Generation' },
-  { key: 'initiative_email_sms', label: 'Email & SMS Generation' },
+  { key: 'feature_sku_aeo_enrichment', label: 'SKU AEO Enrichment' },
+  { key: 'feature_social_content', label: 'Social Content Generation' },
+  { key: 'feature_email_sms', label: 'Email & SMS Generation' },
 ];
 
 const CHANNEL_FLAGS = [
-  { key: 'facebook_enabled', label: 'Facebook Posting' },
-  { key: 'instagram_enabled', label: 'Instagram Posting' },
-  { key: 'tiktok_enabled', label: 'TikTok Posting' },
-  { key: 'blog_aeo_enabled', label: 'Blog/AEO Publishing' },
+  { key: 'channel_facebook', label: 'Facebook' },
+  { key: 'channel_instagram', label: 'Instagram' },
+  { key: 'channel_tiktok', label: 'TikTok' },
+  { key: 'channel_blog', label: 'Blog' },
+  { key: 'channel_aeo', label: 'AEO Posting' },
 ];
+
+const ALL_TOGGLE_KEYS = [...CORE_FLAGS.map(f => f.key), ...CHANNEL_FLAGS.map(f => f.key)];
 
 const DOCUMENTS = [
   'DOC-01 — CARFIX Brand Guidelines',
@@ -61,7 +56,7 @@ const DOCUMENTS = [
 
 export default function Settings() {
   const [loading, setLoading] = useState(true);
-  const [flags, setFlags] = useState<FeatureFlag[]>([]);
+  const [toggles, setToggles] = useState<Record<string, boolean>>({});
   const [orBalance, setOrBalance] = useState<number | null>(null);
   const [orCheckedAt, setOrCheckedAt] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -69,29 +64,37 @@ export default function Settings() {
   const [appConfig, setAppConfig] = useState<{ business_phase: string } | null>(null);
 
   const fetchAll = useCallback(async () => {
-    const [flagsRes, orRes, vectorRes, configRes] = await Promise.all([
-      supabase.from('feature_flags').select('*'),
+    const [togglesRes, orRes, vectorRes, configRes] = await Promise.all([
+      supabase.from('app_config').select('key, value').in('key', ALL_TOGGLE_KEYS),
       supabase.from('emily_openrouter_snapshots').select('credits_remaining_usd, checked_at').order('checked_at', { ascending: false }).limit(1),
       supabase.from('mkt_vectordb_documents').select('*', { count: 'exact', head: true }).eq('status', 'active'),
-      supabase.from('app_config').select('business_phase').limit(1).single(),
+      supabase.from('app_config').select('key, value').eq('key', 'business_phase').limit(1).maybeSingle(),
     ]);
-    if (flagsRes.data) setFlags(flagsRes.data);
+    if (togglesRes.data) {
+      const tm: Record<string, boolean> = {};
+      togglesRes.data.forEach((row: { key: string; value: string }) => {
+        tm[row.key] = row.value === 'true';
+      });
+      setToggles(tm);
+    }
     if (orRes.data?.[0]) { setOrBalance(orRes.data[0].credits_remaining_usd); setOrCheckedAt(orRes.data[0].checked_at); }
     setVectorCount(vectorRes.count || 0);
-    if (configRes.data) setAppConfig(configRes.data);
+    if (configRes.data) setAppConfig({ business_phase: configRes.data.value });
     setLoading(false);
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const toggleFlag = async (key: string, newValue: boolean) => {
-    setFlags(prev => prev.map(f => f.flag_key === key ? { ...f, flag_value: newValue } : f));
-    const { error } = await supabase.from('feature_flags').update({ flag_value: newValue }).eq('flag_key', key);
+  const toggleFlag = async (key: string, label: string, newValue: boolean) => {
+    setToggles(prev => ({ ...prev, [key]: newValue }));
+    const { error } = await supabase
+      .from('app_config')
+      .upsert({ key, value: String(newValue), updated_at: new Date().toISOString() }, { onConflict: 'key' });
     if (error) {
-      setFlags(prev => prev.map(f => f.flag_key === key ? { ...f, flag_value: !newValue } : f));
-      toast.error('Failed to update');
+      setToggles(prev => ({ ...prev, [key]: !newValue }));
+      toast.error(`Failed to update ${label}`);
     } else {
-      toast.success('Flag updated');
+      toast.success(`${label} ${newValue ? 'enabled' : 'disabled'}`);
     }
   };
 
@@ -110,12 +113,6 @@ export default function Settings() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
-  const flagValue = (key: string) => flags.find(f => f.flag_key === key)?.flag_value ?? false;
-
-  // Extra flags not in core or channel groups
-  const knownKeys = [...CORE_FLAGS.map(f => f.key), ...CHANNEL_FLAGS.map(f => f.key)];
-  const experimentalFlags = flags.filter(f => !knownKeys.includes(f.flag_key));
 
   if (loading) {
     return (
@@ -175,7 +172,7 @@ export default function Settings() {
             <Card key={f.key}>
               <CardContent className="p-3 flex items-center justify-between">
                 <span className="text-sm text-foreground">{f.label}</span>
-                <Switch checked={flagValue(f.key)} onCheckedChange={v => toggleFlag(f.key, v)} />
+                <Switch checked={toggles[f.key] ?? false} onCheckedChange={v => toggleFlag(f.key, f.label, v)} />
               </CardContent>
             </Card>
           ))}
@@ -187,28 +184,11 @@ export default function Settings() {
             <Card key={f.key}>
               <CardContent className="p-3 flex items-center justify-between">
                 <span className="text-sm text-foreground">{f.label}</span>
-                <Switch checked={flagValue(f.key)} onCheckedChange={v => toggleFlag(f.key, v)} />
+                <Switch checked={toggles[f.key] ?? false} onCheckedChange={v => toggleFlag(f.key, f.label, v)} />
               </CardContent>
             </Card>
           ))}
         </div>
-
-        {experimentalFlags.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Other</p>
-            {experimentalFlags.map(f => (
-              <Card key={f.flag_key}>
-                <CardContent className="p-3 flex items-center justify-between">
-                  <div>
-                    <span className="text-sm text-foreground">{f.description || f.flag_key}</span>
-                    <p className="text-xs text-muted-foreground font-mono">{f.flag_key}</p>
-                  </div>
-                  <Switch checked={f.flag_value} onCheckedChange={v => toggleFlag(f.flag_key, v)} />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
       </section>
 
       {/* ═══ SECTION C: KNOWLEDGE BASE ═══ */}
