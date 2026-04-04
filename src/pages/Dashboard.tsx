@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { fetchAppConfig, type AppConfig } from '@/lib/appConfig';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,15 +15,6 @@ import {
   BarChart, Bar, Line, ComposedChart, XAxis, YAxis,
   Tooltip as RechartsTooltip, ResponsiveContainer,
 } from 'recharts';
-
-/* ─── Types ─── */
-interface AppConfig {
-  business_phase: string;
-  stream_weight_disrupt: number;
-  stream_weight_educate: number;
-  stream_weight_convert: number;
-  stream_weight_amplify: number;
-}
 
 interface EmilyRun {
   id: string;
