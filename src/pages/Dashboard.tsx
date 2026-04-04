@@ -36,12 +36,6 @@ interface OpenRouterSnapshot {
   is_low_balance: boolean | null;
 }
 
-interface FeatureFlag {
-  flag_key: string;
-  flag_value: boolean;
-}
-
-/* ─── Phase config ─── */
 const PHASE_CONFIG: Record<string, { color: string; cssVar: string; desc: string }> = {
   FORM: { color: 'hsl(var(--phase-form))', cssVar: 'phase-form', desc: 'Foundational architecture & brand definition' },
   LOAD: { color: 'hsl(var(--phase-load))', cssVar: 'phase-load', desc: 'Cold awareness & narrative disruption pipeline' },
