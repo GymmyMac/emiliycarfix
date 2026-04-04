@@ -403,6 +403,112 @@ export default function Approvals() {
             ))
           )}
         </TabsContent>
+
+        {/* ═══ PUBLISHED TAB ═══ */}
+        <TabsContent value="published" className="space-y-4">
+          {/* Summary stats */}
+          <Card className="border-border bg-secondary/50">
+            <CardContent className="p-4">
+              <div className="flex flex-wrap items-center gap-4 text-sm">
+                <span className="text-foreground font-semibold">{publishedArticles.length} published</span>
+                <span className="text-muted-foreground">·</span>
+                {Object.entries(streamCounts).map(([stream, count]) => {
+                  const badgeClass = STREAM_BADGE[stream] || 'bg-muted/20 text-muted-foreground';
+                  return (
+                    <span key={stream} className="flex items-center gap-1">
+                      <Badge variant="outline" className={`${badgeClass} border-transparent text-[10px] font-semibold`}>{stream.toUpperCase()}</Badge>
+                      <span className="text-xs text-muted-foreground">{count}</span>
+                    </span>
+                  );
+                })}
+                <span className="text-muted-foreground">·</span>
+                <span className="text-xs text-muted-foreground">{totalPublishedWords.toLocaleString()} total words</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Category filter (published-only) */}
+          {publishedCategories.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-40 h-8 text-xs bg-secondary border-border">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {publishedCategories.map(cat => (
+                    <SelectItem key={cat} value={cat.toLowerCase()}>{cat}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {filterPublished.length === 0 ? (
+            <Card><CardContent className="p-8 text-center">
+              <p className="text-foreground">No published articles yet.</p>
+            </CardContent></Card>
+          ) : (
+            <div className="border border-border rounded-lg overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-secondary/70 text-muted-foreground text-xs">
+                      <th className="text-left p-3 font-medium">Title</th>
+                      <th className="text-left p-3 font-medium">Stream</th>
+                      <th className="text-left p-3 font-medium">Category</th>
+                      <th className="text-right p-3 font-medium">Words</th>
+                      <th className="text-left p-3 font-medium">Published</th>
+                      <th className="text-center p-3 font-medium">Live</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filterPublished.map(article => {
+                      const stream = article.psyops_stream?.toLowerCase() || '';
+                      const badgeClass = STREAM_BADGE[stream] || 'bg-muted/20 text-muted-foreground';
+                      const liveUrl = article.slug ? `https://carfix.co.nz/guides/${article.slug}` : null;
+                      return (
+                        <tr key={article.id} className="hover:bg-secondary/30">
+                          <td className="p-3">
+                            {liveUrl ? (
+                              <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium line-clamp-1">
+                                {article.title}
+                              </a>
+                            ) : (
+                              <span className="text-foreground font-medium line-clamp-1">{article.title}</span>
+                            )}
+                            {article.target_keyword && (
+                              <p className="text-[11px] text-muted-foreground mt-0.5">{article.target_keyword}</p>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            {stream && <Badge variant="outline" className={`${badgeClass} border-transparent text-[10px] font-semibold`}>{stream.toUpperCase()}</Badge>}
+                          </td>
+                          <td className="p-3 text-muted-foreground text-xs">{article.category || '—'}</td>
+                          <td className="p-3 text-right text-muted-foreground text-xs">{wordCount(article.draft_content).toLocaleString()}</td>
+                          <td className="p-3 text-muted-foreground text-xs">
+                            {article.updated_at ? formatDistanceToNow(new Date(article.updated_at), { addSuffix: true }) : '—'}
+                          </td>
+                          <td className="p-3 text-center">
+                            {liveUrl ? (
+                              <a href={liveUrl} target="_blank" rel="noopener noreferrer">
+                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary">
+                                  <ExternalLink size={14} />
+                                </Button>
+                              </a>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </TabsContent>
       </Tabs>
 
       {/* ─── Edit Article Modal ─── */}
