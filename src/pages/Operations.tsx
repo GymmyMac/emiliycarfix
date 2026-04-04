@@ -197,8 +197,8 @@ export default function Operations() {
   const weightSum = Object.values(editWeights).reduce((a, b) => a + b, 0);
   const activePhase = config?.business_phase?.toLowerCase() || 'load';
   const globalActive = flags['emily_global_active'] ?? false;
-  const canRun = globalActive && (orSnapshot?.credits_remaining_usd ?? 0) > 2;
-  const runDisabledReason = !globalActive ? 'Emily is OFF' : (orSnapshot?.credits_remaining_usd ?? 0) <= 2 ? 'OpenRouter balance low' : '';
+  const canRun = globalActive;
+  const runDisabledReason = !globalActive ? 'Emily is OFF' : '';
 
   // Get preset weights for the phase change confirmation dialog
   const presetForTarget = config?.phase_presets?.[phaseChangeTarget || ''];
