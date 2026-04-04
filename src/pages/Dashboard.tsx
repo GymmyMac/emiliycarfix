@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import CompetitorRefreshBanner from '@/components/CompetitorRefreshBanner';
 import { supabase } from '@/lib/supabase';
 import { fetchAppConfig, type AppConfig } from '@/lib/appConfig';
 import { Card, CardContent } from '@/components/ui/card';
