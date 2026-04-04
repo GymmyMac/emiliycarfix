@@ -14,9 +14,9 @@ import { Calendar } from '@/components/ui/calendar';
 import { toast } from 'sonner';
 import {
   CheckCircle2, XCircle, SkipForward, Pencil, Search,
-  CalendarIcon, Image as ImageIcon, ChevronDown,
+  CalendarIcon, Image as ImageIcon, ChevronDown, ExternalLink,
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 
 /* ─── Social Card Component ─── */
 function SocialCard({ item, onApprove, onReject, onEdit, onLightbox }: {
