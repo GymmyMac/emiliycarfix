@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 
 const navItems = [
   { label: 'Dashboard', icon: LayoutGrid, path: '/dashboard' },
+  { label: 'Competitors', icon: Crosshair, path: '/competitor-intelligence' },
   { label: 'Approvals', icon: CheckSquare, path: '/approvals' },
   { label: 'Operations', icon: Cpu, path: '/operations' },
   { label: 'Analytics', icon: BarChart3, path: '/analytics' },

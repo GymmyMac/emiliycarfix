@@ -5,10 +5,12 @@ import {
   Cpu,
   BarChart3,
   Settings,
+  Crosshair,
 } from 'lucide-react';
 
 const navItems = [
   { label: 'Dashboard', icon: LayoutGrid, path: '/dashboard' },
+  { label: 'Intel', icon: Crosshair, path: '/competitor-intelligence' },
   { label: 'Approvals', icon: CheckSquare, path: '/approvals' },
   { label: 'Ops', icon: Cpu, path: '/operations' },
   { label: 'Analytics', icon: BarChart3, path: '/analytics' },
