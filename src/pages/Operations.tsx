@@ -188,13 +188,10 @@ export default function Operations() {
     setPhaseChangeTarget(null);
   };
 
-  const checkBalance = async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('check-openrouter-balance');
-      if (error) throw error;
-      setOrSnapshot(prev => prev ? { ...prev, credits_remaining_usd: data?.balance ?? null, checked_at: new Date().toISOString() } : null);
-      toast.success('Balance refreshed');
-    } catch { toast.error('Failed to check balance'); }
+  const refreshSnapshot = async () => {
+    const { data } = await supabase.from('emily_openrouter_snapshots').select('checked_at, credits_remaining_usd, usage_usd, limit_usd').order('checked_at', { ascending: false }).limit(1);
+    if (data?.[0]) { setOrSnapshot(data[0]); toast.success('Balance refreshed'); }
+    else { toast.error('No snapshot data'); }
   };
 
   const weightSum = Object.values(editWeights).reduce((a, b) => a + b, 0);
