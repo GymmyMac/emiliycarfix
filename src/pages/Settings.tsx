@@ -114,6 +114,7 @@ export default function Settings() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  if (loading) {
     return (
       <div className="space-y-6 max-w-[1200px]">
         <Skeleton className="h-8 w-48" />
