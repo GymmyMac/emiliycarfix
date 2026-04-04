@@ -12,6 +12,7 @@ import Operations from "./pages/Operations";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
+import CompetitorIntelligence from "./pages/CompetitorIntelligence";
 
 const queryClient = new QueryClient();
 
@@ -26,6 +27,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route element={<AdminLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/competitor-intelligence" element={<CompetitorIntelligence />} />
               <Route path="/approvals" element={<Approvals />} />
               <Route path="/operations" element={<Operations />} />
               <Route path="/analytics" element={<Analytics />} />
