@@ -15,7 +15,9 @@ import { toast } from 'sonner';
 import {
   CheckCircle2, XCircle, SkipForward, Pencil, Search,
   CalendarIcon, Image as ImageIcon, ChevronDown, ExternalLink,
+  Loader2, Plus, Rocket, Send,
 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
 import { format, formatDistanceToNow } from 'date-fns';
 import PageHeader from '@/components/PageHeader';
 
@@ -165,6 +167,21 @@ export default function Approvals() {
   // Lightbox
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
+  // Loading states for publish/send actions
+  const [publishingIds, setPublishingIds] = useState<Set<string>>(new Set());
+  const [sendingIds, setSendingIds] = useState<Set<string>>(new Set());
+  const [publishErrors, setPublishErrors] = useState<Record<string, string>>({});
+
+  // Add to Queue modal
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newTopic, setNewTopic] = useState('');
+  const [newKeyword, setNewKeyword] = useState('');
+  const [newStream, setNewStream] = useState('educate');
+  const [newPriority, setNewPriority] = useState('normal');
+  const [newNotes, setNewNotes] = useState('');
+  const [addingToQueue, setAddingToQueue] = useState(false);
+  const [generatingNow, setGeneratingNow] = useState(false);
+
   const fetchData = useCallback(async () => {
     const [queuedRes, aeoRes, approvedRes, socialRes, publishedRes] = await Promise.all([
       supabase.from('mkt_seo_queue')
@@ -242,18 +259,22 @@ export default function Approvals() {
     fetchData();
   };
 
-  /* ─── Publish actions ─── */
+  /* ─── Publish actions (with per-item loading) ─── */
   const publishArticle = async (article: AeoArticle) => {
     if (!article.slug) {
       toast.error('Cannot publish — this article has no slug');
       return;
     }
+    setPublishingIds(prev => new Set(prev).add(article.id));
+    setPublishErrors(prev => { const n = { ...prev }; delete n[article.id]; return n; });
     const { error } = await supabase.from('mkt_seo_queue').update({
       status: 'published',
       james_approved: true,
       updated_at: new Date().toISOString(),
     }).eq('id', article.id);
+    setPublishingIds(prev => { const n = new Set(prev); n.delete(article.id); return n; });
     if (error) {
+      setPublishErrors(prev => ({ ...prev, [article.id]: error.message }));
       toast.error('Publish failed: ' + error.message);
       return;
     }
@@ -267,6 +288,77 @@ export default function Approvals() {
         </a>
       </div>
     );
+  };
+
+  /* ─── Send Now: approve + publish in one action ─── */
+  const sendNow = async (article: AeoArticle) => {
+    if (!article.slug) {
+      toast.error('Cannot send — this article has no slug. Approve first, add slug, then publish.');
+      return;
+    }
+    setSendingIds(prev => new Set(prev).add(article.id));
+    const { error } = await supabase.from('mkt_seo_queue').update({
+      status: 'published',
+      james_approved: true,
+      updated_at: new Date().toISOString(),
+    }).eq('id', article.id);
+    setSendingIds(prev => { const n = new Set(prev); n.delete(article.id); return n; });
+    if (error) {
+      toast.error('Send failed: ' + error.message);
+      return;
+    }
+    setArticles(prev => prev.filter(a => a.id !== article.id));
+    fetchData();
+    toast.success(
+      <div>
+        Approved & Published — live at{' '}
+        <a href={`https://carfix.co.nz/guides/${article.slug}`} target="_blank" rel="noopener noreferrer" className="underline font-medium">
+          carfix.co.nz/guides/{article.slug}
+        </a>
+      </div>
+    );
+  };
+
+  /* ─── Add to Queue ─── */
+  const addToQueue = async (generateImmediately: boolean) => {
+    if (!newTopic.trim()) { toast.error('Topic is required'); return; }
+    const setter = generateImmediately ? setGeneratingNow : setAddingToQueue;
+    setter(true);
+    const priorityMap: Record<string, number> = { high: 90, normal: 50, low: 10 };
+    const row = {
+      title: newTopic.trim(),
+      target_keyword: newKeyword.trim() || null,
+      psyops_stream: newStream.toUpperCase(),
+      priority_score: priorityMap[newPriority] || 50,
+      status: 'pending',
+      content_type: 'seo_article',
+      notes: newNotes.trim() || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const { data: inserted, error } = await supabase.from('mkt_seo_queue').insert(row).select().single();
+    if (error) {
+      setter(false);
+      toast.error('Failed to add: ' + error.message);
+      return;
+    }
+    if (generateImmediately && inserted) {
+      // Trigger Emily for this single item
+      try {
+        await supabase.functions.invoke('emily-chat', {
+          body: { task_id: inserted.id, title: inserted.title, target_keyword: inserted.target_keyword },
+        });
+        toast.success('Item added and Emily is generating content now. It will appear in Sign-off shortly.');
+      } catch {
+        toast.success('Item added to queue. Emily generation was triggered but may take a moment.');
+      }
+    } else {
+      toast.success('Item added to the queue');
+    }
+    setter(false);
+    setShowAddModal(false);
+    setNewTopic(''); setNewKeyword(''); setNewStream('educate'); setNewPriority('normal'); setNewNotes('');
+    fetchData();
   };
 
   const publishAll = async () => {
