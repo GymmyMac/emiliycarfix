@@ -171,21 +171,20 @@ function LibraryTab() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // Get all vehicle-video associations with video + vehicle data
+      // Get all vehicle-video associations with video + vehicle data joined
       const { data: vvData, error: vvErr } = await supabase
         .from('youtube_video_vehicles')
-        .select('vehicle_id, video_id, youtube_videos!inner(id, youtube_id, title, channel_name, thumbnail_url, composite_score, is_active, flagged)');
+        .select('vehicle_id, video_id, vehicle!inner(vehicle_id, make, model, year_from, year_to), youtube_videos!inner(id, youtube_id, title, channel_name, thumbnail_url, composite_score, is_active, flagged)');
       if (vvErr) throw vvErr;
 
-      // Get vehicle details
-      const vehicleIds = [...new Set((vvData || []).map((r: any) => r.vehicle_id))];
+      // Build vehicle map from joined data
       let vehicleMap: Record<string, { make: string; model: string; year_from: number | null; year_to: number | null }> = {};
-      if (vehicleIds.length) {
-        const { data: vehData } = await supabase.from('vehicle').select('id, make, model, year_from, year_to').in('id', vehicleIds);
-        if (vehData) {
-          vehData.forEach((v: any) => { vehicleMap[v.id] = { make: v.make, model: v.model, year_from: v.year_from, year_to: v.year_to }; });
+      (vvData || []).forEach((row: any) => {
+        const veh = row.vehicle;
+        if (veh && !vehicleMap[row.vehicle_id]) {
+          vehicleMap[row.vehicle_id] = { make: veh.make, model: veh.model, year_from: veh.year_from, year_to: veh.year_to };
         }
-      }
+      });
 
       // Get job mappings for all videos
       const videoIds = [...new Set((vvData || []).map((r: any) => r.video_id))];
