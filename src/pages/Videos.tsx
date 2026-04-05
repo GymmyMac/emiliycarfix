@@ -181,7 +181,7 @@ function LibraryTab() {
       const vehicleIds = [...new Set((vvData || []).map((r: any) => r.vehicle_id))];
       let vehicleMap: Record<string, { make: string; model: string; year_from: number | null; year_to: number | null }> = {};
       if (vehicleIds.length) {
-        const { data: vehData } = await supabase.from('vehicles').select('id, make, model, year_from, year_to').in('id', vehicleIds);
+        const { data: vehData } = await supabase.from('vehicle').select('id, make, model, year_from, year_to').in('id', vehicleIds);
         if (vehData) {
           vehData.forEach((v: any) => { vehicleMap[v.id] = { make: v.make, model: v.model, year_from: v.year_from, year_to: v.year_to }; });
         }
