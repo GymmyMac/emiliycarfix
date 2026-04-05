@@ -80,7 +80,8 @@ export default function Operations() {
   const [runningEmily, setRunningEmily] = useState(false);
 
   const fetchAll = useCallback(async () => {
-    const allFlagKeys = ['emily_global_active', ...INITIATIVE_FLAGS.map(f => f.key)];
+    const channelKeys = ['channel_blog', 'channel_aeo', 'channel_facebook', 'channel_instagram', 'channel_tiktok'];
+    const allFlagKeys = ['emily_global_active', ...INITIATIVE_FLAGS.map(f => f.key), ...channelKeys];
     const [appConfig, flagsRes, lastRunRes, orRes, queuedRes, generatedRes, approvedRes, publishedRes, reviewSeoRes, reviewContentRes] = await Promise.all([
       fetchAppConfig(),
       supabase.from('app_config').select('key, value').in('key', allFlagKeys),
@@ -246,6 +247,9 @@ export default function Operations() {
             );
           })}
         </div>
+        <p className="text-xs text-muted-foreground/70 leading-relaxed">
+          The phase controls Emily's overall content strategy. LOAD builds the content library quietly. LAUNCH goes public. STORM accelerates. PERFORM optimises.
+        </p>
 
         {/* Stream Weights */}
         <div className="space-y-3">
@@ -313,7 +317,34 @@ export default function Operations() {
               Save Weights
             </Button>
           )}
+          <p className="text-xs text-muted-foreground/70 leading-relaxed mt-2">
+            Stream weights tell Emily how to balance content types in each run. DISRUPT challenges workshop dependency. EDUCATE informs. CONVERT sells. AMPLIFY spreads reach. Weights must total 100.
+          </p>
         </div>
+      </section>
+
+      {/* ═══ SECTION A2: CHANNEL TOGGLES ═══ */}
+      <section className="space-y-4">
+        <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Publishing Channels</h2>
+        <div className="space-y-2">
+          {[
+            { key: 'channel_blog', label: 'Blog' },
+            { key: 'channel_aeo', label: 'AEO Posting' },
+            { key: 'channel_facebook', label: 'Facebook' },
+            { key: 'channel_instagram', label: 'Instagram' },
+            { key: 'channel_tiktok', label: 'TikTok' },
+          ].map(f => (
+            <Card key={f.key}>
+              <CardContent className="p-3 flex items-center justify-between">
+                <span className="text-sm text-foreground">{f.label}</span>
+                <Switch checked={flags[f.key] ?? false} onCheckedChange={v => toggleFlag(f.key, v)} />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground/70 leading-relaxed">
+          Controls which publishing channels Emily can use. Turning a channel OFF prevents Emily from publishing to it — content will still generate and queue, but will not be sent until the channel is re-enabled.
+        </p>
       </section>
 
       {/* ═══ SECTION B: RUN CONTROLS ═══ */}
@@ -336,6 +367,9 @@ export default function Operations() {
             </div>
           </CardContent>
         </Card>
+        <p className="text-xs text-muted-foreground/70 leading-relaxed">
+          Master switch. When OFF, Emily will not generate or publish any content, regardless of other settings.
+        </p>
 
         {/* Initiative toggles */}
         {globalActive && (
