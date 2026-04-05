@@ -17,6 +17,7 @@ import {
   CalendarIcon, Image as ImageIcon, ChevronDown, ExternalLink,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
+import PageHeader from '@/components/PageHeader';
 
 /* ─── Social Card Component ─── */
 function SocialCard({ item, onApprove, onReject, onEdit, onLightbox }: {
@@ -379,7 +380,7 @@ export default function Approvals() {
 
   return (
     <div className="space-y-6 max-w-[1400px]">
-      <h1 className="text-2xl font-bold text-foreground">Pipeline</h1>
+      <PageHeader title="Approvals" description="Content waiting for your decision — review, approve, or reject articles and social posts." />
 
       <Tabs defaultValue="queue" className="w-full">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">

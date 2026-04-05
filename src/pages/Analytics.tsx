@@ -8,6 +8,7 @@ import {
   Tooltip as RechartsTooltip, ResponsiveContainer, Cell,
 } from 'recharts';
 import { format, subDays } from 'date-fns';
+import PageHeader from '@/components/PageHeader';
 
 /* ─── Types ─── */
 interface EmilyRun {
@@ -112,7 +113,7 @@ export default function Analytics() {
 
   return (
     <div className="space-y-8 max-w-[1400px]">
-      <h1 className="text-2xl font-bold text-foreground">Analytics</h1>
+      <PageHeader title="Pipeline" description="Content flow from queue to published — generation stats, funnel health, and library performance." />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* ═══ PANEL 1: EMILY PERFORMANCE ═══ */}

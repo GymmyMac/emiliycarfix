@@ -7,6 +7,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { RefreshCw, Copy, CheckCircle2 } from 'lucide-react';
+import PageHeader from '@/components/PageHeader';
 import { format } from 'date-fns';
 
 function StatusDot({ status }: { status: 'green' | 'amber' | 'red' | 'grey' }) {
@@ -125,7 +126,7 @@ export default function Settings() {
 
   return (
     <div className="space-y-8 max-w-[1200px]">
-      <h1 className="text-2xl font-bold text-foreground">Settings</h1>
+      <PageHeader title="Connections" description="API keys, integration health, and credential management. Check status and refresh tokens here." />
 
       {/* ═══ SECTION A: API CONNECTIONS ═══ */}
       <section className="space-y-4">

@@ -10,13 +10,13 @@ import {
 } from 'lucide-react';
 
 const navItems = [
-  { label: 'Dashboard', icon: LayoutGrid, path: '/dashboard' },
+  { label: 'Brief', icon: LayoutGrid, path: '/dashboard' },
   { label: 'Intel', icon: Crosshair, path: '/competitor-intelligence' },
   { label: 'Approvals', icon: CheckSquare, path: '/approvals' },
-  { label: 'Ops', icon: Cpu, path: '/operations' },
-  { label: 'Videos', icon: Play, path: '/videos' },
-  { label: 'Analytics', icon: BarChart3, path: '/analytics' },
-  { label: 'Settings', icon: Settings, path: '/settings' },
+  { label: 'Controls', icon: Cpu, path: '/operations' },
+  { label: 'Guides', icon: Play, path: '/videos' },
+  { label: 'Pipeline', icon: BarChart3, path: '/analytics' },
+  { label: 'Connect', icon: Settings, path: '/settings' },
 ];
 
 export default function MobileNav() {

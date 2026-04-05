@@ -14,13 +14,13 @@ import {
 import { cn } from '@/lib/utils';
 
 const navItems = [
-  { label: 'Dashboard', icon: LayoutGrid, path: '/dashboard' },
-  { label: 'Competitors', icon: Crosshair, path: '/competitor-intelligence' },
-  { label: 'Approvals', icon: CheckSquare, path: '/approvals' },
-  { label: 'Operations', icon: Cpu, path: '/operations' },
-  { label: 'Videos', icon: Play, path: '/videos' },
-  { label: 'Analytics', icon: BarChart3, path: '/analytics' },
-  { label: 'Settings', icon: Settings, path: '/settings' },
+  { label: 'Morning Brief', subtitle: 'What happened overnight', icon: LayoutGrid, path: '/dashboard' },
+  { label: 'Intelligence', subtitle: 'Competitor keywords and gaps', icon: Crosshair, path: '/competitor-intelligence' },
+  { label: 'Approvals', subtitle: 'Content waiting for your decision', icon: CheckSquare, path: '/approvals' },
+  { label: 'Controls', subtitle: 'Turn things on, adjust the dials', icon: Cpu, path: '/operations' },
+  { label: 'Fitting Guides', subtitle: 'YouTube videos by vehicle', icon: Play, path: '/videos' },
+  { label: 'Pipeline', subtitle: 'Content flow from queue to published', icon: BarChart3, path: '/analytics' },
+  { label: 'Connections', subtitle: 'APIs, integrations, credentials', icon: Settings, path: '/settings' },
 ];
 
 export default function AppSidebar() {
@@ -63,7 +63,12 @@ export default function AppSidebar() {
               )}
             >
               <item.icon size={18} className="shrink-0" />
-              {expanded && <span className="whitespace-nowrap overflow-hidden">{item.label}</span>}
+              {expanded && (
+                <div className="whitespace-nowrap overflow-hidden">
+                  <span className="block text-sm leading-tight">{item.label}</span>
+                  <span className="block text-[10px] leading-tight text-muted-foreground font-normal">{item.subtitle}</span>
+                </div>
+              )}
             </button>
           );
         })}
