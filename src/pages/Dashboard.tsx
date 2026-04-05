@@ -22,8 +22,10 @@ interface EmilyRun {
 
 interface CronJob {
   jobname: string;
+  schedule: string;
+  last_run: string;
   status: string;
-  start_time: string;
+  return_message: string | null;
 }
 
 const PHASE_CONFIG: Record<string, { color: string; desc: string }> = {
@@ -77,7 +79,7 @@ export default function Dashboard() {
       queueRes,
     ] = await Promise.all([
       fetchAppConfig(),
-      supabase.from('cron.job_run_details' as any).select('jobname, status, start_time').gte('start_time', yesterdayISO).order('start_time', { ascending: false }),
+      supabase.rpc('get_cron_job_health'),
       supabase.from('emily_runs').select('id, started_at, status, generated_count, failed_count').gte('started_at', yesterdayISO).order('started_at', { ascending: false }),
       supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'published').gte('updated_at', yesterdayISO),
       supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('james_approved', false).not('draft_content', 'is', null),
@@ -86,12 +88,7 @@ export default function Dashboard() {
 
     if (appConfig) setConfig(appConfig);
 
-    // Cron: deduplicate to latest per job
-    const jobMap = new Map<string, CronJob>();
-    (cronRes.data || []).forEach((row: any) => {
-      if (!jobMap.has(row.jobname)) jobMap.set(row.jobname, row);
-    });
-    const jobs = Array.from(jobMap.values());
+    const jobs: CronJob[] = cronRes.data || [];
     setCronJobs(jobs);
 
     // Emily
@@ -183,7 +180,7 @@ export default function Dashboard() {
             <div>
               <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Overnight Automation</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {cronTotal > 0 ? `${cronPassed} of ${cronTotal} jobs completed` : 'No cron data available'}
+                {cronTotal > 0 ? `${cronPassed} of ${cronTotal} jobs ran successfully last night` : 'No cron data available'}
               </p>
             </div>
             {cronTotal > 0 && (
@@ -194,17 +191,22 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Dot grid */}
+          {/* Job grid */}
           {cronTotal > 0 && (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-2">
               {cronJobs.map((job, i) => (
                 <div
                   key={i}
-                  title={`${job.jobname}: ${job.status}`}
-                  className={`h-3 w-3 rounded-full ${
-                    job.status === 'succeeded' ? 'bg-success' : job.status === 'failed' ? 'bg-destructive' : 'bg-warning'
-                  }`}
-                />
+                  title={job.status === 'failed' && job.return_message ? `${job.jobname}: ${job.return_message}` : `${job.jobname}: ${job.status}`}
+                  className="flex items-center gap-1.5 text-xs"
+                >
+                  {job.status === 'succeeded' ? (
+                    <CheckCircle2 size={14} className="text-success shrink-0" />
+                  ) : (
+                    <AlertTriangle size={14} className="text-destructive shrink-0" />
+                  )}
+                  <span className="text-muted-foreground">{job.jobname}</span>
+                </div>
               ))}
             </div>
           )}
@@ -217,7 +219,8 @@ export default function Dashboard() {
                   <tr className="border-b border-border bg-muted/30">
                     <th className="text-left px-3 py-2 text-muted-foreground font-medium">Job</th>
                     <th className="text-left px-3 py-2 text-muted-foreground font-medium">Status</th>
-                    <th className="text-left px-3 py-2 text-muted-foreground font-medium">Time</th>
+                     <th className="text-left px-3 py-2 text-muted-foreground font-medium">Last Run</th>
+                     <th className="text-left px-3 py-2 text-muted-foreground font-medium">Message</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -234,7 +237,8 @@ export default function Dashboard() {
                           {job.status}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-muted-foreground">{format(new Date(job.start_time), 'HH:mm')}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{job.last_run ? format(new Date(job.last_run), 'HH:mm') : '—'}</td>
+                      <td className="px-3 py-2 text-muted-foreground max-w-[200px] truncate">{job.return_message || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
