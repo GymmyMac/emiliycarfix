@@ -241,6 +241,55 @@ export default function Approvals() {
     fetchData();
   };
 
+  /* ─── Publish actions ─── */
+  const publishArticle = async (article: AeoArticle) => {
+    if (!article.slug) {
+      toast.error('Cannot publish — this article has no slug');
+      return;
+    }
+    const { error } = await supabase.from('mkt_seo_queue').update({
+      status: 'published',
+      james_approved: true,
+      updated_at: new Date().toISOString(),
+    }).eq('id', article.id);
+    if (error) {
+      toast.error('Publish failed: ' + error.message);
+      return;
+    }
+    setApprovedArticles(prev => prev.filter(a => a.id !== article.id));
+    fetchData();
+    toast.success(
+      <div>
+        Published — live at{' '}
+        <a href={`https://carfix.co.nz/guides/${article.slug}`} target="_blank" rel="noopener noreferrer" className="underline font-medium">
+          carfix.co.nz/guides/{article.slug}
+        </a>
+      </div>
+    );
+  };
+
+  const publishAll = async () => {
+    const publishable = approvedArticles.filter(a => a.slug);
+    const noSlug = approvedArticles.filter(a => !a.slug);
+    if (publishable.length === 0) {
+      toast.error('No articles have slugs — cannot publish');
+      return;
+    }
+    if (!confirm(`Publish ${publishable.length} article${publishable.length > 1 ? 's' : ''}?${noSlug.length > 0 ? ` (${noSlug.length} skipped — missing slug)` : ''}`)) return;
+    const ids = publishable.map(a => a.id);
+    const { error } = await supabase.from('mkt_seo_queue').update({
+      status: 'published',
+      james_approved: true,
+      updated_at: new Date().toISOString(),
+    }).in('id', ids);
+    if (error) {
+      toast.error('Bulk publish failed: ' + error.message);
+      return;
+    }
+    fetchData();
+    toast.success(`Published ${publishable.length} articles`);
+  };
+
   /* ─── Social actions ─── */
   const approveSocial = async (id: string) => {
     await supabase.from('mkt_content_queue').update({ status: 'approved', updated_at: new Date().toISOString() }).eq('id', id);
