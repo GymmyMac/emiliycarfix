@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import {
   Play, ExternalLink, Search, CheckCircle2, XCircle, AlertTriangle,
   Film, Eye, EyeOff, Trash2, ChevronLeft, ChevronRight, Loader2, Plus,
+  ChevronDown, ChevronUp, Flag,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import PageHeader from '@/components/PageHeader';
@@ -134,90 +135,133 @@ export default function Videos() {
 }
 
 /* ═══════════════════════════════════════════════
-   TAB 1 — LIBRARY
+   TAB 1 — LIBRARY (Vehicle → Part Slot hierarchy)
    ═══════════════════════════════════════════════ */
+interface VehicleGroup {
+  vehicle_id: string;
+  make: string;
+  model: string;
+  year_from: number | null;
+  year_to: number | null;
+  label: string;
+  slots: Record<string, VideoEntry[]>;
+  totalVideos: number;
+}
+
+interface VideoEntry {
+  id: string;
+  youtube_id: string;
+  title: string;
+  channel_name: string | null;
+  thumbnail_url: string | null;
+  composite_score: number | null;
+  is_active: boolean;
+  flagged: boolean;
+  job_type: string;
+}
+
 function LibraryTab() {
-  const [videos, setVideos] = useState<Video[]>([]);
+  const [groups, setGroups] = useState<VehicleGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [jobFilter, setJobFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [jobTypes, setJobTypes] = useState<string[]>([]);
-  const [page, setPage] = useState(0);
-  const [total, setTotal] = useState(0);
-  const [stats, setStats] = useState({ active: 0, flagged: 0, vehicleCoverage: 0 });
-  const [confirmDialog, setConfirmDialog] = useState<{ type: 'disable' | 'enable' | 'remove'; video: Video } | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [confirmDialog, setConfirmDialog] = useState<{ type: 'disable' | 'enable' | 'remove' | 'flag'; video: VideoEntry } | null>(null);
+  const [summaryStats, setSummaryStats] = useState({ vehicles: 0, slots: 0, videos: 0 });
 
-  const fetchVideos = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      // Stats
-      const [activeRes, flaggedRes, vehicleRes] = await Promise.all([
-        supabase.from('youtube_videos').select('id', { count: 'exact', head: true }).eq('is_active', true),
-        supabase.from('youtube_video_reports').select('id', { count: 'exact', head: true }).is('reviewed_at', null),
-        supabase.from('youtube_video_vehicles').select('vehicle_id').then(r => new Set((r.data || []).map(v => v.vehicle_id)).size),
-      ]);
-      setStats({
-        active: activeRes.count || 0,
-        flagged: flaggedRes.count || 0,
-        vehicleCoverage: typeof vehicleRes === 'number' ? vehicleRes : 0,
-      });
+      // Get all vehicle-video associations with video + vehicle data
+      const { data: vvData, error: vvErr } = await supabase
+        .from('youtube_video_vehicles')
+        .select('vehicle_id, video_id, youtube_videos!inner(id, youtube_id, title, channel_name, thumbnail_url, composite_score, is_active, flagged)');
+      if (vvErr) throw vvErr;
 
-      // Job type filter options
-      const jtRes = await supabase.from('youtube_job_mappings').select('job_type');
-      const uniqueJobs = [...new Set((jtRes.data || []).map(r => r.job_type).filter(Boolean))];
-      setJobTypes(uniqueJobs);
-
-      // Build query
-      let query = supabase.from('youtube_videos').select('*', { count: 'exact' });
-
-      if (statusFilter === 'active') query = query.eq('is_active', true).eq('flagged', false);
-      else if (statusFilter === 'flagged') query = query.eq('flagged', true);
-      else if (statusFilter === 'inactive') query = query.eq('is_active', false);
-
-      if (search) query = query.or(`title.ilike.%${search}%,channel_name.ilike.%${search}%`);
-
-      query = query.order('composite_score', { ascending: false, nullsFirst: false })
-        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
-
-      const { data, count, error } = await query;
-      if (error) throw error;
-
-      // Enrich with job mappings and vehicle counts
-      const videoIds = (data || []).map(v => v.id);
-      const [jmRes, vvRes] = await Promise.all([
-        videoIds.length ? supabase.from('youtube_job_mappings').select('video_id, job_type').in('video_id', videoIds) : { data: [] },
-        videoIds.length ? supabase.from('youtube_video_vehicles').select('video_id') .in('video_id', videoIds) : { data: [] },
-      ]);
-
-      const jobMap: Record<string, string> = {};
-      (jmRes.data || []).forEach(r => { if (!jobMap[r.video_id]) jobMap[r.video_id] = r.job_type; });
-
-      const vehCount: Record<string, number> = {};
-      (vvRes.data || []).forEach(r => { vehCount[r.video_id] = (vehCount[r.video_id] || 0) + 1; });
-
-      // Filter by job type client-side if needed
-      let enriched = (data || []).map(v => ({
-        ...v,
-        job_type: jobMap[v.id] || null,
-        vehicle_count: vehCount[v.id] || 0,
-      }));
-
-      if (jobFilter !== 'all') {
-        enriched = enriched.filter(v => v.job_type === jobFilter);
+      // Get vehicle details
+      const vehicleIds = [...new Set((vvData || []).map((r: any) => r.vehicle_id))];
+      let vehicleMap: Record<string, { make: string; model: string; year_from: number | null; year_to: number | null }> = {};
+      if (vehicleIds.length) {
+        const { data: vehData } = await supabase.from('vehicles').select('id, make, model, year_from, year_to').in('id', vehicleIds);
+        if (vehData) {
+          vehData.forEach((v: any) => { vehicleMap[v.id] = { make: v.make, model: v.model, year_from: v.year_from, year_to: v.year_to }; });
+        }
       }
 
-      setVideos(enriched);
-      setTotal(count || 0);
+      // Get job mappings for all videos
+      const videoIds = [...new Set((vvData || []).map((r: any) => r.video_id))];
+      let jobMap: Record<string, string> = {};
+      if (videoIds.length) {
+        const { data: jmData } = await supabase.from('youtube_job_mappings').select('video_id, job_type').in('video_id', videoIds);
+        if (jmData) {
+          jmData.forEach((r: any) => { if (!jobMap[r.video_id]) jobMap[r.video_id] = r.job_type; });
+        }
+      }
+
+      // Build vehicle groups
+      const groupMap: Record<string, VehicleGroup> = {};
+      (vvData || []).forEach((row: any) => {
+        const vid = row.vehicle_id;
+        const veh = vehicleMap[vid];
+        if (!veh) return;
+        const video = row.youtube_videos;
+        if (!video) return;
+        const jobType = jobMap[video.id] || 'General';
+
+        if (!groupMap[vid]) {
+          const yearRange = veh.year_from && veh.year_to ? `${veh.year_from}–${veh.year_to}` : veh.year_from ? `${veh.year_from}+` : '';
+          groupMap[vid] = {
+            vehicle_id: vid,
+            make: veh.make,
+            model: veh.model,
+            year_from: veh.year_from,
+            year_to: veh.year_to,
+            label: `${veh.make} ${veh.model}${yearRange ? ` ${yearRange}` : ''}`,
+            slots: {},
+            totalVideos: 0,
+          };
+        }
+        if (!groupMap[vid].slots[jobType]) groupMap[vid].slots[jobType] = [];
+        // Avoid duplicate videos in same slot
+        if (!groupMap[vid].slots[jobType].some(v => v.id === video.id)) {
+          groupMap[vid].slots[jobType].push({
+            id: video.id,
+            youtube_id: video.youtube_id,
+            title: video.title,
+            channel_name: video.channel_name,
+            thumbnail_url: video.thumbnail_url,
+            composite_score: video.composite_score,
+            is_active: video.is_active,
+            flagged: video.flagged,
+            job_type: jobType,
+          });
+          groupMap[vid].totalVideos++;
+        }
+      });
+
+      const sorted = Object.values(groupMap).sort((a, b) => a.label.localeCompare(b.label));
+      setGroups(sorted);
+
+      const allSlots = new Set<string>();
+      let totalVids = 0;
+      sorted.forEach(g => { Object.keys(g.slots).forEach(s => allSlots.add(s)); totalVids += g.totalVideos; });
+      setSummaryStats({ vehicles: sorted.length, slots: allSlots.size, videos: totalVids });
     } catch (err) {
       console.error(err);
-      toast.error('Failed to load videos');
+      toast.error('Failed to load video library');
     } finally {
       setLoading(false);
     }
-  }, [search, jobFilter, statusFilter, page]);
+  }, []);
 
-  useEffect(() => { fetchVideos(); }, [fetchVideos]);
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const toggleExpand = (id: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
 
   const handleAction = async () => {
     if (!confirmDialog) return;
@@ -231,146 +275,143 @@ function LibraryTab() {
         toast.success(`"${video.title}" enabled`);
       } else if (type === 'remove') {
         await supabase.from('youtube_videos').update({ is_active: false, flagged: true, flagged_reason: 'manually_removed' }).eq('id', video.id);
-        toast.success(`"${video.title}" removed from library`);
+        toast.success(`"${video.title}" removed`);
+      } else if (type === 'flag') {
+        await supabase.from('youtube_videos').update({ flagged: true, flagged_reason: 'manual_flag' }).eq('id', video.id);
+        toast.success(`"${video.title}" flagged for review`);
       }
       setConfirmDialog(null);
-      fetchVideos();
+      fetchData();
     } catch {
       toast.error('Action failed');
     }
   };
 
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const filtered = search.trim()
+    ? groups.filter(g => g.label.toLowerCase().includes(search.toLowerCase()))
+    : groups;
 
   return (
     <div className="space-y-4 mt-4">
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="border-border"><CardContent className="p-4">
-          <p className="text-xs text-muted-foreground">Total Active Videos</p>
-          <p className="text-2xl font-bold text-foreground">{stats.active}</p>
-        </CardContent></Card>
-        <Card className="border-border"><CardContent className="p-4">
-          <p className="text-xs text-muted-foreground">Flagged / Awaiting Review</p>
-          <p className="text-2xl font-bold text-amber-400">{stats.flagged}</p>
-        </CardContent></Card>
-        <Card className="border-border"><CardContent className="p-4">
-          <p className="text-xs text-muted-foreground">Vehicles with Coverage</p>
-          <p className="text-2xl font-bold text-foreground">{stats.vehicleCoverage}</p>
-        </CardContent></Card>
+      {/* Summary strip */}
+      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+        <span><strong className="text-foreground">{summaryStats.vehicles}</strong> vehicles covered</span>
+        <span className="text-border">|</span>
+        <span><strong className="text-foreground">{summaryStats.slots}</strong> part slots</span>
+        <span className="text-border">|</span>
+        <span><strong className="text-foreground">{summaryStats.videos}</strong> total videos</span>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input placeholder="Search title or channel…" value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} className="pl-9 h-9 text-sm" />
-        </div>
-        <Select value={jobFilter} onValueChange={v => { setJobFilter(v); setPage(0); }}>
-          <SelectTrigger className="w-[200px] h-9 text-sm"><SelectValue placeholder="Job type" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Job Types</SelectItem>
-            {jobTypes.map(jt => <SelectItem key={jt} value={jt}>{jt}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={v => { setStatusFilter(v); setPage(0); }}>
-          <SelectTrigger className="w-[150px] h-9 text-sm"><SelectValue placeholder="Status" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="flagged">Flagged</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
-          </SelectContent>
-        </Select>
+      {/* Search */}
+      <div className="relative max-w-md">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Search by make or model…"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="pl-9 h-9 text-sm"
+        />
       </div>
 
-      {/* Table */}
       {loading ? (
-        <div className="space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
-      ) : videos.length === 0 ? (
-        <Card className="border-border"><CardContent className="p-8 text-center text-muted-foreground">No videos found.</CardContent></Card>
+        <div className="space-y-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</div>
+      ) : filtered.length === 0 ? (
+        <Card className="border-border"><CardContent className="p-8 text-center text-muted-foreground">
+          {search ? 'No vehicles match your search.' : 'No vehicles with fitting guides found.'}
+        </CardContent></Card>
       ) : (
-        <>
-          <div className="rounded-md border border-border overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-border hover:bg-transparent">
-                  <TableHead className="w-[80px]">Thumb</TableHead>
-                  <TableHead>Title</TableHead>
-                  <TableHead>Channel</TableHead>
-                  <TableHead className="w-[70px]">Duration</TableHead>
-                  <TableHead className="w-[60px]">Score</TableHead>
-                  <TableHead>Job Type</TableHead>
-                  <TableHead className="w-[90px]">Vehicles</TableHead>
-                  <TableHead className="w-[80px]">Status</TableHead>
-                  <TableHead className="w-[140px] text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {videos.map(v => (
-                  <TableRow key={v.id} className="border-border">
-                    <TableCell className="p-2">
-                      {v.thumbnail_url ? (
-                        <img src={v.thumbnail_url} alt="" className="w-[80px] h-[45px] object-cover rounded" />
-                      ) : (
-                        <div className="w-[80px] h-[45px] bg-muted rounded flex items-center justify-center"><Film size={16} className="text-muted-foreground" /></div>
-                      )}
-                    </TableCell>
-                    <TableCell className="max-w-[200px]">
-                      <span className="text-sm font-medium text-foreground truncate block" title={v.title}>
-                        {v.title.length > 60 ? v.title.slice(0, 60) + '…' : v.title}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{v.channel_name || '—'}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground font-mono">{formatDuration(v.duration_seconds)}</TableCell>
-                    <TableCell><ScorePill score={v.composite_score} /></TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{v.job_type || '—'}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{v.vehicle_count ? `${v.vehicle_count} vehicles` : '—'}</TableCell>
-                    <TableCell><StatusBadge isActive={v.is_active} flagged={v.flagged} /></TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center gap-1 justify-end">
-                        <Button size="icon" variant="ghost" className="h-8 w-8" title="Watch"
-                          onClick={() => window.open(`https://youtube.com/watch?v=${v.youtube_id}`, '_blank')}>
-                          <Play size={14} />
-                        </Button>
-                        {v.is_active ? (
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground" title="Disable"
-                            onClick={() => setConfirmDialog({ type: 'disable', video: v })}>
-                            <EyeOff size={14} />
-                          </Button>
-                        ) : (
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-400" title="Enable"
-                            onClick={() => setConfirmDialog({ type: 'enable', video: v })}>
-                            <Eye size={14} />
-                          </Button>
-                        )}
-                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" title="Remove"
-                          onClick={() => setConfirmDialog({ type: 'remove', video: v })}>
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+        <div className="space-y-2">
+          {filtered.map(group => {
+            const isExpanded = expanded.has(group.vehicle_id);
+            return (
+              <Card key={group.vehicle_id} className="border-border overflow-hidden">
+                {/* Vehicle header */}
+                <button
+                  onClick={() => toggleExpand(group.vehicle_id)}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-secondary/30 transition-colors text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    {isExpanded ? <ChevronUp size={16} className="text-muted-foreground shrink-0" /> : <ChevronDown size={16} className="text-muted-foreground shrink-0" />}
+                    <div>
+                      <span className="text-sm font-semibold text-foreground">{group.label}</span>
+                      <span className="text-xs text-muted-foreground ml-3">{group.totalVideos} video{group.totalVideos !== 1 ? 's' : ''}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {Object.keys(group.slots).map(slot => (
+                      <Badge key={slot} variant="outline" className="text-[10px] border-border font-normal hidden sm:inline-flex">{slot}</Badge>
+                    ))}
+                  </div>
+                </button>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <span>Page {page + 1} of {totalPages} ({total} videos)</span>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
-                  <ChevronLeft size={14} className="mr-1" /> Prev
-                </Button>
-                <Button size="sm" variant="outline" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
-                  Next <ChevronRight size={14} className="ml-1" />
-                </Button>
-              </div>
-            </div>
-          )}
-        </>
+                {/* Expanded: Part slot sections */}
+                {isExpanded && (
+                  <div className="border-t border-border">
+                    {Object.entries(group.slots).sort((a, b) => a[0].localeCompare(b[0])).map(([slotName, videos]) => (
+                      <div key={slotName} className="border-b border-border last:border-0">
+                        <div className="px-4 py-2 bg-secondary/30">
+                          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{slotName}</span>
+                          <span className="text-xs text-muted-foreground ml-2">({videos.length})</span>
+                        </div>
+                        <div className="divide-y divide-border">
+                          {videos.map(video => (
+                            <div key={video.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-secondary/20 transition-colors">
+                              {/* Thumbnail */}
+                              {video.thumbnail_url ? (
+                                <img src={video.thumbnail_url} alt="" className="w-[72px] h-[40px] object-cover rounded shrink-0" />
+                              ) : (
+                                <div className="w-[72px] h-[40px] bg-muted rounded flex items-center justify-center shrink-0">
+                                  <Film size={14} className="text-muted-foreground" />
+                                </div>
+                              )}
+                              {/* Info */}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-foreground truncate">{video.title}</p>
+                                <p className="text-xs text-muted-foreground">{video.channel_name || '—'}</p>
+                              </div>
+                              {/* Score */}
+                              <ScorePill score={video.composite_score} />
+                              {/* Status */}
+                              <StatusBadge isActive={video.is_active} flagged={video.flagged} />
+                              {/* Actions */}
+                              <div className="flex items-center gap-1 shrink-0">
+                                <Button size="icon" variant="ghost" className="h-7 w-7" title="Watch"
+                                  onClick={() => window.open(`https://youtube.com/watch?v=${video.youtube_id}`, '_blank')}>
+                                  <Play size={13} />
+                                </Button>
+                                {video.is_active ? (
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" title="Disable"
+                                    onClick={() => setConfirmDialog({ type: 'disable', video })}>
+                                    <EyeOff size={13} />
+                                  </Button>
+                                ) : (
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-emerald-400" title="Enable"
+                                    onClick={() => setConfirmDialog({ type: 'enable', video })}>
+                                    <Eye size={13} />
+                                  </Button>
+                                )}
+                                {!video.flagged && (
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 text-amber-400" title="Flag"
+                                    onClick={() => setConfirmDialog({ type: 'flag', video })}>
+                                    <Flag size={13} />
+                                  </Button>
+                                )}
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" title="Remove"
+                                  onClick={() => setConfirmDialog({ type: 'remove', video })}>
+                                  <Trash2 size={13} />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+            );
+          })}
+        </div>
       )}
 
       {/* Confirm Dialog */}
@@ -381,22 +422,26 @@ function LibraryTab() {
               {confirmDialog?.type === 'disable' && 'Disable Video'}
               {confirmDialog?.type === 'enable' && 'Enable Video'}
               {confirmDialog?.type === 'remove' && 'Remove Video'}
+              {confirmDialog?.type === 'flag' && 'Flag Video'}
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             {confirmDialog?.type === 'disable' && 'Are you sure you want to disable this video? It will no longer appear anywhere on the site.'}
             {confirmDialog?.type === 'enable' && `Re-enable "${confirmDialog.video.title}"? It will become visible on the site again.`}
             {confirmDialog?.type === 'remove' && 'Remove this video from the library permanently? This cannot be undone easily.'}
+            {confirmDialog?.type === 'flag' && `Flag "${confirmDialog.video.title}" for review?`}
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmDialog(null)}>Cancel</Button>
             <Button
-              variant={confirmDialog?.type === 'remove' ? 'destructive' : 'default'}
+              variant={confirmDialog?.type === 'remove' ? 'destructive' : confirmDialog?.type === 'flag' ? 'outline' : 'default'}
+              className={confirmDialog?.type === 'flag' ? 'border-amber-500 text-amber-400 hover:bg-amber-500/10' : ''}
               onClick={handleAction}
             >
               {confirmDialog?.type === 'disable' && 'Disable Video'}
               {confirmDialog?.type === 'enable' && 'Enable Video'}
               {confirmDialog?.type === 'remove' && 'Remove Video'}
+              {confirmDialog?.type === 'flag' && 'Flag Video'}
             </Button>
           </DialogFooter>
         </DialogContent>
