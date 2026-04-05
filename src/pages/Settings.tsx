@@ -10,8 +10,8 @@ import { RefreshCw, Copy, CheckCircle2 } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 import { format } from 'date-fns';
 
-function StatusDot({ status }: { status: 'green' | 'amber' | 'red' | 'grey' }) {
-  const colors = { green: 'bg-success', amber: 'bg-warning', red: 'bg-destructive', grey: 'bg-muted-foreground/40' };
+function StatusDot({ status }: { status: 'green' | 'red' | 'grey' }) {
+  const colors = { green: 'bg-success', red: 'bg-destructive', grey: 'bg-muted-foreground/40' };
   return <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${colors[status]}`} />;
 }
 
@@ -60,6 +60,8 @@ export default function Settings() {
   const [toggles, setToggles] = useState<Record<string, boolean>>({});
   const [orBalance, setOrBalance] = useState<number | null>(null);
   const [orCheckedAt, setOrCheckedAt] = useState<string | null>(null);
+  const [orStatus, setOrStatus] = useState<'green' | 'red' | 'grey'>('grey');
+  const [orError, setOrError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [vectorCount, setVectorCount] = useState(0);
   const [appConfig, setAppConfig] = useState<{ business_phase: string } | null>(null);
@@ -78,7 +80,12 @@ export default function Settings() {
       });
       setToggles(tm);
     }
-    if (orRes.data?.[0]) { setOrBalance(orRes.data[0].credits_remaining_usd); setOrCheckedAt(orRes.data[0].checked_at); }
+    if (orRes.data?.[0]) {
+      setOrBalance(orRes.data[0].credits_remaining_usd);
+      setOrCheckedAt(orRes.data[0].checked_at);
+      // If we have a recent snapshot, OpenRouter is working
+      setOrStatus('green');
+    }
     setVectorCount(vectorRes.count || 0);
     if (configRes.data) setAppConfig({ business_phase: configRes.data.value });
     setLoading(false);
@@ -105,8 +112,14 @@ export default function Settings() {
       if (error) throw error;
       setOrBalance(data?.balance ?? null);
       setOrCheckedAt(new Date().toISOString());
-      toast.success('Balance refreshed');
-    } catch { toast.error('Failed to check balance'); }
+      setOrStatus('green');
+      setOrError(null);
+      toast.success('Balance refreshed — Connected');
+    } catch (e: any) {
+      setOrStatus('red');
+      setOrError(e?.message || 'Connection failed');
+      toast.error('Failed to check balance');
+    }
   };
 
   const copyProjectId = () => {
@@ -134,9 +147,7 @@ export default function Settings() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {INTEGRATIONS.map(int => {
             const isOR = int.key === 'openrouter';
-            const status: 'green' | 'amber' | 'grey' = isOR
-              ? (orCheckedAt && (Date.now() - new Date(orCheckedAt).getTime()) < 24 * 60 * 60 * 1000 ? 'green' : orCheckedAt ? 'amber' : 'grey')
-              : 'grey';
+            const status: 'green' | 'red' | 'grey' = isOR ? orStatus : 'grey';
             return (
               <Card key={int.key}>
                 <CardContent className="p-4 flex items-center justify-between gap-3">
@@ -146,6 +157,7 @@ export default function Settings() {
                       <p className="text-sm font-medium text-foreground">{int.label} — {int.desc}</p>
                       {isOR && orBalance !== null && <p className="text-xs text-muted-foreground">Balance: ${orBalance.toFixed(2)}</p>}
                       {isOR && orCheckedAt && <p className="text-xs text-muted-foreground">Last checked: {format(new Date(orCheckedAt), 'd MMM HH:mm')}</p>}
+                      {isOR && orStatus === 'red' && orError && <p className="text-xs text-destructive">Error — {orError}</p>}
                       {!isOR && <p className="text-xs text-muted-foreground">Connected</p>}
                     </div>
                   </div>
