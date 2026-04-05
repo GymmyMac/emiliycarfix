@@ -762,6 +762,9 @@ export default function Approvals() {
                               {!article.slug && (
                                 <p className="text-[10px] text-destructive mt-0.5">⚠ No slug — cannot publish</p>
                               )}
+                              {publishErrors[article.id] && (
+                                <p className="text-[10px] text-destructive mt-0.5">Error: {publishErrors[article.id]}</p>
+                              )}
                             </td>
                             <td className="p-3">
                               {stream && <Badge variant="outline" className={`${badgeClass} border-transparent text-[10px] font-semibold`}>{stream.toUpperCase()}</Badge>}
@@ -775,10 +778,11 @@ export default function Approvals() {
                               <Button
                                 size="sm"
                                 className="h-7 text-xs bg-success hover:bg-success/90 text-primary-foreground"
-                                disabled={!article.slug}
+                                disabled={!article.slug || publishingIds.has(article.id)}
                                 onClick={() => publishArticle(article)}
                               >
-                                Publish
+                                {publishingIds.has(article.id) ? <Loader2 size={14} className="mr-1 animate-spin" /> : null}
+                                {publishingIds.has(article.id) ? 'Publishing...' : 'Publish'}
                               </Button>
                             </td>
                           </tr>
