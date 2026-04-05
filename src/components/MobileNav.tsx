@@ -6,6 +6,7 @@ import {
   BarChart3,
   Settings,
   Crosshair,
+  Play,
 } from 'lucide-react';
 
 const navItems = [
@@ -13,6 +14,7 @@ const navItems = [
   { label: 'Intel', icon: Crosshair, path: '/competitor-intelligence' },
   { label: 'Approvals', icon: CheckSquare, path: '/approvals' },
   { label: 'Ops', icon: Cpu, path: '/operations' },
+  { label: 'Videos', icon: Play, path: '/videos' },
   { label: 'Analytics', icon: BarChart3, path: '/analytics' },
   { label: 'Settings', icon: Settings, path: '/settings' },
 ];

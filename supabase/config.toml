@@ -12,3 +12,6 @@ verify_jwt = false
 
 [functions.check-openrouter-balance]
 verify_jwt = false
+
+[functions.youtube-fetch-single]
+verify_jwt = false
