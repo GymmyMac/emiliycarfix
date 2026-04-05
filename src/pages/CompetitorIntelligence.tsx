@@ -12,6 +12,7 @@ import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, XCircle } from 'l
 import TargetAnalysisPanel from '@/components/TargetAnalysisPanel';
 import * as XLSX from 'xlsx';
 import { differenceInDays, format } from 'date-fns';
+import PageHeader from '@/components/PageHeader';
 
 interface CompetitorConfig {
   key: string;
@@ -200,10 +201,7 @@ export default function CompetitorIntelligence() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Competitor Intelligence</h1>
-        <p className="text-sm text-muted-foreground mt-1">Upload monthly keyword exports to keep Emily's competitive targeting sharp.</p>
-      </div>
+      <PageHeader title="Intelligence" description="Competitor keywords and gaps — upload monthly exports to keep Emily's competitive targeting sharp." />
 
       {/* Upload Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

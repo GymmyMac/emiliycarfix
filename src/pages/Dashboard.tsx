@@ -13,6 +13,7 @@ import {
   AlertTriangle, CheckCircle2, XCircle, Info, Clock,
   ArrowRight, Zap, RefreshCw,
 } from 'lucide-react';
+import PageHeader from '@/components/PageHeader';
 import { format, formatDistanceToNow, subDays } from 'date-fns';
 import {
   BarChart, Bar, Line, ComposedChart, XAxis, YAxis,
@@ -251,6 +252,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8 max-w-[1400px]">
+      <PageHeader title="Morning Brief" description="What happened overnight — Emily's latest runs, content status, and anything that needs your attention." />
       <CompetitorRefreshBanner />
       {/* ═══ PHASE & WEIGHTS STRIP ═══ */}
       <div className="flex flex-col lg:flex-row gap-6 items-start">

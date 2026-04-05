@@ -14,6 +14,7 @@ import {
   Power, Zap, Mail, CreditCard, Play, RefreshCw,
   AlertTriangle, CheckCircle2, Minus, ArrowRight,
 } from 'lucide-react';
+import PageHeader from '@/components/PageHeader';
 import { format } from 'date-fns';
 
 /* ─── Types ─── */
@@ -217,7 +218,7 @@ export default function Operations() {
 
   return (
     <div className="space-y-8 max-w-[1200px]">
-      <h1 className="text-2xl font-bold text-foreground">Emily Operations</h1>
+      <PageHeader title="Controls" description="Adjust Emily's phase, stream weights, and channel switches. Changes here take effect on the next Emily run." />
 
       {/* ═══ SECTION A: PHASE & WEIGHTS ═══ */}
       <section className="space-y-4">

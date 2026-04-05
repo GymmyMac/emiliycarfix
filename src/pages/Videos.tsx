@@ -16,6 +16,7 @@ import {
   Film, Eye, EyeOff, Trash2, ChevronLeft, ChevronRight, Loader2, Plus,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
+import PageHeader from '@/components/PageHeader';
 
 /* ─── Types ─── */
 interface Video {
@@ -115,7 +116,7 @@ export default function Videos() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-foreground">Video Manager</h1>
+      <PageHeader title="Fitting Guides" description="YouTube how-to videos by vehicle — manage the library, review reports, and add new guides." />
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="bg-secondary/60">
