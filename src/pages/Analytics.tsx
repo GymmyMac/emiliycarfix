@@ -3,14 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   BarChart, Bar, Line, ComposedChart, XAxis, YAxis,
   Tooltip as RechartsTooltip, ResponsiveContainer,
 } from 'recharts';
 import { format, subDays } from 'date-fns';
-import { ArrowRight, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
 
 /* ─── Types ─── */
@@ -24,17 +23,18 @@ interface EmilyRun {
   error_message: string | null;
 }
 
+type CountOrNull = number | null; // null = query failed
+
 interface PipelineCounts {
-  queue: number;
-  generating: number;
-  awaiting: number;
-  approved: number;
-  published: number;
+  queue: CountOrNull;
+  generating: CountOrNull;
+  awaiting: CountOrNull;
+  approved: CountOrNull;
+  published: CountOrNull;
 }
 
 interface ChannelStatus {
   name: string;
-  configKey: string;
   enabled: boolean;
 }
 
@@ -46,10 +46,12 @@ const PIPELINE_STAGES = [
   { key: 'published', label: 'Published', route: '/approvals' },
 ] as const;
 
-const CHANNELS: { name: string; configKey: string }[] = [
-  { name: 'Blog / AEO', configKey: 'feature_sku_aeo_enrichment' },
-  { name: 'Social', configKey: 'feature_social_content' },
-  { name: 'Email & SMS', configKey: 'feature_email_sms' },
+const CHANNEL_KEYS = [
+  { name: 'Blog', configKey: 'channel_blog' },
+  { name: 'AEO', configKey: 'channel_aeo' },
+  { name: 'Email', configKey: 'channel_email' },
+  { name: 'Social', configKey: 'channel_social' },
+  { name: 'SMS', configKey: 'channel_sms' },
 ];
 
 export default function Analytics() {
@@ -57,7 +59,8 @@ export default function Analytics() {
   const [loading, setLoading] = useState(true);
   const [runs, setRuns] = useState<EmilyRun[]>([]);
   const [allRuns, setAllRuns] = useState<EmilyRun[]>([]);
-  const [counts, setCounts] = useState<PipelineCounts>({ queue: 0, generating: 0, awaiting: 0, approved: 0, published: 0 });
+  const [counts, setCounts] = useState<PipelineCounts>({ queue: null, generating: null, awaiting: null, approved: null, published: null });
+  const [published30d, setPublished30d] = useState<CountOrNull>(null);
   const [channels, setChannels] = useState<ChannelStatus[]>([]);
   const [publishedToggle, setPublishedToggle] = useState<'all' | '30d'>('all');
 
@@ -68,16 +71,16 @@ export default function Analytics() {
     const [
       runsRes, allRunsRes,
       queueRes, generatingRes, awaitingRes, approvedRes,
-      publishedAllRes, published30Res,
+      publishedAllRes, pub30Res,
       configRes,
     ] = await Promise.all([
       supabase.from('emily_runs').select('*').gte('started_at', sevenAgo).order('started_at', { ascending: true }),
       supabase.from('emily_runs').select('*').order('started_at', { ascending: false }).limit(5),
-      // Queue: seo_content_queue pending
-      supabase.from('seo_content_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      // FIX 1: Queue from mkt_seo_queue pending (seo_content_queue doesn't exist)
+      supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
       // Generating: emily_runs currently running
       supabase.from('emily_runs').select('id', { count: 'exact', head: true }).eq('status', 'running'),
-      // Awaiting approval: mkt_seo_queue generated but not approved
+      // Awaiting approval: emily_content_items pending/awaiting_approval
       supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'generated'),
       // Approved but not published
       supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'approved'),
@@ -85,30 +88,29 @@ export default function Analytics() {
       supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'published'),
       // Published last 30 days
       supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'published').gte('updated_at', thirtyAgo),
-      // Channel config
-      supabase.from('app_config').select('key, value').in('key', CHANNELS.map(c => c.configKey)),
+      // FIX 2: Channel config from correct keys
+      supabase.from('app_config').select('key, value').in('key', CHANNEL_KEYS.map(c => c.configKey)),
     ]);
 
     if (runsRes.data) setRuns(runsRes.data);
     if (allRunsRes.data) setAllRuns(allRunsRes.data);
 
+    // Show null (→ "—") when a query errored, otherwise the count (which may be 0)
     setCounts({
-      queue: queueRes.count || 0,
-      generating: generatingRes.count || 0,
-      awaiting: awaitingRes.count || 0,
-      approved: approvedRes.count || 0,
-      published: publishedAllRes.count || 0,
+      queue: queueRes.error ? null : (queueRes.count ?? 0),
+      generating: generatingRes.error ? null : (generatingRes.count ?? 0),
+      awaiting: awaitingRes.error ? null : (awaitingRes.count ?? 0),
+      approved: approvedRes.error ? null : (approvedRes.count ?? 0),
+      published: publishedAllRes.error ? null : (publishedAllRes.count ?? 0),
     });
 
-    // Store both counts for toggle
-    (window as any).__published30d = published30Res.count || 0;
+    setPublished30d(pub30Res.error ? null : (pub30Res.count ?? 0));
 
     // Parse channel statuses from app_config
     const configMap: Record<string, string> = {};
     configRes.data?.forEach((r: any) => { configMap[r.key] = r.value; });
-    setChannels(CHANNELS.map(ch => ({
+    setChannels(CHANNEL_KEYS.map(ch => ({
       name: ch.name,
-      configKey: ch.configKey,
       enabled: configMap[ch.configKey] === 'true',
     })));
 
@@ -134,8 +136,10 @@ export default function Analytics() {
   const totalGenerated = runs.reduce((s, r) => s + (r.generated_count || 0), 0);
   const totalCost = runs.reduce((s, r) => s + (r.estimated_cost_usd || 0), 0);
 
-  const displayedPublished = publishedToggle === '30d' ? ((window as any).__published30d || 0) : counts.published;
-  const displayCounts = { ...counts, published: displayedPublished };
+  const displayCounts = {
+    ...counts,
+    published: publishedToggle === '30d' ? published30d : counts.published,
+  };
 
   if (loading) {
     return (
@@ -177,19 +181,24 @@ export default function Analytics() {
             <div className="flex items-center justify-between gap-2 overflow-x-auto">
               {PIPELINE_STAGES.map((stage, i) => {
                 const count = displayCounts[stage.key as keyof PipelineCounts];
-                const hasItems = count > 0;
+                const isBroken = count === null;
+                const hasItems = count !== null && count > 0;
                 return (
                   <div key={stage.key} className="flex items-center gap-2 flex-1 min-w-0">
                     <button
                       onClick={() => navigate(stage.route)}
                       className={`flex-1 flex flex-col items-center gap-2 rounded-lg border-2 px-3 py-4 transition-all hover:scale-[1.02] cursor-pointer min-w-[120px] ${
-                        hasItems
-                          ? 'border-emerald-500/40 bg-emerald-500/5'
-                          : 'border-border bg-secondary/30'
+                        isBroken
+                          ? 'border-destructive/40 bg-destructive/5'
+                          : hasItems
+                            ? 'border-emerald-500/40 bg-emerald-500/5'
+                            : 'border-border bg-secondary/30'
                       }`}
                     >
-                      <span className={`text-2xl font-bold tabular-nums ${hasItems ? 'text-emerald-400' : 'text-muted-foreground'}`}>
-                        {count.toLocaleString()}
+                      <span className={`text-2xl font-bold tabular-nums ${
+                        isBroken ? 'text-destructive' : hasItems ? 'text-emerald-400' : 'text-muted-foreground'
+                      }`}>
+                        {isBroken ? '—' : count.toLocaleString()}
                       </span>
                       <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider text-center leading-tight">
                         {stage.label}
@@ -246,7 +255,7 @@ export default function Analytics() {
                     <tr key={r.id} className="border-b border-border last:border-0">
                       <td className="px-4 py-2.5 text-xs text-foreground">{format(new Date(r.started_at), 'd MMM HH:mm')}</td>
                       <td className="px-4 py-2.5">
-                        <Badge variant="outline" className={`text-[10px] ${r.status === 'success' ? 'text-success border-success/30' : 'text-destructive border-destructive/30'}`}>{r.status}</Badge>
+                        <Badge variant="outline" className={`text-[10px] ${r.status === 'complete' || r.status === 'success' ? 'text-success border-success/30' : r.status === 'running' ? 'text-primary border-primary/30' : 'text-destructive border-destructive/30'}`}>{r.status}</Badge>
                       </td>
                       <td className="px-4 py-2.5 text-xs text-foreground">{r.generated_count}</td>
                       <td className="px-4 py-2.5 text-xs text-foreground">{r.failed_count}</td>
@@ -261,32 +270,23 @@ export default function Analytics() {
           {/* Channel Activity */}
           <div className="space-y-4">
             <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Channel Status</h3>
-            <div className="space-y-3">
-              {channels.map(ch => (
-                <Card key={ch.name}>
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{ch.name}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {ch.configKey === 'feature_sku_aeo_enrichment' && 'AEO article enrichment & publishing'}
-                        {ch.configKey === 'feature_social_content' && 'Social media content generation'}
-                        {ch.configKey === 'feature_email_sms' && 'Email and SMS campaign generation'}
-                      </p>
+            <Card>
+              <CardContent className="p-0">
+                <div className="divide-y divide-border">
+                  {channels.map(ch => (
+                    <div key={ch.name} className="px-4 py-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${ch.enabled ? 'bg-success' : 'bg-muted-foreground/40'}`} />
+                        <span className="text-sm text-foreground">{ch.name}</span>
+                      </div>
+                      <span className={`text-xs ${ch.enabled ? 'text-success' : 'text-muted-foreground'}`}>
+                        {ch.enabled ? 'Active' : 'Paused'}
+                      </span>
                     </div>
-                    <Badge
-                      variant="outline"
-                      className={`text-[10px] ${
-                        ch.enabled
-                          ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
-                          : 'text-muted-foreground border-border'
-                      }`}
-                    >
-                      {ch.enabled ? 'Active' : 'Off'}
-                    </Badge>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
             <p className="text-xs text-muted-foreground italic">
               Channel toggles are managed in <button onClick={() => navigate('/operations')} className="text-primary hover:underline">Controls</button>.
             </p>
