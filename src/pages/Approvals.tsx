@@ -952,6 +952,72 @@ export default function Approvals() {
         </DialogContent>
       </Dialog>
 
+      {/* ─── Add to Queue Modal ─── */}
+      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+        <DialogContent className="bg-card border-border max-w-lg">
+          <DialogHeader><DialogTitle className="text-foreground">Add to Queue</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-xs text-muted-foreground">Topic / Title *</Label>
+              <Input value={newTopic} onChange={e => setNewTopic(e.target.value)} placeholder="e.g. Best Brake Pads for Toyota Hilux" className="bg-background border-border" />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Target Keyword</Label>
+              <Input value={newKeyword} onChange={e => setNewKeyword(e.target.value)} placeholder="e.g. brake pads toyota hilux" className="bg-background border-border" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">Stream</Label>
+                <Select value={newStream} onValueChange={setNewStream}>
+                  <SelectTrigger className="bg-background border-border"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="disrupt">DISRUPT</SelectItem>
+                    <SelectItem value="educate">EDUCATE</SelectItem>
+                    <SelectItem value="convert">CONVERT</SelectItem>
+                    <SelectItem value="amplify">AMPLIFY</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">Priority</Label>
+                <Select value={newPriority} onValueChange={setNewPriority}>
+                  <SelectTrigger className="bg-background border-border"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="low">Low</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Notes for Emily</Label>
+              <Textarea value={newNotes} onChange={e => setNewNotes(e.target.value)} placeholder="Any specific angle, audience, or requirements..." rows={3} className="bg-background border-border text-xs" />
+            </div>
+          </div>
+          <DialogFooter className="flex gap-2 sm:gap-2">
+            <Button variant="outline" onClick={() => setShowAddModal(false)} className="border-border">Cancel</Button>
+            <Button
+              variant="outline"
+              className="border-primary text-primary hover:bg-primary/10"
+              disabled={addingToQueue || generatingNow}
+              onClick={() => addToQueue(false)}
+            >
+              {addingToQueue ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Plus size={14} className="mr-1" />}
+              Add to Queue
+            </Button>
+            <Button
+              className="bg-primary text-primary-foreground"
+              disabled={addingToQueue || generatingNow}
+              onClick={() => addToQueue(true)}
+            >
+              {generatingNow ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Rocket size={14} className="mr-1" />}
+              {generatingNow ? 'Generating...' : 'Generate Now'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ─── Lightbox ─── */}
       {lightboxUrl && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center" onClick={() => setLightboxUrl(null)}>
