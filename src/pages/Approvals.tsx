@@ -241,6 +241,55 @@ export default function Approvals() {
     fetchData();
   };
 
+  /* ─── Publish actions ─── */
+  const publishArticle = async (article: AeoArticle) => {
+    if (!article.slug) {
+      toast.error('Cannot publish — this article has no slug');
+      return;
+    }
+    const { error } = await supabase.from('mkt_seo_queue').update({
+      status: 'published',
+      james_approved: true,
+      updated_at: new Date().toISOString(),
+    }).eq('id', article.id);
+    if (error) {
+      toast.error('Publish failed: ' + error.message);
+      return;
+    }
+    setApprovedArticles(prev => prev.filter(a => a.id !== article.id));
+    fetchData();
+    toast.success(
+      <div>
+        Published — live at{' '}
+        <a href={`https://carfix.co.nz/guides/${article.slug}`} target="_blank" rel="noopener noreferrer" className="underline font-medium">
+          carfix.co.nz/guides/{article.slug}
+        </a>
+      </div>
+    );
+  };
+
+  const publishAll = async () => {
+    const publishable = approvedArticles.filter(a => a.slug);
+    const noSlug = approvedArticles.filter(a => !a.slug);
+    if (publishable.length === 0) {
+      toast.error('No articles have slugs — cannot publish');
+      return;
+    }
+    if (!confirm(`Publish ${publishable.length} article${publishable.length > 1 ? 's' : ''}?${noSlug.length > 0 ? ` (${noSlug.length} skipped — missing slug)` : ''}`)) return;
+    const ids = publishable.map(a => a.id);
+    const { error } = await supabase.from('mkt_seo_queue').update({
+      status: 'published',
+      james_approved: true,
+      updated_at: new Date().toISOString(),
+    }).in('id', ids);
+    if (error) {
+      toast.error('Bulk publish failed: ' + error.message);
+      return;
+    }
+    fetchData();
+    toast.success(`Published ${publishable.length} articles`);
+  };
+
   /* ─── Social actions ─── */
   const approveSocial = async (id: string) => {
     await supabase.from('mkt_content_queue').update({ status: 'approved', updated_at: new Date().toISOString() }).eq('id', id);
@@ -569,45 +618,68 @@ export default function Approvals() {
               <p className="text-foreground">No approved articles waiting to be published.</p>
             </CardContent></Card>
           ) : (
-            <div className="border border-border rounded-lg overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-secondary/70 text-muted-foreground text-xs">
-                      <th className="text-left p-3 font-medium">Title</th>
-                      <th className="text-left p-3 font-medium">Stream</th>
-                      <th className="text-left p-3 font-medium">Category</th>
-                      <th className="text-right p-3 font-medium">Words</th>
-                      <th className="text-left p-3 font-medium">Approved</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {filterApproved.map(article => {
-                      const stream = article.psyops_stream?.toLowerCase() || '';
-                      const badgeClass = STREAM_BADGE[stream] || 'bg-muted/20 text-muted-foreground';
-                      return (
-                        <tr key={article.id} className="hover:bg-secondary/30">
-                          <td className="p-3">
-                            <span className="text-foreground font-medium line-clamp-1">{article.title}</span>
-                            {article.target_keyword && (
-                              <p className="text-[11px] text-muted-foreground mt-0.5">{article.target_keyword}</p>
-                            )}
-                          </td>
-                          <td className="p-3">
-                            {stream && <Badge variant="outline" className={`${badgeClass} border-transparent text-[10px] font-semibold`}>{stream.toUpperCase()}</Badge>}
-                          </td>
-                          <td className="p-3 text-muted-foreground text-xs">{article.category || '—'}</td>
-                          <td className="p-3 text-right text-muted-foreground text-xs">{wordCount(article.draft_content).toLocaleString()}</td>
-                          <td className="p-3 text-muted-foreground text-xs">
-                            {article.updated_at ? formatDistanceToNow(new Date(article.updated_at), { addSuffix: true }) : '—'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+            <>
+              {approvedArticles.length > 1 && (
+                <div className="flex justify-end">
+                  <Button size="sm" className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" onClick={publishAll}>
+                    <CheckCircle2 size={14} className="mr-1" /> Publish All ({approvedArticles.filter(a => a.slug).length})
+                  </Button>
+                </div>
+              )}
+              <div className="border border-border rounded-lg overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-secondary/70 text-muted-foreground text-xs">
+                        <th className="text-left p-3 font-medium">Title</th>
+                        <th className="text-left p-3 font-medium">Stream</th>
+                        <th className="text-left p-3 font-medium">Category</th>
+                        <th className="text-right p-3 font-medium">Words</th>
+                        <th className="text-left p-3 font-medium">Approved</th>
+                        <th className="text-center p-3 font-medium">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {filterApproved.map(article => {
+                        const stream = article.psyops_stream?.toLowerCase() || '';
+                        const badgeClass = STREAM_BADGE[stream] || 'bg-muted/20 text-muted-foreground';
+                        return (
+                          <tr key={article.id} className="hover:bg-secondary/30">
+                            <td className="p-3">
+                              <span className="text-foreground font-medium line-clamp-1">{article.title}</span>
+                              {article.target_keyword && (
+                                <p className="text-[11px] text-muted-foreground mt-0.5">{article.target_keyword}</p>
+                              )}
+                              {!article.slug && (
+                                <p className="text-[10px] text-destructive mt-0.5">⚠ No slug — cannot publish</p>
+                              )}
+                            </td>
+                            <td className="p-3">
+                              {stream && <Badge variant="outline" className={`${badgeClass} border-transparent text-[10px] font-semibold`}>{stream.toUpperCase()}</Badge>}
+                            </td>
+                            <td className="p-3 text-muted-foreground text-xs">{article.category || '—'}</td>
+                            <td className="p-3 text-right text-muted-foreground text-xs">{wordCount(article.draft_content).toLocaleString()}</td>
+                            <td className="p-3 text-muted-foreground text-xs">
+                              {article.updated_at ? formatDistanceToNow(new Date(article.updated_at), { addSuffix: true }) : '—'}
+                            </td>
+                            <td className="p-3 text-center">
+                              <Button
+                                size="sm"
+                                className="h-7 text-xs bg-success hover:bg-success/90 text-primary-foreground"
+                                disabled={!article.slug}
+                                onClick={() => publishArticle(article)}
+                              >
+                                Publish
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
+            </>
           )}
         </TabsContent>
 
