@@ -472,7 +472,12 @@ export default function Approvals() {
 
   return (
     <div className="space-y-6 max-w-[1400px]">
-      <PageHeader title="Approvals" description="Content waiting for your decision — review, approve, or reject articles and social posts." />
+      <div className="flex items-start justify-between gap-4">
+        <PageHeader title="Approvals" description="Content waiting for your decision — review, approve, or reject articles and social posts." />
+        <Button size="sm" className="h-8 text-xs shrink-0" onClick={() => setShowAddModal(true)}>
+          <Plus size={14} className="mr-1" /> Add to Queue
+        </Button>
+      </div>
 
       <Tabs defaultValue="queue" className="w-full">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
@@ -670,6 +675,17 @@ export default function Approvals() {
                       <Button size="sm" className="h-8 text-xs bg-success hover:bg-success/90 text-primary-foreground" onClick={() => approveArticle(article.id)}>
                         <CheckCircle2 size={14} className="mr-1" /> Approve
                       </Button>
+                      {article.slug && (
+                        <Button
+                          size="sm"
+                          className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
+                          disabled={sendingIds.has(article.id)}
+                          onClick={() => sendNow(article)}
+                        >
+                          {sendingIds.has(article.id) ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Send size={14} className="mr-1" />}
+                          Send Now
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" className="h-8 text-xs border-primary text-primary hover:bg-primary/10" onClick={() => openEditArticle(article)}>
                         <Pencil size={14} className="mr-1" /> Edit
                       </Button>
