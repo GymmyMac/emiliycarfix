@@ -172,8 +172,9 @@ export default function Approvals() {
   const [sendingIds, setSendingIds] = useState<Set<string>>(new Set());
   const [publishErrors, setPublishErrors] = useState<Record<string, string>>({});
 
-  // Add to Queue modal
+  // Add/Edit Queue modal
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingQueueId, setEditingQueueId] = useState<string | null>(null);
   const [newTopic, setNewTopic] = useState('');
   const [newKeyword, setNewKeyword] = useState('');
   const [newStream, setNewStream] = useState('educate');
@@ -319,44 +320,73 @@ export default function Approvals() {
     );
   };
 
-  /* ─── Add to Queue ─── */
+  /* ─── Open queue item for editing ─── */
+  const openQueueItem = (article: AeoArticle) => {
+    setEditingQueueId(article.id);
+    setNewTopic(article.title || '');
+    setNewKeyword(article.target_keyword || '');
+    setNewStream((article.psyops_stream || 'educate').toLowerCase());
+    const score = article.priority_score ?? 50;
+    setNewPriority(score >= 70 ? 'high' : score >= 30 ? 'normal' : 'low');
+    setNewNotes('');
+    setShowAddModal(true);
+  };
+
+  const openNewQueueModal = () => {
+    setEditingQueueId(null);
+    setNewTopic(''); setNewKeyword(''); setNewStream('educate'); setNewPriority('normal'); setNewNotes('');
+    setShowAddModal(true);
+  };
+
+  /* ─── Add / Update Queue ─── */
   const addToQueue = async (generateImmediately: boolean) => {
     if (!newTopic.trim()) { toast.error('Topic is required'); return; }
     const setter = generateImmediately ? setGeneratingNow : setAddingToQueue;
     setter(true);
     const priorityMap: Record<string, number> = { high: 90, normal: 50, low: 10 };
-    const row = {
+    const fields = {
       title: newTopic.trim(),
       target_keyword: newKeyword.trim() || null,
       psyops_stream: newStream.toUpperCase(),
       priority_score: priorityMap[newPriority] || 50,
-      status: 'pending',
-      content_type: 'seo_article',
-      notes: newNotes.trim() || null,
-      created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-    const { data: inserted, error } = await supabase.from('mkt_seo_queue').insert(row).select().single();
-    if (error) {
-      setter(false);
-      toast.error('Failed to add: ' + error.message);
-      return;
+
+    let itemId = editingQueueId;
+
+    if (editingQueueId) {
+      // Update existing queue item
+      const { error } = await supabase.from('mkt_seo_queue').update(fields).eq('id', editingQueueId);
+      if (error) { setter(false); toast.error('Failed to update: ' + error.message); return; }
+    } else {
+      // Insert new queue item
+      const row = {
+        ...fields,
+        status: 'pending',
+        content_type: 'seo_article',
+        notes: newNotes.trim() || null,
+        created_at: new Date().toISOString(),
+      };
+      const { data: inserted, error } = await supabase.from('mkt_seo_queue').insert(row).select().single();
+      if (error) { setter(false); toast.error('Failed to add: ' + error.message); return; }
+      itemId = inserted?.id;
     }
-    if (generateImmediately && inserted) {
-      // Trigger Emily for this single item
+
+    if (generateImmediately && itemId) {
       try {
         await supabase.functions.invoke('emily-chat', {
-          body: { task_id: inserted.id, title: inserted.title, target_keyword: inserted.target_keyword },
+          body: { task_id: itemId, title: newTopic.trim(), target_keyword: newKeyword.trim() || null },
         });
-        toast.success('Item added and Emily is generating content now. It will appear in Sign-off shortly.');
+        toast.success('Emily is generating content now. It will appear in Sign-off shortly.');
       } catch {
-        toast.success('Item added to queue. Emily generation was triggered but may take a moment.');
+        toast.success('Generation triggered but may take a moment.');
       }
     } else {
-      toast.success('Item added to the queue');
+      toast.success(editingQueueId ? 'Queue item updated' : 'Item added to the queue');
     }
     setter(false);
     setShowAddModal(false);
+    setEditingQueueId(null);
     setNewTopic(''); setNewKeyword(''); setNewStream('educate'); setNewPriority('normal'); setNewNotes('');
     fetchData();
   };
@@ -474,7 +504,7 @@ export default function Approvals() {
     <div className="space-y-6 max-w-[1400px]">
       <div className="flex items-start justify-between gap-4">
         <PageHeader title="Approvals" description="Content waiting for your decision — review, approve, or reject articles and social posts." />
-        <Button size="sm" className="h-8 text-xs shrink-0" onClick={() => setShowAddModal(true)}>
+        <Button size="sm" className="h-8 text-xs shrink-0" onClick={openNewQueueModal}>
           <Plus size={14} className="mr-1" /> Add to Queue
         </Button>
       </div>
@@ -595,7 +625,12 @@ export default function Approvals() {
                             {article.task_id ? article.task_id.slice(0, 8) : article.id.slice(0, 8)}
                           </td>
                           <td className="p-3">
-                            <span className="text-foreground font-medium line-clamp-1">{article.title}</span>
+                            <button
+                              onClick={() => openQueueItem(article)}
+                              className="text-primary hover:underline font-medium line-clamp-1 text-left"
+                            >
+                              {article.title}
+                            </button>
                           </td>
                           <td className="p-3">
                             <Badge variant="outline" className="text-[10px] border-border font-normal">{typeLabel}</Badge>
@@ -955,7 +990,7 @@ export default function Approvals() {
       {/* ─── Add to Queue Modal ─── */}
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
         <DialogContent className="bg-card border-border max-w-lg">
-          <DialogHeader><DialogTitle className="text-foreground">Add to Queue</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-foreground">{editingQueueId ? 'Edit Queue Item' : 'Add to Queue'}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div>
               <Label className="text-xs text-muted-foreground">Topic / Title *</Label>
@@ -1004,7 +1039,7 @@ export default function Approvals() {
               onClick={() => addToQueue(false)}
             >
               {addingToQueue ? <Loader2 size={14} className="mr-1 animate-spin" /> : <Plus size={14} className="mr-1" />}
-              Add to Queue
+              {editingQueueId ? 'Save Changes' : 'Add to Queue'}
             </Button>
             <Button
               className="bg-primary text-primary-foreground"
