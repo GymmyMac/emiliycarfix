@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
+
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -42,7 +42,7 @@ const DOCUMENTS = [
 
 export default function Settings() {
   const [loading, setLoading] = useState(true);
-  const [toggles, setToggles] = useState<Record<string, boolean>>({});
+  const [_toggles, setToggles] = useState<Record<string, boolean>>({});
   const [orBalance, setOrBalance] = useState<number | null>(null);
   const [orCheckedAt, setOrCheckedAt] = useState<string | null>(null);
   const [orStatus, setOrStatus] = useState<'green' | 'red' | 'grey'>('grey');
@@ -78,18 +78,6 @@ export default function Settings() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const toggleFlag = async (key: string, label: string, newValue: boolean) => {
-    setToggles(prev => ({ ...prev, [key]: newValue }));
-    const { error } = await supabase
-      .from('app_config')
-      .upsert({ key, value: String(newValue), updated_at: new Date().toISOString() }, { onConflict: 'key' });
-    if (error) {
-      setToggles(prev => ({ ...prev, [key]: !newValue }));
-      toast.error(`Failed to update ${label}`);
-    } else {
-      toast.success(`${label} ${newValue ? 'enabled' : 'disabled'}`);
-    }
-  };
 
   const checkBalance = async () => {
     try {
