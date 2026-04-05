@@ -81,9 +81,9 @@ export default function Dashboard() {
       fetchAppConfig(),
       supabase.rpc('get_cron_job_health'),
       supabase.from('emily_runs').select('id, started_at, status, generated_count, failed_count').gte('started_at', yesterdayISO).order('started_at', { ascending: false }),
-      supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'published').gte('updated_at', yesterdayISO),
-      supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('james_approved', false).not('draft_content', 'is', null),
-      supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('mkt_content_queue').select('id', { count: 'exact', head: true }).eq('status', 'published').gte('updated_at', yesterdayISO),
+      supabase.from('mkt_content_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('partslot_aeo_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
     ]);
 
     if (appConfig) setConfig(appConfig);

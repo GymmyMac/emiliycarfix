@@ -76,18 +76,18 @@ export default function Analytics() {
     ] = await Promise.all([
       supabase.from('emily_runs').select('*').gte('started_at', sevenAgo).order('started_at', { ascending: true }),
       supabase.from('emily_runs').select('*').order('started_at', { ascending: false }).limit(5),
-      // FIX 1: Queue from mkt_seo_queue pending (seo_content_queue doesn't exist)
-      supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      // Queue: partslot_aeo_queue pending
+      supabase.from('partslot_aeo_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
       // Generating: emily_runs currently running
       supabase.from('emily_runs').select('id', { count: 'exact', head: true }).eq('status', 'running'),
-      // Awaiting approval: emily_content_items pending/awaiting_approval
-      supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'generated'),
+      // Awaiting approval: mkt_content_queue pending
+      supabase.from('mkt_content_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
       // Approved but not published
-      supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'approved'),
+      supabase.from('mkt_content_queue').select('id', { count: 'exact', head: true }).eq('status', 'approved'),
       // Published all time
-      supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'published'),
+      supabase.from('mkt_content_queue').select('id', { count: 'exact', head: true }).eq('status', 'published'),
       // Published last 30 days
-      supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'published').gte('updated_at', thirtyAgo),
+      supabase.from('mkt_content_queue').select('id', { count: 'exact', head: true }).eq('status', 'published').gte('updated_at', thirtyAgo),
       // FIX 2: Channel config from correct keys
       supabase.from('app_config').select('key, value').in('key', CHANNEL_KEYS.map(c => c.configKey)),
     ]);
