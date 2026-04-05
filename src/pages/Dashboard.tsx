@@ -1,49 +1,37 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import CompetitorRefreshBanner from '@/components/CompetitorRefreshBanner';
 import { supabase } from '@/lib/supabase';
 import { fetchAppConfig, type AppConfig } from '@/lib/appConfig';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Switch } from '@/components/ui/switch';
-import { toast } from 'sonner';
 import {
-  AlertTriangle, CheckCircle2, XCircle, Info, Clock,
-  ArrowRight, Zap, RefreshCw,
+  CheckCircle2, AlertTriangle, ArrowRight, ChevronDown, ChevronUp,
 } from 'lucide-react';
-import PageHeader from '@/components/PageHeader';
-import { format, formatDistanceToNow, subDays } from 'date-fns';
-import {
-  BarChart, Bar, Line, ComposedChart, XAxis, YAxis,
-  Tooltip as RechartsTooltip, ResponsiveContainer,
-} from 'recharts';
+import { format, subDays } from 'date-fns';
 
+/* ─── Types ─── */
 interface EmilyRun {
   id: string;
   started_at: string;
   status: string;
   generated_count: number;
   failed_count: number;
-  estimated_cost_usd: number | null;
-  error_message: string | null;
 }
 
-interface OpenRouterSnapshot {
-  checked_at: string;
-  credits_remaining_usd: number | null;
-  usage_usd: number | null;
-  limit_usd: number | null;
-  is_low_balance: boolean | null;
+interface CronJob {
+  jobname: string;
+  status: string;
+  start_time: string;
 }
 
-const PHASE_CONFIG: Record<string, { color: string; cssVar: string; desc: string }> = {
-  FORM: { color: 'hsl(var(--phase-form))', cssVar: 'phase-form', desc: 'Foundational architecture & brand definition' },
-  LOAD: { color: 'hsl(var(--phase-load))', cssVar: 'phase-load', desc: 'Cold awareness & narrative disruption pipeline' },
-  LAUNCH: { color: 'hsl(var(--phase-launch))', cssVar: 'phase-launch', desc: 'Market entry & channel activation' },
-  STORM: { color: 'hsl(var(--phase-storm))', cssVar: 'phase-storm', desc: 'Aggressive growth & conversion optimization' },
-  PERFORM: { color: 'hsl(var(--phase-perform))', cssVar: 'phase-perform', desc: 'Scale, retention & advocacy loops' },
+const PHASE_CONFIG: Record<string, { color: string; desc: string }> = {
+  FORM: { color: 'hsl(var(--phase-form))', desc: 'Foundational architecture' },
+  LOAD: { color: 'hsl(var(--phase-load))', desc: 'Content generation & testing' },
+  LAUNCH: { color: 'hsl(var(--phase-launch))', desc: 'Market entry & activation' },
+  STORM: { color: 'hsl(var(--phase-storm))', desc: 'Aggressive growth' },
+  PERFORM: { color: 'hsl(var(--phase-perform))', desc: 'Scale & retention' },
 };
 
 const STREAM_CONFIG = [
@@ -53,101 +41,100 @@ const STREAM_CONFIG = [
   { key: 'amplify', label: 'AMPLIFY', color: 'hsl(var(--stream-amplify))' },
 ];
 
-const CHANNEL_CONFIG = [
-  { key: 'channel_facebook', label: 'Facebook' },
-  { key: 'channel_instagram', label: 'Instagram' },
-  { key: 'channel_tiktok', label: 'TikTok' },
-  { key: 'channel_email', label: 'Email' },
-  { key: 'channel_sms', label: 'SMS' },
-  { key: 'channel_blog', label: 'Blog' },
-  { key: 'channel_aeo', label: 'AEO' },
-];
-
 export default function Dashboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [config, setConfig] = useState<AppConfig | null>(null);
-  const [pendingArticles, setPendingArticles] = useState(0);
-  const [pendingSocial, setPendingSocial] = useState(0);
-  const [lastRun, setLastRun] = useState<EmilyRun | null>(null);
-  const [lastSuccessRun, setLastSuccessRun] = useState<EmilyRun | null>(null);
-  const [orSnapshot, setOrSnapshot] = useState<OpenRouterSnapshot | null>(null);
-  const [channels, setChannels] = useState<Record<string, boolean>>({});
-  const [recentRuns, setRecentRuns] = useState<EmilyRun[]>([]);
-  const [april1Dismissed, setApril1Dismissed] = useState(() => {
-    const d = localStorage.getItem('dismiss_april1');
-    if (!d) return false;
-    return Date.now() - parseInt(d) < 7 * 24 * 60 * 60 * 1000;
-  });
+
+  // Block 1 — Cron jobs
+  const [cronJobs, setCronJobs] = useState<CronJob[]>([]);
+  const [cronExpanded, setCronExpanded] = useState(false);
+
+  // Block 2 — Emily
+  const [emilyRuns, setEmilyRuns] = useState<EmilyRun[]>([]);
+  const [articlesGenerated, setArticlesGenerated] = useState(0);
+  const [articlesPublished, setArticlesPublished] = useState(0);
+
+  // Block 3 — Approvals
+  const [pendingApprovals, setPendingApprovals] = useState(0);
+
+  // Block 4 — Pipeline
+  const [queueDepth, setQueueDepth] = useState(0);
+
+  // Issues for header
+  const [issues, setIssues] = useState<string[]>([]);
 
   const fetchAll = useCallback(async () => {
-    const channelKeys = CHANNEL_CONFIG.map(c => c.key);
+    const yesterday = subDays(new Date(), 1);
+    const yesterdayISO = yesterday.toISOString();
+
     const [
-      appConfig, articlesRes, socialRes, lastRunRes, lastSuccessRes,
-      orRes, channelsRes, runsRes,
+      appConfig,
+      cronRes,
+      emilyRunsRes,
+      publishedRes,
+      pendingRes,
+      queueRes,
     ] = await Promise.all([
       fetchAppConfig(),
+      supabase.from('cron.job_run_details' as any).select('jobname, status, start_time').gte('start_time', yesterdayISO).order('start_time', { ascending: false }),
+      supabase.from('emily_runs').select('id, started_at, status, generated_count, failed_count').gte('started_at', yesterdayISO).order('started_at', { ascending: false }),
+      supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'published').gte('updated_at', yesterdayISO),
       supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('james_approved', false).not('draft_content', 'is', null),
-      supabase.from('mkt_content_queue').select('id', { count: 'exact', head: true }).eq('status', 'draft'),
-      supabase.from('emily_runs').select('*').order('started_at', { ascending: false }).limit(1),
-      supabase.from('emily_runs').select('*').eq('status', 'success').order('started_at', { ascending: false }).limit(1),
-      supabase.from('emily_openrouter_snapshots').select('*').order('checked_at', { ascending: false }).limit(1),
-      supabase.from('app_config').select('key, value').in('key', channelKeys),
-      supabase.from('emily_runs').select('*').gte('started_at', subDays(new Date(), 7).toISOString()).order('started_at', { ascending: true }),
+      supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
     ]);
 
     if (appConfig) setConfig(appConfig);
-    setPendingArticles(articlesRes.count || 0);
-    setPendingSocial(socialRes.count || 0);
-    if (lastRunRes.data?.[0]) setLastRun(lastRunRes.data[0]);
-    if (lastSuccessRes.data?.[0]) setLastSuccessRun(lastSuccessRes.data[0]);
-    if (orRes.data?.[0]) setOrSnapshot(orRes.data[0]);
-    if (channelsRes.data) {
-      const cm: Record<string, boolean> = {};
-      channelsRes.data.forEach((row: { key: string; value: string }) => {
-        cm[row.key] = row.value === 'true';
-      });
-      setChannels(cm);
-    }
-    if (runsRes.data) setRecentRuns(runsRes.data);
+
+    // Cron: deduplicate to latest per job
+    const jobMap = new Map<string, CronJob>();
+    (cronRes.data || []).forEach((row: any) => {
+      if (!jobMap.has(row.jobname)) jobMap.set(row.jobname, row);
+    });
+    const jobs = Array.from(jobMap.values());
+    setCronJobs(jobs);
+
+    // Emily
+    const runs = emilyRunsRes.data || [];
+    setEmilyRuns(runs);
+    setArticlesGenerated(runs.reduce((s, r) => s + (r.generated_count || 0), 0));
+    setArticlesPublished(publishedRes.count || 0);
+
+    // Approvals
+    setPendingApprovals(pendingRes.count || 0);
+
+    // Queue
+    setQueueDepth(queueRes.count || 0);
+
+    // Compute issues
+    const issueList: string[] = [];
+    const failedJobs = jobs.filter(j => j.status === 'failed');
+    if (failedJobs.length > 0) issueList.push(`${failedJobs.length} cron job${failedJobs.length > 1 ? 's' : ''} failed`);
+    const failedRuns = runs.filter(r => r.status === 'failed');
+    if (failedRuns.length > 0) issueList.push(`${failedRuns.length} Emily run${failedRuns.length > 1 ? 's' : ''} failed`);
+    if ((pendingRes.count || 0) > 5) issueList.push(`${pendingRes.count} items awaiting approval`);
+    setIssues(issueList);
+
     setLoading(false);
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  // Realtime for emily_runs
   useEffect(() => {
-    const ch = supabase.channel('dash-runs')
+    const ch = supabase.channel('dash-brief')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'emily_runs' }, () => fetchAll())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [fetchAll]);
 
-  const handleChannelToggle = async (key: string, label: string, checked: boolean) => {
-    // Optimistic update
-    setChannels(prev => ({ ...prev, [key]: checked }));
-
-    const { error } = await supabase
-      .from('app_config')
-      .upsert({ key, value: String(checked), updated_at: new Date().toISOString() }, { onConflict: 'key' });
-
-    if (error) {
-      // Revert on failure
-      setChannels(prev => ({ ...prev, [key]: !checked }));
-      toast.error(`Failed to update ${label}`);
-    } else {
-      toast.success(`${label} ${checked ? 'enabled' : 'disabled'}`);
-    }
-  };
-
   if (loading) {
     return (
-      <div className="space-y-6 max-w-[1400px]">
-        <Skeleton className="h-20 w-full" />
+      <div className="space-y-6 max-w-[1000px]">
+        <Skeleton className="h-14 w-full rounded-lg" />
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Skeleton className="h-24" /><Skeleton className="h-24" />
+          <Skeleton className="h-32" /><Skeleton className="h-32" />
+          <Skeleton className="h-32" /><Skeleton className="h-32" />
         </div>
-        <Skeleton className="h-48" />
       </div>
     );
   }
@@ -160,283 +147,194 @@ export default function Dashboard() {
     convert: config?.stream_weight_convert ?? 0,
     amplify: config?.stream_weight_amplify ?? 0,
   };
-  const weightSum = weights.disrupt + weights.educate + weights.convert + weights.amplify;
 
-  // Build attention items
-  const attentionItems: { type: string; badge: string; badgeColor: string; text: string; cta: string; link: string; timestamp: string }[] = [];
-
-  if (pendingArticles > 0) {
-    attentionItems.push({
-      type: 'approval', badge: 'AEO', badgeColor: 'bg-info/20 text-info',
-      text: `${pendingArticles} article${pendingArticles > 1 ? 's' : ''} awaiting approval`,
-      cta: 'Review Now', link: '/approvals', timestamp: '',
-    });
-  }
-  if (pendingSocial > 0) {
-    attentionItems.push({
-      type: 'approval', badge: 'SOCIAL', badgeColor: 'bg-warning/20 text-warning',
-      text: `${pendingSocial} social & campaign item${pendingSocial > 1 ? 's' : ''} waiting`,
-      cta: 'Review Now', link: '/approvals', timestamp: '',
-    });
-  }
-  if (lastRun?.status === 'failed') {
-    attentionItems.push({
-      type: 'error', badge: 'ERROR', badgeColor: 'bg-destructive/20 text-destructive',
-      text: `Emily's last run failed. Generated: ${lastRun.generated_count}. Failed: ${lastRun.failed_count}.`,
-      cta: 'Investigate', link: '/analytics',
-      timestamp: lastRun.started_at ? `Run started: ${format(new Date(lastRun.started_at), 'd MMM HH:mm')}` : '',
-    });
-  }
-  if (lastSuccessRun && lastSuccessRun.generated_count === 0) {
-    attentionItems.push({
-      type: 'warning', badge: 'WARNING', badgeColor: 'bg-warning/20 text-warning',
-      text: "Emily's last run generated 0 articles. Something's wrong with production.",
-      cta: 'Check Emily Ops', link: '/operations',
-      timestamp: lastSuccessRun.started_at ? `Run completed: ${format(new Date(lastSuccessRun.started_at), 'd MMM HH:mm')}` : '',
-    });
-  }
-  if (orSnapshot) {
-    const isPrepaid = orSnapshot.limit_usd === null;
-    if (isPrepaid) {
-      // Prepaid account — no warning needed, just informational
-    } else if (orSnapshot.credits_remaining_usd !== null && orSnapshot.limit_usd !== null) {
-      const pct = orSnapshot.limit_usd > 0 ? (orSnapshot.credits_remaining_usd / orSnapshot.limit_usd) * 100 : 0;
-      if (pct < 10) {
-        attentionItems.push({
-          type: 'error', badge: 'BALANCE', badgeColor: 'bg-destructive/20 text-destructive',
-          text: `Critical: OpenRouter balance $${orSnapshot.credits_remaining_usd.toFixed(2)} remaining of $${orSnapshot.limit_usd.toFixed(2)}`,
-          cta: 'View Balance', link: '/operations',
-          timestamp: orSnapshot.checked_at ? `Last checked: ${format(new Date(orSnapshot.checked_at), 'd MMM HH:mm')}` : '',
-        });
-      } else if (pct < 30) {
-        attentionItems.push({
-          type: 'warning', badge: 'BALANCE', badgeColor: 'bg-warning/20 text-warning',
-          text: `Low OpenRouter balance: $${orSnapshot.credits_remaining_usd.toFixed(2)} remaining of $${orSnapshot.limit_usd.toFixed(2)}`,
-          cta: 'View Balance', link: '/operations',
-          timestamp: orSnapshot.checked_at ? `Last checked: ${format(new Date(orSnapshot.checked_at), 'd MMM HH:mm')}` : '',
-        });
-      }
-    }
-  }
-
-  // Chart data
-  const chartData = (() => {
-    const days: Record<string, { date: string; runs: number; generated: number }> = {};
-    for (let i = 6; i >= 0; i--) {
-      const d = format(subDays(new Date(), i), 'yyyy-MM-dd');
-      days[d] = { date: format(subDays(new Date(), i), 'EEE'), runs: 0, generated: 0 };
-    }
-    recentRuns.forEach(r => {
-      const d = r.started_at.split('T')[0];
-      if (days[d]) {
-        days[d].runs++;
-        days[d].generated += r.generated_count || 0;
-      }
-    });
-    return Object.values(days);
-  })();
-
-  const totalGenerated = recentRuns.reduce((s, r) => s + (r.generated_count || 0), 0);
-  const totalCost = recentRuns.reduce((s, r) => s + (r.estimated_cost_usd || 0), 0);
-  const avgPerRun = recentRuns.length > 0 ? Math.round(totalGenerated / recentRuns.length) : 0;
-
-  // Intelligence feed
-  const signals = recentRuns
-    .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime())
-    .slice(0, 5)
-    .map(r => ({
-      text: `Emily run completed. Generated: ${r.generated_count}, Failed: ${r.failed_count}, Cost: $${(r.estimated_cost_usd || 0).toFixed(2)}`,
-      time: r.started_at,
-      color: r.generated_count > 0 ? 'text-success' : r.failed_count > 0 ? 'text-destructive' : 'text-warning',
-    }));
+  const lastNightDate = format(subDays(new Date(), 1), 'EEEE d MMMM');
+  const healthy = issues.length === 0;
+  const cronTotal = cronJobs.length;
+  const cronPassed = cronJobs.filter(j => j.status === 'succeeded').length;
+  const avgPerRun = emilyRuns.length > 0 ? Math.round(articlesGenerated / emilyRuns.length) : 0;
+  const estimatedClearanceDays = avgPerRun > 0 ? Math.ceil(queueDepth / avgPerRun) : null;
 
   return (
-    <div className="space-y-8 max-w-[1400px]">
-      <PageHeader title="Morning Brief" description="What happened overnight — Emily's latest runs, content status, and anything that needs your attention." />
-      <CompetitorRefreshBanner />
-      {/* ═══ PHASE & WEIGHTS STRIP ═══ */}
-      <div className="flex flex-col lg:flex-row gap-6 items-start">
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1
-              className="text-3xl font-bold tracking-tight animate-pulse-phase"
-              style={{ color: phaseConf.color }}
-            >
-              {phase}
-            </h1>
-            <span className="text-sm text-muted-foreground">— {phaseConf.desc}</span>
-          </div>
-        </div>
-
-        <div className="w-full lg:w-[340px] space-y-2">
-          {weightSum !== 100 && (
-            <Badge className="bg-warning/20 text-warning border-warning/30 text-xs">
-              <AlertTriangle size={12} className="mr-1" /> Weights unbalanced ({weightSum}%)
-            </Badge>
+    <div className="space-y-6 max-w-[1000px]">
+      {/* ═══ HEADER STRIP ═══ */}
+      <div className={`rounded-lg px-6 py-4 flex items-center gap-3 ${
+        healthy ? 'bg-success/10 border border-success/20' : 'bg-warning/10 border border-warning/20'
+      }`}>
+        {healthy ? (
+          <CheckCircle2 size={20} className="text-success shrink-0" />
+        ) : (
+          <AlertTriangle size={20} className="text-warning shrink-0" />
+        )}
+        <div>
+          <p className={`text-sm font-semibold ${healthy ? 'text-success' : 'text-warning'}`}>
+            Last night: {lastNightDate} — {healthy ? 'All systems healthy ✅' : `${issues.length} issue${issues.length > 1 ? 's' : ''} need attention ⚠️`}
+          </p>
+          {!healthy && (
+            <p className="text-xs text-muted-foreground mt-0.5">{issues.join(' · ')}</p>
           )}
-          {STREAM_CONFIG.map(s => {
-            const w = weights[s.key as keyof typeof weights];
-            return (
-              <div key={s.key} className="flex items-center gap-2 text-xs">
-                <span className="w-20 text-muted-foreground">{s.label}</span>
-                <div className="flex-1 h-2 rounded-full bg-secondary overflow-hidden">
-                  <div className="h-full rounded-full transition-all" style={{ width: `${w}%`, backgroundColor: s.color }} />
-                </div>
-                <span className="w-8 text-right text-foreground font-medium">{w}%</span>
-              </div>
-            );
-          })}
         </div>
       </div>
 
-      {/* ═══ NEEDS YOUR ATTENTION ═══ */}
-      <section>
-        <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-3">Needs Your Attention</h2>
-        {attentionItems.length === 0 ? (
-          <Card>
-            <CardContent className="p-6 text-center">
-              <p className="text-foreground">All clear. No attention needed. 😊</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {attentionItems.slice(0, 5).map((item, i) => (
-              <Card key={i} className="border-border">
-                <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                  <div className="flex items-start gap-3 flex-1">
-                    <Badge variant="outline" className={`${item.badgeColor} border-transparent text-[11px] font-semibold shrink-0`}>
-                      {item.badge}
-                    </Badge>
-                    <div>
-                      <p className="text-sm text-foreground">{item.text}</p>
-                      {item.timestamp && <p className="text-xs text-muted-foreground mt-0.5">{item.timestamp}</p>}
-                    </div>
-                  </div>
-                  <Button size="sm" variant="outline" onClick={() => navigate(item.link)} className="shrink-0 h-8 text-xs">
-                    {item.cta} <ArrowRight size={12} className="ml-1" />
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-            {attentionItems.length > 5 && (
-              <Button variant="ghost" size="sm" onClick={() => navigate('/approvals')} className="text-xs text-muted-foreground">
-                View all ({attentionItems.length}) →
+      {/* ═══ BLOCK 1: OVERNIGHT AUTOMATION ═══ */}
+      <Card>
+        <CardContent className="p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Overnight Automation</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {cronTotal > 0 ? `${cronPassed} of ${cronTotal} jobs completed` : 'No cron data available'}
+              </p>
+            </div>
+            {cronTotal > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => setCronExpanded(!cronExpanded)} className="h-7 text-xs text-muted-foreground">
+                {cronExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                <span className="ml-1">{cronExpanded ? 'Collapse' : 'Details'}</span>
               </Button>
             )}
           </div>
-        )}
 
-        {/* April 1 dismissible info */}
-        {!april1Dismissed && (
-          <Card className="mt-3 border-border">
-            <CardContent className="p-4 flex items-center justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <Badge variant="outline" className="bg-muted/20 text-muted-foreground border-transparent text-[11px] font-semibold">INFO</Badge>
-                <p className="text-sm text-foreground">Note: April 1 produced 0 articles. Root cause under investigation.</p>
+          {/* Dot grid */}
+          {cronTotal > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {cronJobs.map((job, i) => (
+                <div
+                  key={i}
+                  title={`${job.jobname}: ${job.status}`}
+                  className={`h-3 w-3 rounded-full ${
+                    job.status === 'succeeded' ? 'bg-success' : job.status === 'failed' ? 'bg-destructive' : 'bg-warning'
+                  }`}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Expanded detail table */}
+          {cronExpanded && cronTotal > 0 && (
+            <div className="border border-border rounded-md overflow-hidden mt-2">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30">
+                    <th className="text-left px-3 py-2 text-muted-foreground font-medium">Job</th>
+                    <th className="text-left px-3 py-2 text-muted-foreground font-medium">Status</th>
+                    <th className="text-left px-3 py-2 text-muted-foreground font-medium">Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cronJobs.map((job, i) => (
+                    <tr key={i} className="border-b border-border last:border-0">
+                      <td className="px-3 py-2 text-foreground">{job.jobname}</td>
+                      <td className="px-3 py-2">
+                        <span className={`inline-flex items-center gap-1 ${
+                          job.status === 'succeeded' ? 'text-success' : job.status === 'failed' ? 'text-destructive' : 'text-warning'
+                        }`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${
+                            job.status === 'succeeded' ? 'bg-success' : job.status === 'failed' ? 'bg-destructive' : 'bg-warning'
+                          }`} />
+                          {job.status}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">{format(new Date(job.start_time), 'HH:mm')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ═══ BLOCKS 2 & 3 ═══ */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Block 2 — Emily Activity */}
+        <Card>
+          <CardContent className="p-5 space-y-3">
+            <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Emily Last Night</h2>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <p className="text-2xl font-bold text-foreground">{emilyRuns.length}</p>
+                <p className="text-xs text-muted-foreground">Runs completed</p>
               </div>
-              <Button size="sm" variant="ghost" className="text-xs text-muted-foreground shrink-0" onClick={() => {
-                localStorage.setItem('dismiss_april1', Date.now().toString());
-                setApril1Dismissed(true);
-              }}>
-                Dismiss
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-      </section>
-
-      {/* ═══ CHANNEL HEALTH GRID ═══ */}
-      <section>
-        <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-3">Channel Status</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {CHANNEL_CONFIG.map(ch => {
-            const isOn = channels[ch.key] ?? false;
-            return (
-              <Card key={ch.key}>
-                <CardContent className="p-4 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-foreground">{ch.label}</span>
-                    <Switch
-                      checked={isOn}
-                      onCheckedChange={(checked) => handleChannelToggle(ch.key, ch.label, checked)}
-                    />
-                  </div>
-                  <p className={`text-xs ${isOn ? 'text-success' : 'text-muted-foreground'}`}>
-                    {isOn ? 'Active' : 'Disabled'}
-                  </p>
-                </CardContent>
-              </Card>
-            );
-          })}
-          <Card>
-            <CardContent className="p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-foreground">Canva</span>
-                <Badge variant="outline" className="text-[10px] text-muted-foreground border-border">external</Badge>
+              <div>
+                <p className="text-2xl font-bold text-foreground">{articlesGenerated}</p>
+                <p className="text-xs text-muted-foreground">Articles generated</p>
               </div>
-              <p className="text-xs text-muted-foreground">Visual Design</p>
-            </CardContent>
-          </Card>
-        </div>
-      </section>
-
-      {/* ═══ INTELLIGENCE FEED + CHART ═══ */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Intelligence Feed */}
-        <div className="xl:col-span-1">
-          <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-3">Overnight Intelligence</h2>
-          <div className="space-y-2">
-            {signals.length === 0 ? (
-              <Card><CardContent className="p-4"><p className="text-sm text-muted-foreground">No recent signals.</p></CardContent></Card>
-            ) : (
-              signals.map((s, i) => (
-                <Card key={i}>
-                  <CardContent className="p-3 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Zap size={12} className={s.color} />
-                      <span className="text-[11px] text-muted-foreground">
-                        {formatDistanceToNow(new Date(s.time), { addSuffix: true })}
-                      </span>
-                    </div>
-                    <p className="text-xs text-foreground">{s.text}</p>
-                  </CardContent>
-                </Card>
-              ))
+              <div>
+                <p className="text-2xl font-bold text-foreground">{articlesPublished}</p>
+                <p className="text-xs text-muted-foreground">Articles published</p>
+              </div>
+            </div>
+            {emilyRuns.some(r => r.status === 'failed') && (
+              <p className="text-xs text-destructive flex items-center gap-1">
+                <AlertTriangle size={12} /> {emilyRuns.filter(r => r.status === 'failed').length} run(s) failed
+              </p>
             )}
-            {/* Placeholder signals */}
-            {['GA4 integration pending', 'Buffer integration pending', 'Bob conversation analysis pending', 'Competitor monitoring pending'].map(p => (
-              <Card key={p}><CardContent className="p-3">
-                <p className="text-xs text-muted-foreground italic">{p}</p>
-              </CardContent></Card>
-            ))}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        {/* Emily Activity Chart */}
-        <div className="xl:col-span-2">
-          <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-3">Emily Activity (Last 7 Days)</h2>
-          <Card>
-            <CardContent className="p-4">
-              <div className="h-[240px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={chartData}>
-                    <XAxis dataKey="date" tick={{ fill: 'hsl(215, 9%, 55%)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis yAxisId="left" tick={{ fill: 'hsl(215, 9%, 55%)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis yAxisId="right" orientation="right" tick={{ fill: 'hsl(215, 9%, 55%)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <RechartsTooltip contentStyle={{ background: 'hsl(215, 22%, 11%)', border: '1px solid hsl(215, 14%, 16%)', borderRadius: 8, color: 'hsl(213, 14%, 80%)', fontSize: 12 }} />
-                    <Bar yAxisId="left" dataKey="runs" fill="hsl(212, 100%, 67%)" radius={[4, 4, 0, 0]} barSize={32} name="Runs" />
-                    <Line yAxisId="right" type="monotone" dataKey="generated" stroke="hsl(142, 58%, 49%)" strokeWidth={2} dot={{ r: 3 }} name="Articles" />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="flex gap-6 mt-4 text-xs text-muted-foreground">
-                <span>7-day avg: <strong className="text-foreground">{avgPerRun} articles/run</strong></span>
-                <span>Total generated: <strong className="text-foreground">{totalGenerated}</strong></span>
-                <span>Avg cost/run: <strong className="text-foreground">${recentRuns.length > 0 ? (totalCost / recentRuns.length).toFixed(2) : '0.00'}</strong></span>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Block 3 — Approvals Waiting */}
+        <Card className={pendingApprovals > 0 ? 'border-warning/40 bg-warning/5' : ''}>
+          <CardContent className="p-5 space-y-3">
+            <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Your Action Needed</h2>
+            <p className="text-2xl font-bold text-foreground">{pendingApprovals}</p>
+            <p className="text-xs text-muted-foreground">
+              {pendingApprovals === 0 ? 'No items awaiting approval' : `item${pendingApprovals > 1 ? 's' : ''} awaiting your approval`}
+            </p>
+            {pendingApprovals > 0 && (
+              <Button size="sm" onClick={() => navigate('/approvals')} className="h-8 text-xs bg-warning text-warning-foreground hover:bg-warning/90">
+                Review Now <ArrowRight size={12} className="ml-1" />
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ═══ BLOCKS 4 & 5 ═══ */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Block 4 — Pipeline Health */}
+        <Card>
+          <CardContent className="p-5 space-y-3">
+            <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Content Queue</h2>
+            <p className="text-2xl font-bold text-foreground">{queueDepth}</p>
+            <p className="text-xs text-muted-foreground">pending items in queue</p>
+            {estimatedClearanceDays !== null && (
+              <p className="text-xs text-muted-foreground">
+                Est. clearance: <span className="text-foreground font-medium">{estimatedClearanceDays} day{estimatedClearanceDays !== 1 ? 's' : ''}</span>
+                <span className="text-muted-foreground/60"> (at ~{avgPerRun} articles/run)</span>
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Block 5 — Current Strategy */}
+        <Card>
+          <CardContent className="p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Current Strategy</h2>
+              <Button variant="ghost" size="sm" onClick={() => navigate('/operations')} className="h-7 text-xs text-muted-foreground">
+                Edit <ArrowRight size={12} className="ml-1" />
+              </Button>
+            </div>
+            <Badge className="text-sm font-bold border-0" style={{ backgroundColor: `${phaseConf.color}20`, color: phaseConf.color }}>
+              {phase}
+            </Badge>
+            <p className="text-xs text-muted-foreground">{phaseConf.desc}</p>
+            <div className="space-y-1.5 pt-1">
+              {STREAM_CONFIG.map(s => {
+                const w = weights[s.key as keyof typeof weights];
+                return (
+                  <div key={s.key} className="flex items-center gap-2 text-xs">
+                    <span className="w-16 text-muted-foreground">{s.label}</span>
+                    <div className="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${w}%`, backgroundColor: s.color }} />
+                    </div>
+                    <span className="w-8 text-right text-foreground font-medium">{w}%</span>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
