@@ -9,6 +9,7 @@ import {
   Settings,
   LogOut,
   Crosshair,
+  Play,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -17,6 +18,7 @@ const navItems = [
   { label: 'Competitors', icon: Crosshair, path: '/competitor-intelligence' },
   { label: 'Approvals', icon: CheckSquare, path: '/approvals' },
   { label: 'Operations', icon: Cpu, path: '/operations' },
+  { label: 'Videos', icon: Play, path: '/videos' },
   { label: 'Analytics', icon: BarChart3, path: '/analytics' },
   { label: 'Settings', icon: Settings, path: '/settings' },
 ];

@@ -13,6 +13,7 @@ import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import CompetitorIntelligence from "./pages/CompetitorIntelligence";
+import Videos from "./pages/Videos";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +31,7 @@ const App = () => (
               <Route path="/competitor-intelligence" element={<CompetitorIntelligence />} />
               <Route path="/approvals" element={<Approvals />} />
               <Route path="/operations" element={<Operations />} />
+              <Route path="/videos" element={<Videos />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
