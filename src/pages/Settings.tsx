@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
+
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -22,22 +22,7 @@ const INTEGRATIONS = [
   { key: 'mailchimp', label: 'Mailchimp', desc: 'Email Platform' },
 ];
 
-const CORE_FLAGS = [
-  { key: 'emily_global_active', label: 'Emily Global Active' },
-  { key: 'feature_sku_aeo_enrichment', label: 'SKU AEO Enrichment' },
-  { key: 'feature_social_content', label: 'Social Content Generation' },
-  { key: 'feature_email_sms', label: 'Email & SMS Generation' },
-];
-
-const CHANNEL_FLAGS = [
-  { key: 'channel_facebook', label: 'Facebook' },
-  { key: 'channel_instagram', label: 'Instagram' },
-  { key: 'channel_tiktok', label: 'TikTok' },
-  { key: 'channel_blog', label: 'Blog' },
-  { key: 'channel_aeo', label: 'AEO Posting' },
-];
-
-const ALL_TOGGLE_KEYS = [...CORE_FLAGS.map(f => f.key), ...CHANNEL_FLAGS.map(f => f.key)];
+const ALL_TOGGLE_KEYS: string[] = [];
 
 const DOCUMENTS = [
   'DOC-01 — CARFIX Brand Guidelines',
@@ -57,7 +42,7 @@ const DOCUMENTS = [
 
 export default function Settings() {
   const [loading, setLoading] = useState(true);
-  const [toggles, setToggles] = useState<Record<string, boolean>>({});
+  const [_toggles, setToggles] = useState<Record<string, boolean>>({});
   const [orBalance, setOrBalance] = useState<number | null>(null);
   const [orCheckedAt, setOrCheckedAt] = useState<string | null>(null);
   const [orStatus, setOrStatus] = useState<'green' | 'red' | 'grey'>('grey');
@@ -93,18 +78,6 @@ export default function Settings() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const toggleFlag = async (key: string, label: string, newValue: boolean) => {
-    setToggles(prev => ({ ...prev, [key]: newValue }));
-    const { error } = await supabase
-      .from('app_config')
-      .upsert({ key, value: String(newValue), updated_at: new Date().toISOString() }, { onConflict: 'key' });
-    if (error) {
-      setToggles(prev => ({ ...prev, [key]: !newValue }));
-      toast.error(`Failed to update ${label}`);
-    } else {
-      toast.success(`${label} ${newValue ? 'enabled' : 'disabled'}`);
-    }
-  };
 
   const checkBalance = async () => {
     try {
@@ -175,34 +148,6 @@ export default function Settings() {
         </div>
       </section>
 
-      {/* ═══ SECTION B: FEATURE FLAGS ═══ */}
-      <section className="space-y-4">
-        <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Feature Toggles</h2>
-
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Emily Core</p>
-          {CORE_FLAGS.map(f => (
-            <Card key={f.key}>
-              <CardContent className="p-3 flex items-center justify-between">
-                <span className="text-sm text-foreground">{f.label}</span>
-                <Switch checked={toggles[f.key] ?? false} onCheckedChange={v => toggleFlag(f.key, f.label, v)} />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Channels</p>
-          {CHANNEL_FLAGS.map(f => (
-            <Card key={f.key}>
-              <CardContent className="p-3 flex items-center justify-between">
-                <span className="text-sm text-foreground">{f.label}</span>
-                <Switch checked={toggles[f.key] ?? false} onCheckedChange={v => toggleFlag(f.key, f.label, v)} />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
 
       {/* ═══ SECTION C: KNOWLEDGE BASE ═══ */}
       <section className="space-y-4">
