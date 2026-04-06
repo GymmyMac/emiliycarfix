@@ -162,7 +162,7 @@ export default function Dashboard() {
   const cronTotal = cronJobs.length;
   const cronPassed = cronJobs.filter(j => j.status === 'succeeded').length;
   const avgPerRun = emilyRuns.length > 0 ? Math.round(articlesGenerated / emilyRuns.length) : 0;
-  const estimatedClearanceDays = avgPerRun > 0 ? Math.ceil(queueDepth / avgPerRun) : null;
+  const estimatedClearanceDays = avgPerDay > 0 ? Math.ceil(queueDepth / avgPerDay) : null;
 
   return (
     <div className="space-y-6 max-w-[1000px]">
