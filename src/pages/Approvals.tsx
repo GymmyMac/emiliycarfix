@@ -254,6 +254,22 @@ export default function Approvals() {
     return () => { supabase.removeChannel(ch1); supabase.removeChannel(ch2); };
   }, [fetchData]);
 
+  /* ─── Return to queue ─── */
+  const returnToQueue = async (id: string) => {
+    await supabase.from('mkt_seo_queue').update({ status: 'pending', james_approved: false, updated_at: new Date().toISOString() }).eq('id', id);
+    setApprovedArticles(prev => prev.filter(a => a.id !== id));
+    toast.success('Returned to queue');
+    fetchData();
+  };
+
+  const returnAllToQueue = async () => {
+    const ids = approvedArticles.map(a => a.id);
+    if (!confirm(`Return ${ids.length} article${ids.length > 1 ? 's' : ''} to the queue?`)) return;
+    await supabase.from('mkt_seo_queue').update({ status: 'pending', james_approved: false, updated_at: new Date().toISOString() }).in('id', ids);
+    toast.success(`${ids.length} articles returned to queue`);
+    fetchData();
+  };
+
   /* ─── AEO actions ─── */
   const approveArticle = async (id: string) => {
     await supabase.from('mkt_seo_queue').update({ james_approved: true, status: 'approved', updated_at: new Date().toISOString() }).eq('id', id);
@@ -883,8 +899,11 @@ export default function Approvals() {
             </CardContent></Card>
           ) : (
             <>
-              {approvedArticles.length > 1 && (
-                <div className="flex justify-end">
+              {approvedArticles.length > 0 && (
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" variant="outline" className="h-8 text-xs border-warning text-warning hover:bg-warning/10" onClick={returnAllToQueue}>
+                    ← Return All to Queue ({approvedArticles.length})
+                  </Button>
                   <Button size="sm" className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" onClick={publishAll}>
                     <CheckCircle2 size={14} className="mr-1" /> Publish All ({approvedArticles.filter(a => a.slug).length})
                   </Button>
@@ -930,15 +949,25 @@ export default function Approvals() {
                               {article.updated_at ? formatDistanceToNow(new Date(article.updated_at), { addSuffix: true }) : '—'}
                             </td>
                             <td className="p-3 text-center">
-                              <Button
-                                size="sm"
-                                className="h-7 text-xs bg-success hover:bg-success/90 text-primary-foreground"
-                                disabled={!article.slug || publishingIds.has(article.id)}
-                                onClick={() => publishArticle(article)}
-                              >
-                                {publishingIds.has(article.id) ? <Loader2 size={14} className="mr-1 animate-spin" /> : null}
-                                {publishingIds.has(article.id) ? 'Publishing...' : 'Publish'}
-                              </Button>
+                              <div className="flex items-center justify-center gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-[11px] border-warning text-warning hover:bg-warning/10 px-2"
+                                  onClick={() => returnToQueue(article.id)}
+                                >
+                                  ← Queue
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs bg-success hover:bg-success/90 text-primary-foreground"
+                                  disabled={!article.slug || publishingIds.has(article.id)}
+                                  onClick={() => publishArticle(article)}
+                                >
+                                  {publishingIds.has(article.id) ? <Loader2 size={14} className="mr-1 animate-spin" /> : null}
+                                  {publishingIds.has(article.id) ? 'Publishing...' : 'Publish'}
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         );
