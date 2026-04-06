@@ -141,8 +141,9 @@ interface VehicleGroup {
   vehicle_id: string;
   make: string;
   model: string;
-  year_from: number | null;
-  year_to: number | null;
+  sub_model: string | null;
+  year_range: string | null;
+  vehicle_name_nz: string | null;
   label: string;
   slots: Record<string, VideoEntry[]>;
   totalVideos: number;
@@ -174,28 +175,19 @@ function LibraryTab() {
       // Get all vehicle-video associations with video + vehicle data joined
       const { data: vvData, error: vvErr } = await supabase
         .from('youtube_video_vehicles')
-        .select('vehicle_id, video_id, vehicle!inner(vehicle_id, make, model, year_from, year_to), youtube_videos!inner(id, youtube_id, title, channel_name, thumbnail_url, composite_score, is_active, flagged)');
+        .select('vehicle_id, video_id, job_type, vehicle!inner(vehicle_id, make, model, sub_model, year_range, vehicle_name_nz), youtube_videos!inner(id, youtube_id, title, channel_name, thumbnail_url, composite_score, is_active, flagged)');
       if (vvErr) throw vvErr;
 
       // Build vehicle map from joined data
-      let vehicleMap: Record<string, { make: string; model: string; year_from: number | null; year_to: number | null }> = {};
+      let vehicleMap: Record<string, { make: string; model: string; sub_model: string | null; year_range: string | null; vehicle_name_nz: string | null }> = {};
       (vvData || []).forEach((row: any) => {
         const veh = row.vehicle;
         if (veh && !vehicleMap[row.vehicle_id]) {
-          vehicleMap[row.vehicle_id] = { make: veh.make, model: veh.model, year_from: veh.year_from, year_to: veh.year_to };
+          vehicleMap[row.vehicle_id] = { make: veh.make, model: veh.model, sub_model: veh.sub_model, year_range: veh.year_range, vehicle_name_nz: veh.vehicle_name_nz };
         }
       });
 
-      // Get job mappings for all videos
-      const videoIds = [...new Set((vvData || []).map((r: any) => r.video_id))];
-      let jobMap: Record<string, string> = {};
-      if (videoIds.length) {
-        const { data: jmData } = await supabase.from('youtube_job_mappings').select('video_id, job_type').in('video_id', videoIds);
-        if (jmData) {
-          jmData.forEach((r: any) => { if (!jobMap[r.video_id]) jobMap[r.video_id] = r.job_type; });
-        }
-      }
-
+      // Use job_type from youtube_video_vehicles directly
       // Build vehicle groups
       const groupMap: Record<string, VehicleGroup> = {};
       (vvData || []).forEach((row: any) => {
@@ -204,17 +196,18 @@ function LibraryTab() {
         if (!veh) return;
         const video = row.youtube_videos;
         if (!video) return;
-        const jobType = jobMap[video.id] || 'General';
+        const jobType = row.job_type || 'General';
 
         if (!groupMap[vid]) {
-          const yearRange = veh.year_from && veh.year_to ? `${veh.year_from}–${veh.year_to}` : veh.year_from ? `${veh.year_from}+` : '';
+          const displayLabel = veh.vehicle_name_nz || `${veh.make} ${veh.model}${veh.sub_model ? ` ${veh.sub_model}` : ''}${veh.year_range ? ` ${veh.year_range}` : ''}`;
           groupMap[vid] = {
             vehicle_id: vid,
             make: veh.make,
             model: veh.model,
-            year_from: veh.year_from,
-            year_to: veh.year_to,
-            label: `${veh.make} ${veh.model}${yearRange ? ` ${yearRange}` : ''}`,
+            sub_model: veh.sub_model,
+            year_range: veh.year_range,
+            vehicle_name_nz: veh.vehicle_name_nz,
+            label: displayLabel,
             slots: {},
             totalVideos: 0,
           };
