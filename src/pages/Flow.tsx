@@ -162,9 +162,9 @@ async function fetchFlowData(): Promise<FlowData> {
   d.queue.seo = seoQC.count ?? 0;
   d.queue.partslot = partslotQC.count ?? 0;
   d.queue.aeo = aeoQC.count ?? 0;
-  if (ytLog) {
-    d.queue.ytSearches = (ytLog as any[]).length;
-    const makes = new Set((ytLog as any[]).map((r: any) => `${r.vehicle_make}${r.vehicle_model}`));
+  if (ytLog.data) {
+    d.queue.ytSearches = ytLog.data.length;
+    const makes = new Set(ytLog.data.map((r: any) => `${r.vehicle_make}${r.vehicle_model}`));
     d.queue.ytMakes = makes.size;
   }
 
