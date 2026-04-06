@@ -59,9 +59,11 @@ export default function Dashboard() {
 
   // Block 3 — Approvals
   const [pendingApprovals, setPendingApprovals] = useState(0);
+  const [pendingSeoReview, setPendingSeoReview] = useState(0);
 
   // Block 4 — Pipeline
   const [queueDepth, setQueueDepth] = useState(0);
+  const [avgPerDay, setAvgPerDay] = useState(0);
 
   // Issues for header
   const [issues, setIssues] = useState<string[]>([]);
@@ -77,13 +79,17 @@ export default function Dashboard() {
       publishedRes,
       pendingRes,
       queueRes,
+      seoReviewRes,
+      emilyAvgRes,
     ] = await Promise.all([
       fetchAppConfig(),
       supabase.rpc('get_cron_job_health'),
       supabase.from('emily_runs').select('id, started_at, status, generated_count, failed_count').gte('started_at', yesterdayISO).order('started_at', { ascending: false }),
       supabase.from('mkt_content_queue').select('id', { count: 'exact', head: true }).eq('status', 'published').gte('updated_at', yesterdayISO),
       supabase.from('mkt_content_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-      supabase.from('partslot_aeo_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('james_approved', false).not('draft_content', 'is', null).not('status', 'in', '("rejected","published")'),
+      supabase.from('emily_runs').select('generated_count').gte('started_at', subDays(new Date(), 7).toISOString()).eq('status', 'complete'),
     ]);
 
     if (appConfig) setConfig(appConfig);
@@ -99,9 +105,15 @@ export default function Dashboard() {
 
     // Approvals
     setPendingApprovals(pendingRes.count || 0);
+    setPendingSeoReview(seoReviewRes.count || 0);
 
-    // Queue
+    // Queue — from mkt_seo_queue
     setQueueDepth(queueRes.count || 0);
+
+    // Avg generated per day (last 7 days)
+    const avgRuns = emilyAvgRes.data || [];
+    const totalGen7d = avgRuns.reduce((s: number, r: any) => s + (r.generated_count || 0), 0);
+    setAvgPerDay(avgRuns.length > 0 ? Math.round(totalGen7d / 7) : 0);
 
     // Compute issues
     const issueList: string[] = [];
@@ -150,7 +162,7 @@ export default function Dashboard() {
   const cronTotal = cronJobs.length;
   const cronPassed = cronJobs.filter(j => j.status === 'succeeded').length;
   const avgPerRun = emilyRuns.length > 0 ? Math.round(articlesGenerated / emilyRuns.length) : 0;
-  const estimatedClearanceDays = avgPerRun > 0 ? Math.ceil(queueDepth / avgPerRun) : null;
+  const estimatedClearanceDays = avgPerDay > 0 ? Math.ceil(queueDepth / avgPerDay) : null;
 
   return (
     <div className="space-y-6 max-w-[1000px]">
@@ -267,28 +279,53 @@ export default function Dashboard() {
                 <p className="text-2xl font-bold text-foreground">{articlesPublished}</p>
                 <p className="text-xs text-muted-foreground">Articles published</p>
               </div>
-            </div>
+             </div>
             {emilyRuns.some(r => r.status === 'failed') && (
               <p className="text-xs text-destructive flex items-center gap-1">
                 <AlertTriangle size={12} /> {emilyRuns.filter(r => r.status === 'failed').length} run(s) failed
               </p>
             )}
+            <p className="text-[11px] text-muted-foreground/70 italic">
+              Articles generated are AEO vehicle-part descriptions (partslot pipeline)
+            </p>
           </CardContent>
         </Card>
 
         {/* Block 3 — Approvals Waiting */}
-        <Card className={pendingApprovals > 0 ? 'border-warning/40 bg-warning/5' : ''}>
+        <Card className={pendingApprovals > 0 || pendingSeoReview > 0 ? 'border-warning/40 bg-warning/5' : ''}>
           <CardContent className="p-5 space-y-3">
             <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Your Action Needed</h2>
-            <p className="text-2xl font-bold text-foreground">{pendingApprovals}</p>
-            <p className="text-xs text-muted-foreground">
-              {pendingApprovals === 0 ? 'No items awaiting approval' : `item${pendingApprovals > 1 ? 's' : ''} awaiting your approval`}
-            </p>
-            {pendingApprovals > 0 && (
-              <Button size="sm" onClick={() => navigate('/approvals')} className="h-8 text-xs bg-warning text-warning-foreground hover:bg-warning/90">
-                Review Now <ArrowRight size={12} className="ml-1" />
-              </Button>
-            )}
+            
+            {/* Editorial content */}
+            <div>
+              <p className="text-2xl font-bold text-foreground">{pendingApprovals}</p>
+              <p className="text-xs text-muted-foreground">
+                {pendingApprovals === 0 ? 'No editorial items awaiting approval' : `editorial item${pendingApprovals > 1 ? 's' : ''} awaiting approval`}
+              </p>
+              <p className="text-[11px] text-muted-foreground/70 italic">Editorial content (social, email, SMS)</p>
+            </div>
+
+            {/* SEO articles */}
+            <div className="border-t border-border pt-3">
+              <p className="text-2xl font-bold text-foreground">{pendingSeoReview}</p>
+              <p className="text-xs text-muted-foreground">
+                {pendingSeoReview === 0 ? 'No SEO articles ready to review' : `SEO article${pendingSeoReview > 1 ? 's' : ''} ready to review`}
+              </p>
+              <p className="text-[11px] text-muted-foreground/70 italic">SEO articles ready to review</p>
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              {pendingSeoReview > 0 && (
+                <Button size="sm" onClick={() => navigate('/approvals')} className="h-8 text-xs bg-warning text-warning-foreground hover:bg-warning/90">
+                  Review SEO Articles <ArrowRight size={12} className="ml-1" />
+                </Button>
+              )}
+              {pendingApprovals > 0 && (
+                <Button size="sm" variant="outline" onClick={() => navigate('/approvals?tab=editorial')} className="h-8 text-xs border-warning text-warning hover:bg-warning/10">
+                  Review Editorial Content <ArrowRight size={12} className="ml-1" />
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -304,7 +341,7 @@ export default function Dashboard() {
             {estimatedClearanceDays !== null && (
               <p className="text-xs text-muted-foreground">
                 Est. clearance: <span className="text-foreground font-medium">{estimatedClearanceDays} day{estimatedClearanceDays !== 1 ? 's' : ''}</span>
-                <span className="text-muted-foreground/60"> (at ~{avgPerRun} articles/run)</span>
+                <span className="text-muted-foreground/60"> (at ~{avgPerDay} articles/day avg over 7d)</span>
               </p>
             )}
           </CardContent>
