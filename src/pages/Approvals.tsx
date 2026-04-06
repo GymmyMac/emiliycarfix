@@ -565,12 +565,13 @@ export default function Approvals() {
         </Button>
       </div>
 
-      <Tabs defaultValue="queue" className="w-full">
+      <Tabs defaultValue={defaultTab} className="w-full">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-          <TabsList className="bg-secondary">
+          <TabsList className="bg-secondary flex-wrap">
             <TabsTrigger value="queue">Queue ({queuedArticles.length})</TabsTrigger>
             <TabsTrigger value="signoff">Sign-off ({articles.length})</TabsTrigger>
             <TabsTrigger value="approved">Approved ({approvedArticles.length})</TabsTrigger>
+            <TabsTrigger value="editorial">Editorial ({editorialPendingCount})</TabsTrigger>
             <TabsTrigger value="published">Published ({publishedArticles.length})</TabsTrigger>
           </TabsList>
 
