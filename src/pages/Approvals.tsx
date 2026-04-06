@@ -472,7 +472,37 @@ export default function Approvals() {
     fetchData();
   };
 
+  /* ─── Editorial actions ─── */
+  const approveEditorial = async (id: string) => {
+    await supabase.from('mkt_content_queue').update({ status: 'approved', approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', id);
+    toast.success('Editorial item approved');
+    fetchData();
+  };
+
+  const rejectEditorial = async (id: string) => {
+    if (!confirm('Reject this editorial item?')) return;
+    await supabase.from('mkt_content_queue').update({ status: 'rejected', updated_at: new Date().toISOString() }).eq('id', id);
+    toast.success('Editorial item rejected');
+    fetchData();
+  };
+
+  const publishEditorial = async (id: string) => {
+    const { error } = await supabase.from('mkt_content_queue').update({ status: 'published', published_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) {
+      toast.error('Publish failed: ' + error.message);
+      return;
+    }
+    toast.success('Editorial item published');
+    fetchData();
+  };
+
   /* ─── Filtering ─── */
+  const editorialPendingCount = editorialItems.filter(e => e.status === 'pending').length;
+  const filterEditorial = editorialItems
+    .filter(e => editorialStatusFilter === 'all' || e.status === editorialStatusFilter)
+    .filter(e => streamFilter === 'all' || e.psyops_stream?.toLowerCase() === streamFilter)
+    .filter(e => !search || e.draft_copy?.toLowerCase().includes(search.toLowerCase()));
+
   const filterQueued = queuedArticles
     .filter(a => streamFilter === 'all' || a.psyops_stream?.toLowerCase() === streamFilter)
     .filter(a => categoryFilter === 'all' || a.category?.toLowerCase() === categoryFilter)
