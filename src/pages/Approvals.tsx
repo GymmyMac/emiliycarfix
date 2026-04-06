@@ -949,11 +949,26 @@ export default function Approvals() {
                               {article.updated_at ? formatDistanceToNow(new Date(article.updated_at), { addSuffix: true }) : '—'}
                             </td>
                             <td className="p-3 text-center">
-                              <Button
-                                size="sm"
-                                className="h-7 text-xs bg-success hover:bg-success/90 text-primary-foreground"
-                                disabled={!article.slug || publishingIds.has(article.id)}
-                                onClick={() => publishArticle(article)}
+                              <div className="flex items-center justify-center gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-7 text-[11px] border-warning text-warning hover:bg-warning/10 px-2"
+                                  onClick={() => returnToQueue(article.id)}
+                                >
+                                  ← Queue
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  className="h-7 text-xs bg-success hover:bg-success/90 text-primary-foreground"
+                                  disabled={!article.slug || publishingIds.has(article.id)}
+                                  onClick={() => publishArticle(article)}
+                                >
+                                  {publishingIds.has(article.id) ? <Loader2 size={14} className="mr-1 animate-spin" /> : null}
+                                  {publishingIds.has(article.id) ? 'Publishing...' : 'Publish'}
+                                </Button>
+                              </div>
+                            </td>
                               >
                                 {publishingIds.has(article.id) ? <Loader2 size={14} className="mr-1 animate-spin" /> : null}
                                 {publishingIds.has(article.id) ? 'Publishing...' : 'Publish'}
