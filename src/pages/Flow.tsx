@@ -141,13 +141,8 @@ const EMPTY_DATA: FlowData = {
   velocity: { seoPerDay: 0, seoQueueSize: 0, partslotComplete: 0, partslotPending: 0, aeoPerDay: 0, ytSearches: 0, ytVideos: 0, ytVehicles: 0, ytJobTypes: 0, ytQuotaUsed: 0 },
 };
 
-async function safeQuery<T>(fn: () => Promise<{ data: T | null; error: any }>): Promise<T | null> {
-  try {
-    const { data, error } = await fn();
-    if (error) { console.error(error); return null; }
-    return data;
-  } catch { return null; }
-}
+
+
 
 async function fetchFlowData(): Promise<FlowData> {
   const d = structuredClone(EMPTY_DATA);
