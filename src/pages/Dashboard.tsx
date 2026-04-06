@@ -279,12 +279,15 @@ export default function Dashboard() {
                 <p className="text-2xl font-bold text-foreground">{articlesPublished}</p>
                 <p className="text-xs text-muted-foreground">Articles published</p>
               </div>
-            </div>
+             </div>
             {emilyRuns.some(r => r.status === 'failed') && (
               <p className="text-xs text-destructive flex items-center gap-1">
                 <AlertTriangle size={12} /> {emilyRuns.filter(r => r.status === 'failed').length} run(s) failed
               </p>
             )}
+            <p className="text-[11px] text-muted-foreground/70 italic">
+              Articles generated are AEO vehicle-part descriptions (partslot pipeline)
+            </p>
           </CardContent>
         </Card>
 
