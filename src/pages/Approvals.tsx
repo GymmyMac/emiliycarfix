@@ -149,6 +149,7 @@ export default function Approvals() {
   const [socialItems, setSocialItems] = useState<SocialItem[]>([]);
   const [publishedArticles, setPublishedArticles] = useState<AeoArticle[]>([]);
   const [search, setSearch] = useState('');
+  const [expandedQueueId, setExpandedQueueId] = useState<string | null>(null);
   const [streamFilter, setStreamFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [contentTypeFilter, setContentTypeFilter] = useState<string>('all');
