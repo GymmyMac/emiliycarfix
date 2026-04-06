@@ -341,7 +341,7 @@ export default function Dashboard() {
             {estimatedClearanceDays !== null && (
               <p className="text-xs text-muted-foreground">
                 Est. clearance: <span className="text-foreground font-medium">{estimatedClearanceDays} day{estimatedClearanceDays !== 1 ? 's' : ''}</span>
-                <span className="text-muted-foreground/60"> (at ~{avgPerRun} articles/run)</span>
+                <span className="text-muted-foreground/60"> (at ~{avgPerDay} articles/day avg over 7d)</span>
               </p>
             )}
           </CardContent>
