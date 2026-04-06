@@ -153,18 +153,11 @@ async function fetchFlowData(): Promise<FlowData> {
   const d = structuredClone(EMPTY_DATA);
 
   // Queue
-  const [seoQ, partslotQ, aeoQ, ytLog] = await Promise.all([
-    safeQuery(() => supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending').is('draft_content', null).neq('content_type', 'partslot_aeo')),
-    safeQuery(() => supabase.from('partslot_aeo_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending')),
-    safeQuery(() => supabase.from('part_enrichment_staging').select('id', { count: 'exact', head: true }).not('status', 'in', '("pending_review","approved","published","rejected","FLAGGED_POOR_DATA")')),
-    safeQuery(() => supabase.from('youtube_search_log').select('vehicle_make, vehicle_model')),
-  ]);
-  // For counts from head queries we need the count from the response directly
-  // Let me re-do these with proper count
-  const [seoQC, partslotQC, aeoQC] = await Promise.all([
+  const [seoQC, partslotQC, aeoQC, ytLog] = await Promise.all([
     supabase.from('mkt_seo_queue').select('*', { count: 'exact', head: true }).eq('status', 'pending').is('draft_content', null).neq('content_type', 'partslot_aeo'),
     supabase.from('partslot_aeo_queue').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
     supabase.from('part_enrichment_staging').select('*', { count: 'exact', head: true }).not('status', 'in', '("pending_review","approved","published","rejected","FLAGGED_POOR_DATA")'),
+    supabase.from('youtube_search_log').select('vehicle_make, vehicle_model'),
   ]);
   d.queue.seo = seoQC.count ?? 0;
   d.queue.partslot = partslotQC.count ?? 0;
