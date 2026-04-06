@@ -79,13 +79,17 @@ export default function Dashboard() {
       publishedRes,
       pendingRes,
       queueRes,
+      seoReviewRes,
+      emilyAvgRes,
     ] = await Promise.all([
       fetchAppConfig(),
       supabase.rpc('get_cron_job_health'),
       supabase.from('emily_runs').select('id, started_at, status, generated_count, failed_count').gte('started_at', yesterdayISO).order('started_at', { ascending: false }),
       supabase.from('mkt_content_queue').select('id', { count: 'exact', head: true }).eq('status', 'published').gte('updated_at', yesterdayISO),
       supabase.from('mkt_content_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-      supabase.from('partslot_aeo_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('mkt_seo_queue').select('id', { count: 'exact', head: true }).eq('james_approved', false).not('draft_content', 'is', null).not('status', 'in', '("rejected","published")'),
+      supabase.from('emily_runs').select('generated_count').gte('started_at', subDays(new Date(), 7).toISOString()).eq('status', 'complete'),
     ]);
 
     if (appConfig) setConfig(appConfig);
@@ -101,9 +105,15 @@ export default function Dashboard() {
 
     // Approvals
     setPendingApprovals(pendingRes.count || 0);
+    setPendingSeoReview(seoReviewRes.count || 0);
 
-    // Queue
+    // Queue — from mkt_seo_queue
     setQueueDepth(queueRes.count || 0);
+
+    // Avg generated per day (last 7 days)
+    const avgRuns = emilyAvgRes.data || [];
+    const totalGen7d = avgRuns.reduce((s: number, r: any) => s + (r.generated_count || 0), 0);
+    setAvgPerDay(avgRuns.length > 0 ? Math.round(totalGen7d / 7) : 0);
 
     // Compute issues
     const issueList: string[] = [];
