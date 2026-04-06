@@ -899,8 +899,11 @@ export default function Approvals() {
             </CardContent></Card>
           ) : (
             <>
-              {approvedArticles.length > 1 && (
-                <div className="flex justify-end">
+              {approvedArticles.length > 0 && (
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" variant="outline" className="h-8 text-xs border-warning text-warning hover:bg-warning/10" onClick={returnAllToQueue}>
+                    ← Return All to Queue ({approvedArticles.length})
+                  </Button>
                   <Button size="sm" className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" onClick={publishAll}>
                     <CheckCircle2 size={14} className="mr-1" /> Publish All ({approvedArticles.filter(a => a.slug).length})
                   </Button>
