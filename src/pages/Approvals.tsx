@@ -254,6 +254,22 @@ export default function Approvals() {
     return () => { supabase.removeChannel(ch1); supabase.removeChannel(ch2); };
   }, [fetchData]);
 
+  /* ─── Return to queue ─── */
+  const returnToQueue = async (id: string) => {
+    await supabase.from('mkt_seo_queue').update({ status: 'pending', james_approved: false, updated_at: new Date().toISOString() }).eq('id', id);
+    setApprovedArticles(prev => prev.filter(a => a.id !== id));
+    toast.success('Returned to queue');
+    fetchData();
+  };
+
+  const returnAllToQueue = async () => {
+    const ids = approvedArticles.map(a => a.id);
+    if (!confirm(`Return ${ids.length} article${ids.length > 1 ? 's' : ''} to the queue?`)) return;
+    await supabase.from('mkt_seo_queue').update({ status: 'pending', james_approved: false, updated_at: new Date().toISOString() }).in('id', ids);
+    toast.success(`${ids.length} articles returned to queue`);
+    fetchData();
+  };
+
   /* ─── AEO actions ─── */
   const approveArticle = async (id: string) => {
     await supabase.from('mkt_seo_queue').update({ james_approved: true, status: 'approved', updated_at: new Date().toISOString() }).eq('id', id);
