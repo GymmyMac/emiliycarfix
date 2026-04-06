@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -110,6 +111,21 @@ interface SocialItem {
   updated_at: string | null;
 }
 
+interface EditorialItem {
+  id: string;
+  content_type: string | null;
+  platform: string | null;
+  psyops_phase: string | null;
+  psyops_stream: string | null;
+  draft_copy: string | null;
+  status: string;
+  approved_at: string | null;
+  published_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
 const STREAM_BADGE: Record<string, string> = {
   disrupt: 'bg-stream-disrupt/20 text-stream-disrupt',
   educate: 'bg-stream-educate/20 text-stream-educate',
@@ -142,12 +158,17 @@ function wordCount(text: string | null) {
 }
 
 export default function Approvals() {
+  const [searchParams] = useSearchParams();
+  const defaultTab = searchParams.get('tab') === 'editorial' ? 'editorial' : 'queue';
   const [loading, setLoading] = useState(true);
   const [queuedArticles, setQueuedArticles] = useState<AeoArticle[]>([]);
   const [articles, setArticles] = useState<AeoArticle[]>([]);
   const [approvedArticles, setApprovedArticles] = useState<AeoArticle[]>([]);
   const [socialItems, setSocialItems] = useState<SocialItem[]>([]);
   const [publishedArticles, setPublishedArticles] = useState<AeoArticle[]>([]);
+  const [editorialItems, setEditorialItems] = useState<EditorialItem[]>([]);
+  const [editorialStatusFilter, setEditorialStatusFilter] = useState<string>('pending');
+  const [expandedEditorialId, setExpandedEditorialId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [expandedQueueId, setExpandedQueueId] = useState<string | null>(null);
   const [streamFilter, setStreamFilter] = useState<string>('all');
@@ -185,7 +206,7 @@ export default function Approvals() {
   const [generatingNow, setGeneratingNow] = useState(false);
 
   const fetchData = useCallback(async () => {
-    const [queuedRes, aeoRes, approvedRes, socialRes, publishedRes] = await Promise.all([
+    const [queuedRes, aeoRes, approvedRes, socialRes, publishedRes, editorialRes] = await Promise.all([
       supabase.from('mkt_seo_queue')
         .select('*')
         .eq('status', 'pending')
@@ -207,12 +228,16 @@ export default function Approvals() {
         .select('*')
         .eq('status', 'published')
         .order('updated_at', { ascending: false }),
+      supabase.from('mkt_content_queue')
+        .select('*')
+        .order('created_at', { ascending: false }),
     ]);
     if (queuedRes.data) setQueuedArticles(queuedRes.data);
     if (aeoRes.data) setArticles(aeoRes.data);
     if (approvedRes.data) setApprovedArticles(approvedRes.data);
     if (socialRes.data) setSocialItems(socialRes.data);
     if (publishedRes.data) setPublishedArticles(publishedRes.data);
+    if (editorialRes.data) setEditorialItems(editorialRes.data);
     setLoading(false);
   }, []);
 
@@ -447,7 +472,37 @@ export default function Approvals() {
     fetchData();
   };
 
+  /* ─── Editorial actions ─── */
+  const approveEditorial = async (id: string) => {
+    await supabase.from('mkt_content_queue').update({ status: 'approved', approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', id);
+    toast.success('Editorial item approved');
+    fetchData();
+  };
+
+  const rejectEditorial = async (id: string) => {
+    if (!confirm('Reject this editorial item?')) return;
+    await supabase.from('mkt_content_queue').update({ status: 'rejected', updated_at: new Date().toISOString() }).eq('id', id);
+    toast.success('Editorial item rejected');
+    fetchData();
+  };
+
+  const publishEditorial = async (id: string) => {
+    const { error } = await supabase.from('mkt_content_queue').update({ status: 'published', published_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', id);
+    if (error) {
+      toast.error('Publish failed: ' + error.message);
+      return;
+    }
+    toast.success('Editorial item published');
+    fetchData();
+  };
+
   /* ─── Filtering ─── */
+  const editorialPendingCount = editorialItems.filter(e => e.status === 'pending').length;
+  const filterEditorial = editorialItems
+    .filter(e => editorialStatusFilter === 'all' || e.status === editorialStatusFilter)
+    .filter(e => streamFilter === 'all' || e.psyops_stream?.toLowerCase() === streamFilter)
+    .filter(e => !search || e.draft_copy?.toLowerCase().includes(search.toLowerCase()));
+
   const filterQueued = queuedArticles
     .filter(a => streamFilter === 'all' || a.psyops_stream?.toLowerCase() === streamFilter)
     .filter(a => categoryFilter === 'all' || a.category?.toLowerCase() === categoryFilter)
@@ -510,12 +565,13 @@ export default function Approvals() {
         </Button>
       </div>
 
-      <Tabs defaultValue="queue" className="w-full">
+      <Tabs defaultValue={defaultTab} className="w-full">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-          <TabsList className="bg-secondary">
+          <TabsList className="bg-secondary flex-wrap">
             <TabsTrigger value="queue">Queue ({queuedArticles.length})</TabsTrigger>
             <TabsTrigger value="signoff">Sign-off ({articles.length})</TabsTrigger>
             <TabsTrigger value="approved">Approved ({approvedArticles.length})</TabsTrigger>
+            <TabsTrigger value="editorial">Editorial ({editorialPendingCount})</TabsTrigger>
             <TabsTrigger value="published">Published ({publishedArticles.length})</TabsTrigger>
           </TabsList>
 
@@ -906,6 +962,114 @@ export default function Approvals() {
                 </div>
               </div>
             </>
+          )}
+        </TabsContent>
+
+        {/* ═══ EDITORIAL TAB ═══ */}
+        <TabsContent value="editorial" className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Select value={editorialStatusFilter} onValueChange={setEditorialStatusFilter}>
+              <SelectTrigger className="w-40 h-8 text-xs bg-secondary border-border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="published">Published</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
+                <SelectItem value="all">All Statuses</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {filterEditorial.length} item{filterEditorial.length !== 1 ? 's' : ''} · Social posts, emails, SMS, Canva briefs
+            </p>
+          </div>
+
+          {filterEditorial.length === 0 ? (
+            <Card><CardContent className="p-8 text-center">
+              <p className="text-foreground">No editorial items matching this filter.</p>
+            </CardContent></Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {filterEditorial.map(item => {
+                const stream = item.psyops_stream?.toLowerCase() || '';
+                const badgeClass = STREAM_BADGE[stream] || 'bg-muted/20 text-muted-foreground';
+                const platClass = PLATFORM_COLORS[item.platform?.toLowerCase() || ''] || 'bg-muted/20 text-muted-foreground';
+                const copy = item.draft_copy || '';
+                const isExpanded = expandedEditorialId === item.id;
+                const displayCopy = isExpanded || copy.length <= 200 ? copy : copy.slice(0, 200) + '...';
+
+                return (
+                  <Card key={item.id} className="border-border">
+                    <CardContent className="p-4 space-y-3">
+                      {/* Badges row */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {item.platform && (
+                          <Badge variant="outline" className={`${platClass} border-transparent text-[11px] font-semibold`}>
+                            {item.platform}
+                          </Badge>
+                        )}
+                        {item.content_type && (
+                          <Badge variant="outline" className="text-[10px] border-border">
+                            {item.content_type.replace(/_/g, ' ')}
+                          </Badge>
+                        )}
+                        {stream && (
+                          <Badge variant="outline" className={`${badgeClass} border-transparent text-[10px] font-semibold`}>
+                            {stream.toUpperCase()}
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className="text-[10px] border-border">{item.status}</Badge>
+                      </div>
+
+                      {/* Draft copy */}
+                      <div className="font-mono text-sm text-foreground whitespace-pre-wrap">
+                        {displayCopy}
+                        {copy.length > 200 && (
+                          <button
+                            className="text-primary text-xs ml-1"
+                            onClick={() => setExpandedEditorialId(isExpanded ? null : item.id)}
+                          >
+                            {isExpanded ? 'Collapse' : 'Expand'}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Notes */}
+                      {item.notes && (
+                        <p className="text-xs text-muted-foreground italic">Note: {item.notes}</p>
+                      )}
+
+                      {/* Timestamps */}
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span>Created: {format(new Date(item.created_at), 'd MMM')}</span>
+                        {item.approved_at && <span>Approved: {format(new Date(item.approved_at), 'd MMM')}</span>}
+                        {item.published_at && <span>Published: {format(new Date(item.published_at), 'd MMM')}</span>}
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-2 justify-end">
+                        {item.status === 'pending' && (
+                          <>
+                            <Button size="sm" className="h-8 text-xs bg-success hover:bg-success/90 text-primary-foreground" onClick={() => approveEditorial(item.id)}>
+                              <CheckCircle2 size={14} className="mr-1" /> Approve
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-8 text-xs border-destructive text-destructive hover:bg-destructive/10" onClick={() => rejectEditorial(item.id)}>
+                              <XCircle size={14} className="mr-1" /> Reject
+                            </Button>
+                          </>
+                        )}
+                        {item.status === 'approved' && (
+                          <Button size="sm" className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => publishEditorial(item.id)}>
+                            <Rocket size={14} className="mr-1" /> Publish Now
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           )}
         </TabsContent>
 
