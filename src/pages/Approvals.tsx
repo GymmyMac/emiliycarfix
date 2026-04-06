@@ -969,11 +969,6 @@ export default function Approvals() {
                                 </Button>
                               </div>
                             </td>
-                              >
-                                {publishingIds.has(article.id) ? <Loader2 size={14} className="mr-1 animate-spin" /> : null}
-                                {publishingIds.has(article.id) ? 'Publishing...' : 'Publish'}
-                              </Button>
-                            </td>
                           </tr>
                         );
                       })}
