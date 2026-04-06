@@ -11,6 +11,7 @@ import {
 import { format, subDays } from 'date-fns';
 import { ChevronRight } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+import ReadyToReview from '@/components/ReadyToReview';
 
 /* ─── Types ─── */
 interface EmilyRun {
@@ -215,7 +216,10 @@ export default function Analytics() {
         </Card>
       </section>
 
-      {/* ═══ SECTION 2: RECENT ACTIVITY ═══ */}
+      {/* ═══ SECTION 2: READY TO REVIEW ═══ */}
+      <ReadyToReview />
+
+      {/* ═══ SECTION 3: RECENT ACTIVITY ═══ */}
       <section className="space-y-6">
         <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Recent Activity</h2>
 
