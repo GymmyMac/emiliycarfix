@@ -11,6 +11,7 @@ import {
 import { format, subDays } from 'date-fns';
 import { ChevronRight } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+import ReadyToReview from '@/components/ReadyToReview';
 
 /* ─── Types ─── */
 interface EmilyRun {
