@@ -292,18 +292,40 @@ export default function Dashboard() {
         </Card>
 
         {/* Block 3 — Approvals Waiting */}
-        <Card className={pendingApprovals > 0 ? 'border-warning/40 bg-warning/5' : ''}>
+        <Card className={pendingApprovals > 0 || pendingSeoReview > 0 ? 'border-warning/40 bg-warning/5' : ''}>
           <CardContent className="p-5 space-y-3">
             <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Your Action Needed</h2>
-            <p className="text-2xl font-bold text-foreground">{pendingApprovals}</p>
-            <p className="text-xs text-muted-foreground">
-              {pendingApprovals === 0 ? 'No items awaiting approval' : `item${pendingApprovals > 1 ? 's' : ''} awaiting your approval`}
-            </p>
-            {pendingApprovals > 0 && (
-              <Button size="sm" onClick={() => navigate('/approvals')} className="h-8 text-xs bg-warning text-warning-foreground hover:bg-warning/90">
-                Review Now <ArrowRight size={12} className="ml-1" />
-              </Button>
-            )}
+            
+            {/* Editorial content */}
+            <div>
+              <p className="text-2xl font-bold text-foreground">{pendingApprovals}</p>
+              <p className="text-xs text-muted-foreground">
+                {pendingApprovals === 0 ? 'No editorial items awaiting approval' : `editorial item${pendingApprovals > 1 ? 's' : ''} awaiting approval`}
+              </p>
+              <p className="text-[11px] text-muted-foreground/70 italic">Editorial content (social, email, SMS)</p>
+            </div>
+
+            {/* SEO articles */}
+            <div className="border-t border-border pt-3">
+              <p className="text-2xl font-bold text-foreground">{pendingSeoReview}</p>
+              <p className="text-xs text-muted-foreground">
+                {pendingSeoReview === 0 ? 'No SEO articles ready to review' : `SEO article${pendingSeoReview > 1 ? 's' : ''} ready to review`}
+              </p>
+              <p className="text-[11px] text-muted-foreground/70 italic">SEO articles ready to review</p>
+            </div>
+
+            <div className="flex flex-wrap gap-2 pt-1">
+              {pendingSeoReview > 0 && (
+                <Button size="sm" onClick={() => navigate('/approvals')} className="h-8 text-xs bg-warning text-warning-foreground hover:bg-warning/90">
+                  Review SEO Articles <ArrowRight size={12} className="ml-1" />
+                </Button>
+              )}
+              {pendingApprovals > 0 && (
+                <Button size="sm" variant="outline" onClick={() => navigate('/approvals?tab=editorial')} className="h-8 text-xs border-warning text-warning hover:bg-warning/10">
+                  Review Editorial Content <ArrowRight size={12} className="ml-1" />
+                </Button>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
