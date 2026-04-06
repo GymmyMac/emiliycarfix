@@ -243,8 +243,8 @@ export default function ReadyToReview() {
                   {/* Preview / Full content */}
                   <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
                     {isExpanded ? (
-                      <ScrollArea className="max-h-[500px] pr-4">
-                        <div className="prose prose-sm prose-invert max-w-none">
+                      <ScrollArea className="h-[400px] pr-4">
+                        <div className="prose prose-sm prose-invert max-w-none pb-4">
                           {article.draft_content}
                         </div>
                       </ScrollArea>
