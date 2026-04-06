@@ -158,12 +158,17 @@ function wordCount(text: string | null) {
 }
 
 export default function Approvals() {
+  const [searchParams] = useSearchParams();
+  const defaultTab = searchParams.get('tab') === 'editorial' ? 'editorial' : 'queue';
   const [loading, setLoading] = useState(true);
   const [queuedArticles, setQueuedArticles] = useState<AeoArticle[]>([]);
   const [articles, setArticles] = useState<AeoArticle[]>([]);
   const [approvedArticles, setApprovedArticles] = useState<AeoArticle[]>([]);
   const [socialItems, setSocialItems] = useState<SocialItem[]>([]);
   const [publishedArticles, setPublishedArticles] = useState<AeoArticle[]>([]);
+  const [editorialItems, setEditorialItems] = useState<EditorialItem[]>([]);
+  const [editorialStatusFilter, setEditorialStatusFilter] = useState<string>('pending');
+  const [expandedEditorialId, setExpandedEditorialId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [expandedQueueId, setExpandedQueueId] = useState<string | null>(null);
   const [streamFilter, setStreamFilter] = useState<string>('all');
