@@ -10,11 +10,13 @@ import {
   LogOut,
   Crosshair,
   Play,
+  Grid3X3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { label: 'Morning Brief', subtitle: 'What happened overnight', icon: LayoutGrid, path: '/dashboard' },
+  { label: 'Flow', subtitle: 'All channels, every stage', icon: Grid3X3, path: '/flow' },
   { label: 'Intelligence', subtitle: 'Competitor keywords and gaps', icon: Crosshair, path: '/competitor-intelligence' },
   { label: 'Approvals', subtitle: 'Content waiting for your decision', icon: CheckSquare, path: '/approvals' },
   { label: 'Controls', subtitle: 'Turn things on, adjust the dials', icon: Cpu, path: '/operations' },

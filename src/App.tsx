@@ -14,6 +14,7 @@ import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import CompetitorIntelligence from "./pages/CompetitorIntelligence";
 import Videos from "./pages/Videos";
+import Flow from "./pages/Flow";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +29,7 @@ const App = () => (
             <Route path="/login" element={<Login />} />
             <Route element={<AdminLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/flow" element={<Flow />} />
               <Route path="/competitor-intelligence" element={<CompetitorIntelligence />} />
               <Route path="/approvals" element={<Approvals />} />
               <Route path="/operations" element={<Operations />} />

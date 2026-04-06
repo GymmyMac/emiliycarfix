@@ -7,10 +7,12 @@ import {
   Settings,
   Crosshair,
   Play,
+  Grid3X3,
 } from 'lucide-react';
 
 const navItems = [
   { label: 'Brief', icon: LayoutGrid, path: '/dashboard' },
+  { label: 'Flow', icon: Grid3X3, path: '/flow' },
   { label: 'Intel', icon: Crosshair, path: '/competitor-intelligence' },
   { label: 'Approvals', icon: CheckSquare, path: '/approvals' },
   { label: 'Controls', icon: Cpu, path: '/operations' },
