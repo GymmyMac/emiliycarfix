@@ -712,20 +712,6 @@ export default function Approvals() {
                                 <Button size="sm" variant="outline" className="h-7 text-[11px] border-destructive text-destructive hover:bg-destructive/10 px-2" onClick={() => rejectArticle(article.id)}>
                                   <XCircle size={12} className="mr-1" /> Remove
                                 </Button>
-                                <Button size="sm" variant="outline" className="h-7 text-[11px] border-destructive text-destructive hover:bg-destructive/10 px-2" onClick={() => rejectArticle(article.id)}>
-                                  <XCircle size={12} className="mr-1" /> Reject
-                                </Button>
-                                {article.james_approved && (
-                                  <Button
-                                    size="sm"
-                                    className="h-7 text-[11px] bg-primary hover:bg-primary/90 text-primary-foreground px-2"
-                                    disabled={!article.slug || publishingIds.has(article.id)}
-                                    onClick={() => publishArticle(article)}
-                                  >
-                                    {publishingIds.has(article.id) ? <Loader2 size={12} className="mr-1 animate-spin" /> : <Rocket size={12} className="mr-1" />}
-                                    Publish Now
-                                  </Button>
-                                )}
                               </div>
                             </td>
                           </tr>
