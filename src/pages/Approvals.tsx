@@ -709,8 +709,8 @@ export default function Approvals() {
                             </td>
                             <td className="p-3 text-center">
                               <div className="flex items-center justify-center gap-1">
-                                <Button size="sm" className="h-7 text-[11px] bg-success hover:bg-success/90 text-primary-foreground px-2" onClick={() => approveArticle(article.id)}>
-                                  <CheckCircle2 size={12} className="mr-1" /> Approve
+                                <Button size="sm" variant="outline" className="h-7 text-[11px] border-destructive text-destructive hover:bg-destructive/10 px-2" onClick={() => rejectArticle(article.id)}>
+                                  <XCircle size={12} className="mr-1" /> Remove
                                 </Button>
                                 <Button size="sm" variant="outline" className="h-7 text-[11px] border-destructive text-destructive hover:bg-destructive/10 px-2" onClick={() => rejectArticle(article.id)}>
                                   <XCircle size={12} className="mr-1" /> Reject
