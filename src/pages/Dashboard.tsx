@@ -59,9 +59,11 @@ export default function Dashboard() {
 
   // Block 3 — Approvals
   const [pendingApprovals, setPendingApprovals] = useState(0);
+  const [pendingSeoReview, setPendingSeoReview] = useState(0);
 
   // Block 4 — Pipeline
   const [queueDepth, setQueueDepth] = useState(0);
+  const [avgPerDay, setAvgPerDay] = useState(0);
 
   // Issues for header
   const [issues, setIssues] = useState<string[]>([]);
