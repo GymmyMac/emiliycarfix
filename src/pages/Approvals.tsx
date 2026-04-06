@@ -111,6 +111,21 @@ interface SocialItem {
   updated_at: string | null;
 }
 
+interface EditorialItem {
+  id: string;
+  content_type: string | null;
+  platform: string | null;
+  psyops_phase: string | null;
+  psyops_stream: string | null;
+  draft_copy: string | null;
+  status: string;
+  approved_at: string | null;
+  published_at: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
 const STREAM_BADGE: Record<string, string> = {
   disrupt: 'bg-stream-disrupt/20 text-stream-disrupt',
   educate: 'bg-stream-educate/20 text-stream-educate',
