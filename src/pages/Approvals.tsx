@@ -206,7 +206,7 @@ export default function Approvals() {
   const [generatingNow, setGeneratingNow] = useState(false);
 
   const fetchData = useCallback(async () => {
-    const [queuedRes, aeoRes, approvedRes, socialRes, publishedRes] = await Promise.all([
+    const [queuedRes, aeoRes, approvedRes, socialRes, publishedRes, editorialRes] = await Promise.all([
       supabase.from('mkt_seo_queue')
         .select('*')
         .eq('status', 'pending')
@@ -228,12 +228,16 @@ export default function Approvals() {
         .select('*')
         .eq('status', 'published')
         .order('updated_at', { ascending: false }),
+      supabase.from('mkt_content_queue')
+        .select('*')
+        .order('created_at', { ascending: false }),
     ]);
     if (queuedRes.data) setQueuedArticles(queuedRes.data);
     if (aeoRes.data) setArticles(aeoRes.data);
     if (approvedRes.data) setApprovedArticles(approvedRes.data);
     if (socialRes.data) setSocialItems(socialRes.data);
     if (publishedRes.data) setPublishedArticles(publishedRes.data);
+    if (editorialRes.data) setEditorialItems(editorialRes.data);
     setLoading(false);
   }, []);
 
