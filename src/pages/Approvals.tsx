@@ -965,6 +965,114 @@ export default function Approvals() {
           )}
         </TabsContent>
 
+        {/* ═══ EDITORIAL TAB ═══ */}
+        <TabsContent value="editorial" className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Select value={editorialStatusFilter} onValueChange={setEditorialStatusFilter}>
+              <SelectTrigger className="w-40 h-8 text-xs bg-secondary border-border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="published">Published</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
+                <SelectItem value="all">All Statuses</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {filterEditorial.length} item{filterEditorial.length !== 1 ? 's' : ''} · Social posts, emails, SMS, Canva briefs
+            </p>
+          </div>
+
+          {filterEditorial.length === 0 ? (
+            <Card><CardContent className="p-8 text-center">
+              <p className="text-foreground">No editorial items matching this filter.</p>
+            </CardContent></Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {filterEditorial.map(item => {
+                const stream = item.psyops_stream?.toLowerCase() || '';
+                const badgeClass = STREAM_BADGE[stream] || 'bg-muted/20 text-muted-foreground';
+                const platClass = PLATFORM_COLORS[item.platform?.toLowerCase() || ''] || 'bg-muted/20 text-muted-foreground';
+                const copy = item.draft_copy || '';
+                const isExpanded = expandedEditorialId === item.id;
+                const displayCopy = isExpanded || copy.length <= 200 ? copy : copy.slice(0, 200) + '...';
+
+                return (
+                  <Card key={item.id} className="border-border">
+                    <CardContent className="p-4 space-y-3">
+                      {/* Badges row */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {item.platform && (
+                          <Badge variant="outline" className={`${platClass} border-transparent text-[11px] font-semibold`}>
+                            {item.platform}
+                          </Badge>
+                        )}
+                        {item.content_type && (
+                          <Badge variant="outline" className="text-[10px] border-border">
+                            {item.content_type.replace(/_/g, ' ')}
+                          </Badge>
+                        )}
+                        {stream && (
+                          <Badge variant="outline" className={`${badgeClass} border-transparent text-[10px] font-semibold`}>
+                            {stream.toUpperCase()}
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className="text-[10px] border-border">{item.status}</Badge>
+                      </div>
+
+                      {/* Draft copy */}
+                      <div className="font-mono text-sm text-foreground whitespace-pre-wrap">
+                        {displayCopy}
+                        {copy.length > 200 && (
+                          <button
+                            className="text-primary text-xs ml-1"
+                            onClick={() => setExpandedEditorialId(isExpanded ? null : item.id)}
+                          >
+                            {isExpanded ? 'Collapse' : 'Expand'}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Notes */}
+                      {item.notes && (
+                        <p className="text-xs text-muted-foreground italic">Note: {item.notes}</p>
+                      )}
+
+                      {/* Timestamps */}
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span>Created: {format(new Date(item.created_at), 'd MMM')}</span>
+                        {item.approved_at && <span>Approved: {format(new Date(item.approved_at), 'd MMM')}</span>}
+                        {item.published_at && <span>Published: {format(new Date(item.published_at), 'd MMM')}</span>}
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-2 justify-end">
+                        {item.status === 'pending' && (
+                          <>
+                            <Button size="sm" className="h-8 text-xs bg-success hover:bg-success/90 text-primary-foreground" onClick={() => approveEditorial(item.id)}>
+                              <CheckCircle2 size={14} className="mr-1" /> Approve
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-8 text-xs border-destructive text-destructive hover:bg-destructive/10" onClick={() => rejectEditorial(item.id)}>
+                              <XCircle size={14} className="mr-1" /> Reject
+                            </Button>
+                          </>
+                        )}
+                        {item.status === 'approved' && (
+                          <Button size="sm" className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => publishEditorial(item.id)}>
+                            <Rocket size={14} className="mr-1" /> Publish Now
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
+
         {/* ═══ SOCIAL & CAMPAIGN (hidden but kept for social tab access) ═══ */}
 
         {/* ═══ PUBLISHED TAB ═══ */}
