@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -149,6 +149,7 @@ export default function Approvals() {
   const [socialItems, setSocialItems] = useState<SocialItem[]>([]);
   const [publishedArticles, setPublishedArticles] = useState<AeoArticle[]>([]);
   const [search, setSearch] = useState('');
+  const [expandedQueueId, setExpandedQueueId] = useState<string | null>(null);
   const [streamFilter, setStreamFilter] = useState<string>('all');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [contentTypeFilter, setContentTypeFilter] = useState<string>('all');
@@ -612,6 +613,7 @@ export default function Approvals() {
                       <th className="text-left p-3 font-medium">Category</th>
                       <th className="text-right p-3 font-medium">Priority</th>
                       <th className="text-left p-3 font-medium">Stream</th>
+                      <th className="text-center p-3 font-medium">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -619,34 +621,110 @@ export default function Approvals() {
                       const stream = article.psyops_stream?.toLowerCase() || '';
                       const badgeClass = STREAM_BADGE[stream] || 'bg-muted/20 text-muted-foreground';
                       const typeLabel = CONTENT_TYPE_LABELS[article.content_type || ''] || article.content_type || '—';
+                      const isExpanded = expandedQueueId === article.id;
                       return (
-                        <tr key={article.id} className="hover:bg-secondary/30">
-                          <td className="p-3 text-xs text-muted-foreground font-mono">
-                            {article.task_id ? article.task_id.slice(0, 8) : article.id.slice(0, 8)}
-                          </td>
-                          <td className="p-3">
-                            <button
-                              onClick={() => openQueueItem(article)}
-                              className="text-primary hover:underline font-medium line-clamp-1 text-left"
-                            >
-                              {article.title}
-                            </button>
-                          </td>
-                          <td className="p-3">
-                            <Badge variant="outline" className="text-[10px] border-border font-normal">{typeLabel}</Badge>
-                          </td>
-                          <td className="p-3 text-muted-foreground text-xs">{article.category || '—'}</td>
-                          <td className="p-3 text-right">
-                            {article.priority_score != null ? (
-                              <span className="text-xs font-bold text-foreground bg-secondary px-2 py-0.5 rounded">{article.priority_score}</span>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
-                          </td>
-                          <td className="p-3">
-                            {stream && <Badge variant="outline" className={`${badgeClass} border-transparent text-[10px] font-semibold`}>{stream.toUpperCase()}</Badge>}
-                          </td>
-                        </tr>
+                        <React.Fragment key={article.id}>
+                          <tr className="hover:bg-secondary/30">
+                            <td className="p-3 text-xs text-muted-foreground font-mono">
+                              {article.task_id ? article.task_id.slice(0, 8) : article.id.slice(0, 8)}
+                            </td>
+                            <td className="p-3">
+                              <button
+                                onClick={() => setExpandedQueueId(isExpanded ? null : article.id)}
+                                className="text-primary hover:underline font-medium line-clamp-1 text-left flex items-center gap-1"
+                              >
+                                <ChevronDown size={14} className={`shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                {article.title}
+                              </button>
+                            </td>
+                            <td className="p-3">
+                              <Badge variant="outline" className="text-[10px] border-border font-normal">{typeLabel}</Badge>
+                            </td>
+                            <td className="p-3 text-muted-foreground text-xs">{article.category || '—'}</td>
+                            <td className="p-3 text-right">
+                              {article.priority_score != null ? (
+                                <span className="text-xs font-bold text-foreground bg-secondary px-2 py-0.5 rounded">{article.priority_score}</span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              )}
+                            </td>
+                            <td className="p-3">
+                              {stream && <Badge variant="outline" className={`${badgeClass} border-transparent text-[10px] font-semibold`}>{stream.toUpperCase()}</Badge>}
+                            </td>
+                            <td className="p-3 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <Button size="sm" className="h-7 text-[11px] bg-success hover:bg-success/90 text-primary-foreground px-2" onClick={() => approveArticle(article.id)}>
+                                  <CheckCircle2 size={12} className="mr-1" /> Approve
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 text-[11px] border-destructive text-destructive hover:bg-destructive/10 px-2" onClick={() => rejectArticle(article.id)}>
+                                  <XCircle size={12} className="mr-1" /> Reject
+                                </Button>
+                                {article.james_approved && (
+                                  <Button
+                                    size="sm"
+                                    className="h-7 text-[11px] bg-primary hover:bg-primary/90 text-primary-foreground px-2"
+                                    disabled={!article.slug || publishingIds.has(article.id)}
+                                    onClick={() => publishArticle(article)}
+                                  >
+                                    {publishingIds.has(article.id) ? <Loader2 size={12} className="mr-1 animate-spin" /> : <Rocket size={12} className="mr-1" />}
+                                    Publish Now
+                                  </Button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={7} className="bg-secondary/30 p-4">
+                                <div className="space-y-3 max-w-3xl">
+                                  {/* Meta details */}
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+                                    {article.target_keyword && (
+                                      <div><span className="text-muted-foreground">Target Keyword:</span> <span className="text-foreground font-medium">{article.target_keyword}</span></div>
+                                    )}
+                                    {article.content_type && (
+                                      <div><span className="text-muted-foreground">Content Type:</span> <span className="text-foreground font-medium">{CONTENT_TYPE_LABELS[article.content_type] || article.content_type}</span></div>
+                                    )}
+                                    {article.psyops_stream && (
+                                      <div><span className="text-muted-foreground">Stream:</span> <span className="text-foreground font-medium">{article.psyops_stream}</span></div>
+                                    )}
+                                    {article.priority_score != null && (
+                                      <div><span className="text-muted-foreground">Priority Score:</span> <span className="text-foreground font-medium">{article.priority_score}</span></div>
+                                    )}
+                                  </div>
+
+                                  {/* Draft content or placeholder */}
+                                  {article.draft_content ? (
+                                    <div className="bg-background rounded-md p-4 border border-border">
+                                      <p className="text-xs text-muted-foreground mb-2 font-semibold">Draft Content ({wordCount(article.draft_content)} words)</p>
+                                      <div className="font-mono text-xs text-foreground whitespace-pre-wrap max-h-80 overflow-y-auto">
+                                        {article.draft_content}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="bg-background rounded-md p-4 border border-border text-center">
+                                      <p className="text-sm text-muted-foreground italic">This article has not been generated yet. It is in the queue and will be written by Emily.</p>
+                                    </div>
+                                  )}
+
+                                  {/* Notes - using any available field */}
+                                  {(article as any).notes && (
+                                    <div className="text-xs">
+                                      <span className="text-muted-foreground">Notes:</span> <span className="text-foreground">{(article as any).notes}</span>
+                                    </div>
+                                  )}
+
+                                  {/* Inline actions */}
+                                  <div className="flex items-center gap-2 pt-1">
+                                    <Button size="sm" variant="outline" className="h-7 text-[11px] border-primary text-primary hover:bg-primary/10" onClick={() => openQueueItem(article)}>
+                                      <Pencil size={12} className="mr-1" /> Edit
+                                    </Button>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
