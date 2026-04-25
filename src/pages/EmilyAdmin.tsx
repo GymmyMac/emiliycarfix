@@ -349,36 +349,36 @@ function InsightsCard() {
   };
 
   return (
-    <Card className="p-4">
-      <div className="flex items-center justify-between mb-3">
+    <Card className="p-5 bg-[#1E293B] border-[#334155] border-t-[#F59E0B] border-t shadow-md">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <Activity size={14} className="text-amber-400" />
-          <h3 className="text-sm font-semibold">Emily's Insights</h3>
+          <Activity size={14} className="text-[#F59E0B]" />
+          <h3 className="text-sm font-semibold text-white">Emily's Insights</h3>
         </div>
-        {insights.length > 0 && <Badge className="bg-amber-500/20 text-amber-400 border-0 text-[10px]">{insights.length} new</Badge>}
+        {insights.length > 0 && <Badge className="bg-[#F59E0B]/20 text-[#F59E0B] border-0 text-[10px]">{insights.length} new</Badge>}
       </div>
       {insights.length === 0 ? (
-        <p className="text-xs text-muted-foreground flex items-center gap-2">
+        <p className="text-sm text-[#475569] flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-green-500/50 animate-pulse" />
           No new insights. Emily is monitoring.
         </p>
       ) : (
         <div className="space-y-2 max-h-80 overflow-y-auto">
           {insights.slice(0, 5).map(ins => (
-            <div key={ins.id} className="p-2.5 rounded-lg bg-muted/40 border border-border">
+            <div key={ins.id} className="p-3 rounded-lg bg-[#0F172A] border border-[#334155]">
               <div className="flex items-start justify-between gap-2 mb-1">
                 <Badge variant="outline" className={`${sevColor(ins.severity)} text-[9px] px-1.5 py-0`}>{ins.severity}</Badge>
-                <span className="text-[10px] text-muted-foreground">{ago(ins.created_at)}</span>
+                <span className="text-[10px] text-[#94A3B8]">{ago(ins.created_at)}</span>
               </div>
-              <p className="text-xs font-semibold">{ins.title}</p>
+              <p className="text-xs font-semibold text-white">{ins.title}</p>
               <button onClick={() => setExpanded(p => ({ ...p, [ins.id]: !p[ins.id] }))}
-                className="text-[11px] text-muted-foreground mt-1 text-left w-full">
+                className="text-[11px] text-[#94A3B8] mt-1 text-left w-full">
                 {expanded[ins.id] ? ins.analysis : (ins.analysis?.slice(0, 80) + (ins.analysis?.length > 80 ? '…' : ''))}
               </button>
               <div className="flex items-center justify-between gap-2 mt-2">
-                <span className="text-[10px] text-muted-foreground uppercase">{ins.insight_type}</span>
+                <span className="text-[10px] text-[#94A3B8] uppercase">{ins.insight_type}</span>
                 <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]" onClick={() => dismiss(ins.id)}>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-[#94A3B8] hover:text-white hover:bg-[#334155]" onClick={() => dismiss(ins.id)}>
                     <X size={10} className="mr-0.5" />Dismiss
                   </Button>
                 </div>
