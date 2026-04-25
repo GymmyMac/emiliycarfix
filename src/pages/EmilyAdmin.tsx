@@ -691,14 +691,14 @@ function ConversationsTab() {
 // ---------- MAIN PAGE ----------
 export default function EmilyAdmin() {
   return (
-    <div className="-mx-4 md:-mx-6 -my-4 md:-my-6 min-h-[calc(100vh-3.5rem)] md:min-h-screen bg-[#111827] text-foreground">
+    <div className="-mx-4 md:-mx-6 -my-4 md:-my-6 min-h-[calc(100vh-3.5rem)] md:min-h-screen bg-[#0F172A] text-foreground">
       {/* Header */}
-      <header className="h-14 border-b border-border bg-[#0d1117] px-4 flex items-center gap-6 sticky top-0 z-20">
+      <header className="h-[52px] border-b border-[#334155] bg-[#0F172A] px-5 flex items-center gap-6 sticky top-0 z-20">
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-base font-bold tracking-tight">CARFIX</span>
-          <span className="text-xs text-muted-foreground">·</span>
-          <span className="text-base font-bold text-amber-400">EMILY</span>
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground ml-1">Admin</span>
+          <span className="text-base font-bold tracking-tight text-white">CARFIX</span>
+          <span className="text-xs text-[#475569]">·</span>
+          <span className="text-base font-bold text-[#F59E0B]">EMILY</span>
+          <span className="text-[10px] uppercase tracking-wider text-[#64748B] ml-1 font-semibold">Admin</span>
         </div>
         <div className="flex-1 min-w-0">
           <Ticker />
@@ -710,7 +710,7 @@ export default function EmilyAdmin() {
         <div className="lg:col-span-3 h-[calc(100vh-9rem)] min-h-[500px]">
           <ChatPanel />
         </div>
-        <div className="lg:col-span-2 space-y-3 max-h-[calc(100vh-9rem)] overflow-y-auto">
+        <div className="lg:col-span-2 space-y-3 max-h-[calc(100vh-9rem)] overflow-y-auto pr-1">
           <StateEngineCard />
           <InsightsCard />
           <PendingActionsCard />
@@ -720,11 +720,19 @@ export default function EmilyAdmin() {
       {/* Bottom tabs */}
       <div className="px-4 pb-6">
         <Tabs defaultValue="documents">
-          <TabsList className="bg-card">
-            <TabsTrigger value="documents"><FileUp size={12} className="mr-1.5" />Documents</TabsTrigger>
-            <TabsTrigger value="memory"><Brain size={12} className="mr-1.5" />Memory</TabsTrigger>
-            <TabsTrigger value="controls"><Settings2 size={12} className="mr-1.5" />Controls</TabsTrigger>
-            <TabsTrigger value="conversations"><MessageSquare size={12} className="mr-1.5" />Conversations</TabsTrigger>
+          <TabsList className="bg-[#1E293B] border border-[#334155] h-auto p-1 gap-1">
+            <TabsTrigger value="documents" className="data-[state=active]:bg-transparent data-[state=active]:text-[#F59E0B] data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[#F59E0B] rounded-none px-4 py-2 text-[#94A3B8] hover:text-white border-b-2 border-transparent">
+              <FileUp size={13} className="mr-1.5" />Documents
+            </TabsTrigger>
+            <TabsTrigger value="memory" className="data-[state=active]:bg-transparent data-[state=active]:text-[#F59E0B] data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[#F59E0B] rounded-none px-4 py-2 text-[#94A3B8] hover:text-white border-b-2 border-transparent">
+              <Brain size={13} className="mr-1.5" />Memory
+            </TabsTrigger>
+            <TabsTrigger value="controls" className="data-[state=active]:bg-transparent data-[state=active]:text-[#F59E0B] data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[#F59E0B] rounded-none px-4 py-2 text-[#94A3B8] hover:text-white border-b-2 border-transparent">
+              <Settings2 size={13} className="mr-1.5" />Controls
+            </TabsTrigger>
+            <TabsTrigger value="conversations" className="data-[state=active]:bg-transparent data-[state=active]:text-[#F59E0B] data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[#F59E0B] rounded-none px-4 py-2 text-[#94A3B8] hover:text-white border-b-2 border-transparent">
+              <MessageSquare size={13} className="mr-1.5" />Conversations
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="documents" className="mt-3"><DocumentsTab /></TabsContent>
           <TabsContent value="memory" className="mt-3"><MemoryTab /></TabsContent>
