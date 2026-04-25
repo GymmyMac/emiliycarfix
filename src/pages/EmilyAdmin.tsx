@@ -425,33 +425,33 @@ function PendingActionsCard() {
   };
 
   return (
-    <Card className="p-4">
-      <div className="flex items-center justify-between mb-3">
+    <Card className="p-5 bg-[#1E293B] border-[#334155] border-t-[#F59E0B] border-t shadow-md">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <Zap size={14} className="text-amber-400" />
-          <h3 className="text-sm font-semibold">Pending Approval</h3>
+          <Zap size={14} className="text-[#F59E0B]" />
+          <h3 className="text-sm font-semibold text-white">Pending Approval</h3>
         </div>
-        {actions.length > 0 && <Badge className="bg-amber-500 text-black border-0 text-[10px]">{actions.length}</Badge>}
+        {actions.length > 0 && <Badge className="bg-[#F59E0B] text-black border-0 text-[10px]">{actions.length}</Badge>}
       </div>
       {actions.length === 0 ? (
-        <p className="text-xs text-muted-foreground">Nothing pending. Emily is ready.</p>
+        <p className="text-sm text-[#475569]">Nothing pending. Emily is ready.</p>
       ) : (
         <div className="space-y-2 max-h-80 overflow-y-auto">
           {actions.slice(0, 5).map(a => (
-            <div key={a.id} className="p-2.5 rounded-lg bg-muted/40 border border-border">
+            <div key={a.id} className="p-3 rounded-lg bg-[#0F172A] border border-[#334155]">
               <div className="flex items-center justify-between gap-2 mb-1">
-                <Badge variant="outline" className="text-[9px] px-1.5 py-0">{a.action_type}</Badge>
-                <span className="text-[10px] text-muted-foreground">{new Date(a.created_at).toLocaleDateString()}</span>
+                <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-[#334155] text-[#94A3B8]">{a.action_type}</Badge>
+                <span className="text-[10px] text-[#94A3B8]">{new Date(a.created_at).toLocaleDateString()}</span>
               </div>
-              <p className="text-xs font-semibold">{a.title}</p>
-              {a.description && <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{a.description}</p>}
+              <p className="text-xs font-semibold text-white">{a.title}</p>
+              {a.description && <p className="text-[11px] text-[#94A3B8] mt-1 line-clamp-2">{a.description}</p>}
               <div className="flex gap-1.5 mt-2">
                 <Button size="sm" onClick={() => approve(a)}
                   className="h-7 px-2.5 text-[10px] bg-green-600 hover:bg-green-700 text-white">
                   <Check size={11} className="mr-1" />Approve
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => reject(a)}
-                  className="h-7 px-2.5 text-[10px] border-red-500/40 text-red-400 hover:bg-red-500/10">
+                  className="h-7 px-2.5 text-[10px] border-red-500/40 text-red-400 hover:bg-red-500/10 bg-transparent">
                   <X size={11} className="mr-1" />Reject
                 </Button>
               </div>
