@@ -43,7 +43,7 @@ function Ticker() {
 
   useEffect(() => { load(); const i = setInterval(load, 60000); return () => clearInterval(i); }, [load]);
 
-  if (!metrics) return <div className="text-xs text-muted-foreground">Loading metrics…</div>;
+  if (!metrics) return <div className="text-xs text-[#94A3B8]">Loading metrics…</div>;
 
   const items = [
     { label: 'Orders 7d', value: metrics?.orders?.count ?? '—' },
@@ -56,12 +56,14 @@ function Ticker() {
     { label: 'KB docs', value: metrics?.knowledge?.documents ?? '—' },
   ];
 
+  const isNonZero = (v: any) => v !== 0 && v !== '0' && v !== '—' && v != null;
+
   return (
-    <div className="flex items-center gap-4 overflow-x-auto whitespace-nowrap text-xs scrollbar-none">
+    <div className="flex items-center gap-5 overflow-x-auto whitespace-nowrap text-xs scrollbar-none">
       {items.map((it, i) => (
         <span key={i} className="flex items-center gap-1.5">
-          <span className="text-muted-foreground">{it.label}:</span>
-          <span className={it.urgent ? 'text-amber-400 font-semibold' : 'text-foreground font-medium'}>{it.value}</span>
+          <span className="text-[#94A3B8]">{it.label}:</span>
+          <span className={it.urgent || isNonZero(it.value) ? 'text-[#F59E0B] font-semibold' : 'text-[#94A3B8] font-medium'}>{it.value}</span>
         </span>
       ))}
     </div>
