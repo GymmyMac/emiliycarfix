@@ -103,8 +103,10 @@ function ChatPanel() {
     })();
   }, [sessionId]);
 
-  const scrollToBottom = () => setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }), 50);
-  useEffect(scrollToBottom, [messages, isTyping]);
+  useEffect(() => {
+    const t = setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }), 50);
+    return () => clearTimeout(t);
+  }, [messages, isTyping]);
 
   const send = async (text: string) => {
     if (!text.trim() || isTyping) return;
