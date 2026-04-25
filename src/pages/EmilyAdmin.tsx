@@ -149,32 +149,32 @@ function ChatPanel() {
   const userInitial = user?.email?.charAt(0).toUpperCase() || 'J';
 
   return (
-    <div className="flex flex-col h-full bg-card rounded-xl border border-border overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+    <div className="flex flex-col h-full bg-[#1E293B] rounded-xl border border-[#334155] overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#334155]">
         <div className="flex items-center gap-2">
-          <Sparkles size={16} className="text-amber-400" />
-          <h2 className="text-sm font-semibold tracking-wide">EMILY</h2>
-          <span className="text-xs text-muted-foreground">Strategic AI</span>
+          <Sparkles size={16} className="text-[#F59E0B]" />
+          <h2 className="text-sm font-semibold tracking-wide text-white">EMILY</h2>
+          <span className="text-xs text-[#94A3B8]">Strategic AI</span>
         </div>
-        <Button variant="ghost" size="sm" onClick={newConversation} className="text-xs">
+        <Button variant="ghost" size="sm" onClick={newConversation} className="text-xs text-[#94A3B8] hover:text-white hover:bg-[#334155]">
           <RefreshCw size={12} className="mr-1.5" /> New
         </Button>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
         {messages.length === 0 && !isTyping && (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-4 py-12">
-            <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center">
-              <Sparkles size={20} className="text-amber-400" />
+            <div className="w-12 h-12 rounded-full bg-[#F59E0B]/10 flex items-center justify-center">
+              <Sparkles size={20} className="text-[#F59E0B]" />
             </div>
             <div>
-              <p className="text-sm font-medium">Ask Emily anything about CARFIX</p>
-              <p className="text-xs text-muted-foreground mt-1">She has access to your knowledge base, metrics, and live state.</p>
+              <p className="text-sm font-medium text-white">Ask Emily anything about CARFIX</p>
+              <p className="text-xs text-[#94A3B8] mt-1">She has access to your knowledge base, metrics, and live state.</p>
             </div>
             <div className="flex flex-wrap gap-2 justify-center max-w-md">
               {QUICK_PROMPTS.map((p, i) => (
                 <button key={i} onClick={() => send(p.text)}
-                  className="text-xs px-3 py-1.5 rounded-full bg-muted hover:bg-accent border border-border transition-colors">
+                  className="text-xs px-3 py-1.5 rounded-full bg-[#0F172A] hover:bg-[#334155] border border-[#334155] text-[#94A3B8] hover:text-white transition-colors">
                   <span className="mr-1">{p.icon}</span>{p.text}
                 </button>
               ))}
@@ -185,19 +185,19 @@ function ChatPanel() {
           <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${
               m.role === 'user'
-                ? 'bg-secondary text-secondary-foreground'
-                : 'bg-muted border-l-2 border-l-amber-400'
+                ? 'bg-[#1E3A5F] text-white'
+                : 'bg-[#0F172A] border-l-2 border-l-[#F59E0B] text-[#E2E8F0]'
             }`}>
               {m.role === 'emily' && (
                 <div className="flex items-center gap-1.5 mb-1.5">
-                  <Sparkles size={10} className="text-amber-400" />
-                  <span className="text-[10px] uppercase tracking-wider text-amber-400 font-semibold">Emily</span>
+                  <Sparkles size={10} className="text-[#F59E0B]" />
+                  <span className="text-[10px] uppercase tracking-wider text-[#F59E0B] font-semibold">Emily</span>
                 </div>
               )}
-              <div className="prose prose-sm prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1">
+              <div className="prose prose-sm prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-headings:font-bold prose-headings:text-white prose-strong:text-white prose-code:text-[#F59E0B] prose-code:bg-[#0F172A] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:before:content-none prose-code:after:content-none prose-pre:bg-[#0F172A] prose-pre:border prose-pre:border-[#334155]">
                 <ReactMarkdown>{m.content}</ReactMarkdown>
               </div>
-              <div className="text-[10px] text-muted-foreground mt-1.5 opacity-60">
+              <div className="text-[10px] text-[#64748B] mt-1.5">
                 {m.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </div>
             </div>
@@ -205,18 +205,18 @@ function ChatPanel() {
         ))}
         {isTyping && (
           <div className="flex justify-start">
-            <div className="bg-muted border-l-2 border-l-amber-400 rounded-xl px-4 py-3">
+            <div className="bg-[#0F172A] border-l-2 border-l-[#F59E0B] rounded-xl px-4 py-3">
               <div className="flex gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           </div>
         )}
       </div>
 
-      <div className="border-t border-border p-3">
+      <div className="border-t border-[#334155] p-4">
         <div className="flex gap-2 items-end">
           <Textarea
             value={input}
@@ -226,10 +226,10 @@ function ChatPanel() {
             }}
             placeholder="Ask Emily anything about CARFIX..."
             rows={1}
-            className="resize-none min-h-[40px] max-h-[120px] bg-muted border-border text-sm"
+            className="resize-none min-h-[44px] max-h-[140px] bg-[#0F172A] border-[#334155] text-sm text-white placeholder:text-[#64748B] focus-visible:ring-0 focus-visible:border-[#F59E0B] focus-visible:ring-offset-0"
           />
           <Button onClick={() => send(input)} disabled={!input.trim() || isTyping}
-            className="bg-amber-500 hover:bg-amber-600 text-black h-10 px-3">
+            className="bg-[#F59E0B] hover:bg-[#D97706] text-black h-11 px-4 disabled:opacity-50">
             <Send size={16} />
           </Button>
         </div>
