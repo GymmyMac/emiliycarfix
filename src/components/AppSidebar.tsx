@@ -11,10 +11,12 @@ import {
   Crosshair,
   Play,
   Grid3X3,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
+  { label: 'Emily Admin', subtitle: 'Chat, state, insights, actions', icon: Sparkles, path: '/emily-admin' },
   { label: 'Morning Brief', subtitle: 'What happened overnight', icon: LayoutGrid, path: '/dashboard' },
   { label: 'Flow', subtitle: 'All channels, every stage', icon: Grid3X3, path: '/flow' },
   { label: 'Intelligence', subtitle: 'Competitor keywords and gaps', icon: Crosshair, path: '/competitor-intelligence' },

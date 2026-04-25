@@ -15,6 +15,7 @@ import NotFound from "./pages/NotFound";
 import CompetitorIntelligence from "./pages/CompetitorIntelligence";
 import Videos from "./pages/Videos";
 import Flow from "./pages/Flow";
+import EmilyAdmin from "./pages/EmilyAdmin";
 
 const queryClient = new QueryClient();
 
@@ -30,6 +31,7 @@ const App = () => (
             <Route element={<AdminLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/flow" element={<Flow />} />
+              <Route path="/emily-admin" element={<EmilyAdmin />} />
               <Route path="/competitor-intelligence" element={<CompetitorIntelligence />} />
               <Route path="/approvals" element={<Approvals />} />
               <Route path="/operations" element={<Operations />} />
