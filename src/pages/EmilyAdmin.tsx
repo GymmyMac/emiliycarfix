@@ -265,40 +265,40 @@ function StateEngineCard() {
   const activeCount = events.filter(e => e.is_active && e.event_type !== 'base').length;
 
   const typeColor = (t: string) => ({
-    base: 'bg-muted text-muted-foreground',
+    base: 'bg-[#334155] text-[#94A3B8]',
     product_push: 'bg-blue-500/15 text-blue-400',
-    campaign: 'bg-purple-500/15 text-purple-400',
+    campaign: 'bg-violet-500/15 text-violet-400',
     seasonal: 'bg-amber-500/15 text-amber-400',
     emergency: 'bg-red-500/15 text-red-400',
-  } as any)[t] || 'bg-muted text-muted-foreground';
+  } as any)[t] || 'bg-[#334155] text-[#94A3B8]';
 
   return (
-    <Card className="p-4">
-      <div className="flex items-center justify-between mb-3">
+    <Card className="p-5 bg-[#1E293B] border-[#334155] border-t-[#F59E0B] border-t shadow-md">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${activeCount > 0 ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground'}`} />
-          <h3 className="text-sm font-semibold">State Engine</h3>
+          <span className={`w-2 h-2 rounded-full ${activeCount > 0 ? 'bg-green-500 animate-pulse' : 'bg-[#475569]'}`} />
+          <h3 className="text-sm font-semibold text-white">State Engine</h3>
         </div>
-        <span className="text-xs text-muted-foreground">{events.length} events</span>
+        <span className="text-xs text-[#94A3B8]">{events.length} events</span>
       </div>
       {loading ? (
-        <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-12 bg-muted/40 rounded animate-pulse" />)}</div>
+        <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-12 bg-[#0F172A] rounded animate-pulse" />)}</div>
       ) : events.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No events configured.</p>
+        <p className="text-sm text-[#475569]">No events configured.</p>
       ) : (
         <div className="space-y-2 max-h-64 overflow-y-auto">
           {events.map(ev => (
-            <div key={ev.event_key} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-muted/40 border border-border">
+            <div key={ev.event_key} className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-[#0F172A] border border-[#334155]">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-xs font-medium truncate">{ev.event_name}</span>
+                  <span className="text-xs font-medium truncate text-white">{ev.event_name}</span>
                   <Badge variant="outline" className={`${typeColor(ev.event_type)} text-[9px] px-1.5 py-0 border-0`}>{ev.event_type}</Badge>
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5">P{ev.priority} · {ev.ends_at ? `ends ${new Date(ev.ends_at).toLocaleDateString()}` : 'no expiry'}</p>
+                <p className="text-[10px] text-[#94A3B8] mt-0.5">P{ev.priority} · {ev.ends_at ? `ends ${new Date(ev.ends_at).toLocaleDateString()}` : 'no expiry'}</p>
               </div>
               <button
                 onClick={() => toggle(ev)}
-                className={`relative w-9 h-5 rounded-full transition-colors ${ev.is_active ? 'bg-green-500' : 'bg-muted-foreground/30'}`}
+                className={`relative w-9 h-5 rounded-full transition-colors ${ev.is_active ? 'bg-green-500' : 'bg-[#475569]'}`}
               >
                 <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${ev.is_active ? 'translate-x-4' : 'translate-x-0.5'}`} />
               </button>
