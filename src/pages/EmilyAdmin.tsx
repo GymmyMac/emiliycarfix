@@ -43,7 +43,7 @@ function Ticker() {
 
   useEffect(() => { load(); const i = setInterval(load, 60000); return () => clearInterval(i); }, [load]);
 
-  if (!metrics) return <div className="text-xs text-muted-foreground">Loading metrics…</div>;
+  if (!metrics) return <div className="text-xs text-[#94A3B8]">Loading metrics…</div>;
 
   const items = [
     { label: 'Orders 7d', value: metrics?.orders?.count ?? '—' },
@@ -56,12 +56,14 @@ function Ticker() {
     { label: 'KB docs', value: metrics?.knowledge?.documents ?? '—' },
   ];
 
+  const isNonZero = (v: any) => v !== 0 && v !== '0' && v !== '—' && v != null;
+
   return (
-    <div className="flex items-center gap-4 overflow-x-auto whitespace-nowrap text-xs scrollbar-none">
+    <div className="flex items-center gap-5 overflow-x-auto whitespace-nowrap text-xs scrollbar-none">
       {items.map((it, i) => (
         <span key={i} className="flex items-center gap-1.5">
-          <span className="text-muted-foreground">{it.label}:</span>
-          <span className={it.urgent ? 'text-amber-400 font-semibold' : 'text-foreground font-medium'}>{it.value}</span>
+          <span className="text-[#94A3B8]">{it.label}:</span>
+          <span className={it.urgent || isNonZero(it.value) ? 'text-[#F59E0B] font-semibold' : 'text-[#94A3B8] font-medium'}>{it.value}</span>
         </span>
       ))}
     </div>
@@ -147,32 +149,32 @@ function ChatPanel() {
   const userInitial = user?.email?.charAt(0).toUpperCase() || 'J';
 
   return (
-    <div className="flex flex-col h-full bg-card rounded-xl border border-border overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+    <div className="flex flex-col h-full bg-[#1E293B] rounded-xl border border-[#334155] overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#334155]">
         <div className="flex items-center gap-2">
-          <Sparkles size={16} className="text-amber-400" />
-          <h2 className="text-sm font-semibold tracking-wide">EMILY</h2>
-          <span className="text-xs text-muted-foreground">Strategic AI</span>
+          <Sparkles size={16} className="text-[#F59E0B]" />
+          <h2 className="text-sm font-semibold tracking-wide text-white">EMILY</h2>
+          <span className="text-xs text-[#94A3B8]">Strategic AI</span>
         </div>
-        <Button variant="ghost" size="sm" onClick={newConversation} className="text-xs">
+        <Button variant="ghost" size="sm" onClick={newConversation} className="text-xs text-[#94A3B8] hover:text-white hover:bg-[#334155]">
           <RefreshCw size={12} className="mr-1.5" /> New
         </Button>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
         {messages.length === 0 && !isTyping && (
           <div className="flex flex-col items-center justify-center h-full text-center space-y-4 py-12">
-            <div className="w-12 h-12 rounded-full bg-amber-500/10 flex items-center justify-center">
-              <Sparkles size={20} className="text-amber-400" />
+            <div className="w-12 h-12 rounded-full bg-[#F59E0B]/10 flex items-center justify-center">
+              <Sparkles size={20} className="text-[#F59E0B]" />
             </div>
             <div>
-              <p className="text-sm font-medium">Ask Emily anything about CARFIX</p>
-              <p className="text-xs text-muted-foreground mt-1">She has access to your knowledge base, metrics, and live state.</p>
+              <p className="text-sm font-medium text-white">Ask Emily anything about CARFIX</p>
+              <p className="text-xs text-[#94A3B8] mt-1">She has access to your knowledge base, metrics, and live state.</p>
             </div>
             <div className="flex flex-wrap gap-2 justify-center max-w-md">
               {QUICK_PROMPTS.map((p, i) => (
                 <button key={i} onClick={() => send(p.text)}
-                  className="text-xs px-3 py-1.5 rounded-full bg-muted hover:bg-accent border border-border transition-colors">
+                  className="text-xs px-3 py-1.5 rounded-full bg-[#0F172A] hover:bg-[#334155] border border-[#334155] text-[#94A3B8] hover:text-white transition-colors">
                   <span className="mr-1">{p.icon}</span>{p.text}
                 </button>
               ))}
@@ -183,19 +185,19 @@ function ChatPanel() {
           <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${
               m.role === 'user'
-                ? 'bg-secondary text-secondary-foreground'
-                : 'bg-muted border-l-2 border-l-amber-400'
+                ? 'bg-[#1E3A5F] text-white'
+                : 'bg-[#0F172A] border-l-2 border-l-[#F59E0B] text-[#E2E8F0]'
             }`}>
               {m.role === 'emily' && (
                 <div className="flex items-center gap-1.5 mb-1.5">
-                  <Sparkles size={10} className="text-amber-400" />
-                  <span className="text-[10px] uppercase tracking-wider text-amber-400 font-semibold">Emily</span>
+                  <Sparkles size={10} className="text-[#F59E0B]" />
+                  <span className="text-[10px] uppercase tracking-wider text-[#F59E0B] font-semibold">Emily</span>
                 </div>
               )}
-              <div className="prose prose-sm prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1">
+              <div className="prose prose-sm prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-headings:font-bold prose-headings:text-white prose-strong:text-white prose-code:text-[#F59E0B] prose-code:bg-[#0F172A] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:before:content-none prose-code:after:content-none prose-pre:bg-[#0F172A] prose-pre:border prose-pre:border-[#334155]">
                 <ReactMarkdown>{m.content}</ReactMarkdown>
               </div>
-              <div className="text-[10px] text-muted-foreground mt-1.5 opacity-60">
+              <div className="text-[10px] text-[#64748B] mt-1.5">
                 {m.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </div>
             </div>
@@ -203,18 +205,18 @@ function ChatPanel() {
         ))}
         {isTyping && (
           <div className="flex justify-start">
-            <div className="bg-muted border-l-2 border-l-amber-400 rounded-xl px-4 py-3">
+            <div className="bg-[#0F172A] border-l-2 border-l-[#F59E0B] rounded-xl px-4 py-3">
               <div className="flex gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#F59E0B] animate-bounce" style={{ animationDelay: '300ms' }} />
               </div>
             </div>
           </div>
         )}
       </div>
 
-      <div className="border-t border-border p-3">
+      <div className="border-t border-[#334155] p-4">
         <div className="flex gap-2 items-end">
           <Textarea
             value={input}
@@ -224,10 +226,10 @@ function ChatPanel() {
             }}
             placeholder="Ask Emily anything about CARFIX..."
             rows={1}
-            className="resize-none min-h-[40px] max-h-[120px] bg-muted border-border text-sm"
+            className="resize-none min-h-[44px] max-h-[140px] bg-[#0F172A] border-[#334155] text-sm text-white placeholder:text-[#64748B] focus-visible:ring-0 focus-visible:border-[#F59E0B] focus-visible:ring-offset-0"
           />
           <Button onClick={() => send(input)} disabled={!input.trim() || isTyping}
-            className="bg-amber-500 hover:bg-amber-600 text-black h-10 px-3">
+            className="bg-[#F59E0B] hover:bg-[#D97706] text-black h-11 px-4 disabled:opacity-50">
             <Send size={16} />
           </Button>
         </div>
@@ -263,40 +265,40 @@ function StateEngineCard() {
   const activeCount = events.filter(e => e.is_active && e.event_type !== 'base').length;
 
   const typeColor = (t: string) => ({
-    base: 'bg-muted text-muted-foreground',
+    base: 'bg-[#334155] text-[#94A3B8]',
     product_push: 'bg-blue-500/15 text-blue-400',
-    campaign: 'bg-purple-500/15 text-purple-400',
+    campaign: 'bg-violet-500/15 text-violet-400',
     seasonal: 'bg-amber-500/15 text-amber-400',
     emergency: 'bg-red-500/15 text-red-400',
-  } as any)[t] || 'bg-muted text-muted-foreground';
+  } as any)[t] || 'bg-[#334155] text-[#94A3B8]';
 
   return (
-    <Card className="p-4">
-      <div className="flex items-center justify-between mb-3">
+    <Card className="p-5 bg-[#1E293B] border-[#334155] border-t-[#F59E0B] border-t shadow-md">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${activeCount > 0 ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground'}`} />
-          <h3 className="text-sm font-semibold">State Engine</h3>
+          <span className={`w-2 h-2 rounded-full ${activeCount > 0 ? 'bg-green-500 animate-pulse' : 'bg-[#475569]'}`} />
+          <h3 className="text-sm font-semibold text-white">State Engine</h3>
         </div>
-        <span className="text-xs text-muted-foreground">{events.length} events</span>
+        <span className="text-xs text-[#94A3B8]">{events.length} events</span>
       </div>
       {loading ? (
-        <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-12 bg-muted/40 rounded animate-pulse" />)}</div>
+        <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-12 bg-[#0F172A] rounded animate-pulse" />)}</div>
       ) : events.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No events configured.</p>
+        <p className="text-sm text-[#475569]">No events configured.</p>
       ) : (
         <div className="space-y-2 max-h-64 overflow-y-auto">
           {events.map(ev => (
-            <div key={ev.event_key} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-muted/40 border border-border">
+            <div key={ev.event_key} className="flex items-center justify-between gap-2 p-2.5 rounded-lg bg-[#0F172A] border border-[#334155]">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-xs font-medium truncate">{ev.event_name}</span>
+                  <span className="text-xs font-medium truncate text-white">{ev.event_name}</span>
                   <Badge variant="outline" className={`${typeColor(ev.event_type)} text-[9px] px-1.5 py-0 border-0`}>{ev.event_type}</Badge>
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5">P{ev.priority} · {ev.ends_at ? `ends ${new Date(ev.ends_at).toLocaleDateString()}` : 'no expiry'}</p>
+                <p className="text-[10px] text-[#94A3B8] mt-0.5">P{ev.priority} · {ev.ends_at ? `ends ${new Date(ev.ends_at).toLocaleDateString()}` : 'no expiry'}</p>
               </div>
               <button
                 onClick={() => toggle(ev)}
-                className={`relative w-9 h-5 rounded-full transition-colors ${ev.is_active ? 'bg-green-500' : 'bg-muted-foreground/30'}`}
+                className={`relative w-9 h-5 rounded-full transition-colors ${ev.is_active ? 'bg-green-500' : 'bg-[#475569]'}`}
               >
                 <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${ev.is_active ? 'translate-x-4' : 'translate-x-0.5'}`} />
               </button>
@@ -347,36 +349,36 @@ function InsightsCard() {
   };
 
   return (
-    <Card className="p-4">
-      <div className="flex items-center justify-between mb-3">
+    <Card className="p-5 bg-[#1E293B] border-[#334155] border-t-[#F59E0B] border-t shadow-md">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <Activity size={14} className="text-amber-400" />
-          <h3 className="text-sm font-semibold">Emily's Insights</h3>
+          <Activity size={14} className="text-[#F59E0B]" />
+          <h3 className="text-sm font-semibold text-white">Emily's Insights</h3>
         </div>
-        {insights.length > 0 && <Badge className="bg-amber-500/20 text-amber-400 border-0 text-[10px]">{insights.length} new</Badge>}
+        {insights.length > 0 && <Badge className="bg-[#F59E0B]/20 text-[#F59E0B] border-0 text-[10px]">{insights.length} new</Badge>}
       </div>
       {insights.length === 0 ? (
-        <p className="text-xs text-muted-foreground flex items-center gap-2">
+        <p className="text-sm text-[#475569] flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-green-500/50 animate-pulse" />
           No new insights. Emily is monitoring.
         </p>
       ) : (
         <div className="space-y-2 max-h-80 overflow-y-auto">
           {insights.slice(0, 5).map(ins => (
-            <div key={ins.id} className="p-2.5 rounded-lg bg-muted/40 border border-border">
+            <div key={ins.id} className="p-3 rounded-lg bg-[#0F172A] border border-[#334155]">
               <div className="flex items-start justify-between gap-2 mb-1">
                 <Badge variant="outline" className={`${sevColor(ins.severity)} text-[9px] px-1.5 py-0`}>{ins.severity}</Badge>
-                <span className="text-[10px] text-muted-foreground">{ago(ins.created_at)}</span>
+                <span className="text-[10px] text-[#94A3B8]">{ago(ins.created_at)}</span>
               </div>
-              <p className="text-xs font-semibold">{ins.title}</p>
+              <p className="text-xs font-semibold text-white">{ins.title}</p>
               <button onClick={() => setExpanded(p => ({ ...p, [ins.id]: !p[ins.id] }))}
-                className="text-[11px] text-muted-foreground mt-1 text-left w-full">
+                className="text-[11px] text-[#94A3B8] mt-1 text-left w-full">
                 {expanded[ins.id] ? ins.analysis : (ins.analysis?.slice(0, 80) + (ins.analysis?.length > 80 ? '…' : ''))}
               </button>
               <div className="flex items-center justify-between gap-2 mt-2">
-                <span className="text-[10px] text-muted-foreground uppercase">{ins.insight_type}</span>
+                <span className="text-[10px] text-[#94A3B8] uppercase">{ins.insight_type}</span>
                 <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px]" onClick={() => dismiss(ins.id)}>
+                  <Button size="sm" variant="ghost" className="h-6 px-2 text-[10px] text-[#94A3B8] hover:text-white hover:bg-[#334155]" onClick={() => dismiss(ins.id)}>
                     <X size={10} className="mr-0.5" />Dismiss
                   </Button>
                 </div>
@@ -423,33 +425,33 @@ function PendingActionsCard() {
   };
 
   return (
-    <Card className="p-4">
-      <div className="flex items-center justify-between mb-3">
+    <Card className="p-5 bg-[#1E293B] border-[#334155] border-t-[#F59E0B] border-t shadow-md">
+      <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <Zap size={14} className="text-amber-400" />
-          <h3 className="text-sm font-semibold">Pending Approval</h3>
+          <Zap size={14} className="text-[#F59E0B]" />
+          <h3 className="text-sm font-semibold text-white">Pending Approval</h3>
         </div>
-        {actions.length > 0 && <Badge className="bg-amber-500 text-black border-0 text-[10px]">{actions.length}</Badge>}
+        {actions.length > 0 && <Badge className="bg-[#F59E0B] text-black border-0 text-[10px]">{actions.length}</Badge>}
       </div>
       {actions.length === 0 ? (
-        <p className="text-xs text-muted-foreground">Nothing pending. Emily is ready.</p>
+        <p className="text-sm text-[#475569]">Nothing pending. Emily is ready.</p>
       ) : (
         <div className="space-y-2 max-h-80 overflow-y-auto">
           {actions.slice(0, 5).map(a => (
-            <div key={a.id} className="p-2.5 rounded-lg bg-muted/40 border border-border">
+            <div key={a.id} className="p-3 rounded-lg bg-[#0F172A] border border-[#334155]">
               <div className="flex items-center justify-between gap-2 mb-1">
-                <Badge variant="outline" className="text-[9px] px-1.5 py-0">{a.action_type}</Badge>
-                <span className="text-[10px] text-muted-foreground">{new Date(a.created_at).toLocaleDateString()}</span>
+                <Badge variant="outline" className="text-[9px] px-1.5 py-0 border-[#334155] text-[#94A3B8]">{a.action_type}</Badge>
+                <span className="text-[10px] text-[#94A3B8]">{new Date(a.created_at).toLocaleDateString()}</span>
               </div>
-              <p className="text-xs font-semibold">{a.title}</p>
-              {a.description && <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{a.description}</p>}
+              <p className="text-xs font-semibold text-white">{a.title}</p>
+              {a.description && <p className="text-[11px] text-[#94A3B8] mt-1 line-clamp-2">{a.description}</p>}
               <div className="flex gap-1.5 mt-2">
                 <Button size="sm" onClick={() => approve(a)}
                   className="h-7 px-2.5 text-[10px] bg-green-600 hover:bg-green-700 text-white">
                   <Check size={11} className="mr-1" />Approve
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => reject(a)}
-                  className="h-7 px-2.5 text-[10px] border-red-500/40 text-red-400 hover:bg-red-500/10">
+                  className="h-7 px-2.5 text-[10px] border-red-500/40 text-red-400 hover:bg-red-500/10 bg-transparent">
                   <X size={11} className="mr-1" />Reject
                 </Button>
               </div>
@@ -689,14 +691,14 @@ function ConversationsTab() {
 // ---------- MAIN PAGE ----------
 export default function EmilyAdmin() {
   return (
-    <div className="-mx-4 md:-mx-6 -my-4 md:-my-6 min-h-[calc(100vh-3.5rem)] md:min-h-screen bg-[#111827] text-foreground">
+    <div className="-mx-4 md:-mx-6 -my-4 md:-my-6 min-h-[calc(100vh-3.5rem)] md:min-h-screen bg-[#0F172A] text-foreground">
       {/* Header */}
-      <header className="h-14 border-b border-border bg-[#0d1117] px-4 flex items-center gap-6 sticky top-0 z-20">
+      <header className="h-[52px] border-b border-[#334155] bg-[#0F172A] px-5 flex items-center gap-6 sticky top-0 z-20">
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-base font-bold tracking-tight">CARFIX</span>
-          <span className="text-xs text-muted-foreground">·</span>
-          <span className="text-base font-bold text-amber-400">EMILY</span>
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground ml-1">Admin</span>
+          <span className="text-base font-bold tracking-tight text-white">CARFIX</span>
+          <span className="text-xs text-[#475569]">·</span>
+          <span className="text-base font-bold text-[#F59E0B]">EMILY</span>
+          <span className="text-[10px] uppercase tracking-wider text-[#64748B] ml-1 font-semibold">Admin</span>
         </div>
         <div className="flex-1 min-w-0">
           <Ticker />
@@ -708,7 +710,7 @@ export default function EmilyAdmin() {
         <div className="lg:col-span-3 h-[calc(100vh-9rem)] min-h-[500px]">
           <ChatPanel />
         </div>
-        <div className="lg:col-span-2 space-y-3 max-h-[calc(100vh-9rem)] overflow-y-auto">
+        <div className="lg:col-span-2 space-y-3 max-h-[calc(100vh-9rem)] overflow-y-auto pr-1">
           <StateEngineCard />
           <InsightsCard />
           <PendingActionsCard />
@@ -718,11 +720,19 @@ export default function EmilyAdmin() {
       {/* Bottom tabs */}
       <div className="px-4 pb-6">
         <Tabs defaultValue="documents">
-          <TabsList className="bg-card">
-            <TabsTrigger value="documents"><FileUp size={12} className="mr-1.5" />Documents</TabsTrigger>
-            <TabsTrigger value="memory"><Brain size={12} className="mr-1.5" />Memory</TabsTrigger>
-            <TabsTrigger value="controls"><Settings2 size={12} className="mr-1.5" />Controls</TabsTrigger>
-            <TabsTrigger value="conversations"><MessageSquare size={12} className="mr-1.5" />Conversations</TabsTrigger>
+          <TabsList className="bg-[#1E293B] border border-[#334155] h-auto p-1 gap-1">
+            <TabsTrigger value="documents" className="data-[state=active]:bg-transparent data-[state=active]:text-[#F59E0B] data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[#F59E0B] rounded-none px-4 py-2 text-[#94A3B8] hover:text-white border-b-2 border-transparent">
+              <FileUp size={13} className="mr-1.5" />Documents
+            </TabsTrigger>
+            <TabsTrigger value="memory" className="data-[state=active]:bg-transparent data-[state=active]:text-[#F59E0B] data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[#F59E0B] rounded-none px-4 py-2 text-[#94A3B8] hover:text-white border-b-2 border-transparent">
+              <Brain size={13} className="mr-1.5" />Memory
+            </TabsTrigger>
+            <TabsTrigger value="controls" className="data-[state=active]:bg-transparent data-[state=active]:text-[#F59E0B] data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[#F59E0B] rounded-none px-4 py-2 text-[#94A3B8] hover:text-white border-b-2 border-transparent">
+              <Settings2 size={13} className="mr-1.5" />Controls
+            </TabsTrigger>
+            <TabsTrigger value="conversations" className="data-[state=active]:bg-transparent data-[state=active]:text-[#F59E0B] data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-[#F59E0B] rounded-none px-4 py-2 text-[#94A3B8] hover:text-white border-b-2 border-transparent">
+              <MessageSquare size={13} className="mr-1.5" />Conversations
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="documents" className="mt-3"><DocumentsTab /></TabsContent>
           <TabsContent value="memory" className="mt-3"><MemoryTab /></TabsContent>
