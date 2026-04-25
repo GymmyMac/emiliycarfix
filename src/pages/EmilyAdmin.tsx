@@ -121,7 +121,11 @@ function ChatPanel() {
       const res = await fetch(`${SUPABASE_URL}/functions/v1/emily-chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}) },
-        body: JSON.stringify({ message: text.trim(), session_id: sessionId }),
+        body: JSON.stringify({
+          message: text.trim(),
+          messages: [...messages.map((m) => ({ role: m.role === 'emily' ? 'assistant' : 'user', content: m.content })), { role: 'user', content: text.trim() }],
+          session_id: sessionId,
+        }),
       });
       const json = await res.json();
       const reply = json?.response || json?.error || 'No response';
