@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, Check, RefreshCw, X, Rocket, AlertTriangle, ChevronDown, ChevronRight, Maximize2 } from 'lucide-react';
+import { Sparkles, Check, RefreshCw, X, Rocket, AlertTriangle, ChevronDown, ChevronRight, Maximize2, Square } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import DOMPurify from 'dompurify';
 import {
@@ -9,6 +9,9 @@ import {
   generateSampleForVehicle,
   writeWikiToDb,
   deployVehicle,
+  requestStop,
+  clearStop,
+  isStopRequested,
   type PriorityVehicle,
   type SamplePreview,
   type DeployResult,
@@ -82,15 +85,22 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
     else workBoard.pushActivity('✗', `Failed — ${r.make} ${r.model}: ${r.reason}`);
   };
 
+  const stop = () => {
+    requestStop();
+    workBoard.pushActivity('⏹', 'Stop requested — halting after current vehicle');
+  };
+
   const approveAndRun = async () => {
     // Guard: only execute when explicitly approved (samples exist & user clicked this).
     if (samples.length === 0) return;
+    clearStop();
     setPhase('deploying');
     workBoard.pushActivity('▶', `Wiki batch started — ${vehicles.length} vehicles`);
     const results: DeployResult[] = [];
 
     // Deploy already-sampled vehicles using the cached wiki content.
     for (const s of samples) {
+      if (isStopRequested()) break;
       const r = await writeWikiToDb(s.vehicle, s.wiki, s.raw);
       results.push(r);
       setDeployResults([...results]);
@@ -101,6 +111,7 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
     // Generate + deploy the remaining vehicles.
     const remaining = vehicles.filter(v => !sampledIds.has(v.id));
     for (const v of remaining) {
+      if (isStopRequested()) break;
       workBoard.pushActivity('⟳', `Generating — ${v.make} ${v.model} ${v.generation}`);
       const r = await deployVehicle(v);
       results.push(r);
@@ -109,22 +120,27 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
       logResult(r);
     }
 
+    const stopped = isStopRequested();
     setPhase('done');
     const live = results.filter(r => r.status === 'live').length;
     const skipped = results.filter(r => r.status === 'skipped').length;
     const failed = results.filter(r => r.status === 'failed').length;
-    onDone?.(`${live} live · ${skipped} skipped · ${failed} failed`);
+    if (stopped) workBoard.pushActivity('⏹', `Batch halted — ${results.length}/${vehicles.length} processed`);
+    onDone?.(`${live} live · ${skipped} skipped · ${failed} failed${stopped ? ' · stopped' : ''}`);
+    clearStop();
   };
 
   const retryFailed = async () => {
     const failedResults = deployResults.filter(r => r.status === 'failed');
     if (failedResults.length === 0) return;
+    clearStop();
     setPhase('deploying');
     workBoard.pushActivity('▶', `Retrying ${failedResults.length} failed vehicle${failedResults.length === 1 ? '' : 's'}`);
 
     const updated = [...deployResults];
     let done = 0;
     for (const failed of failedResults) {
+      if (isStopRequested()) break;
       const v = vehicles.find(x => x.id === failed.vehicleId);
       if (!v) { done++; continue; }
       workBoard.pushActivity('⟳', `Retrying — ${v.make} ${v.model} ${v.generation}`);
@@ -137,11 +153,14 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
       logResult(r);
     }
 
+    const stopped = isStopRequested();
     setPhase('done');
     const live = updated.filter(r => r.status === 'live').length;
     const skipped = updated.filter(r => r.status === 'skipped').length;
     const stillFailed = updated.filter(r => r.status === 'failed').length;
-    onDone?.(`${live} live · ${skipped} skipped · ${stillFailed} failed`);
+    if (stopped) workBoard.pushActivity('⏹', 'Retry halted by user');
+    onDone?.(`${live} live · ${skipped} skipped · ${stillFailed} failed${stopped ? ' · stopped' : ''}`);
+    clearStop();
   };
 
   return (
@@ -229,9 +248,22 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
 
       {phase === 'deploying' && (
         <div className="space-y-2">
-          <p className="text-xs text-foreground">
-            Deploying <span className="font-semibold text-primary">{deployProgress.current}</span> of {deployProgress.total}…
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-foreground">
+              Deploying <span className="font-semibold text-primary">{deployProgress.current}</span> of {deployProgress.total}
+              {isStopRequested() ? <span className="text-destructive ml-1">— stopping…</span> : '…'}
+            </p>
+            <Button
+              onClick={stop}
+              disabled={isStopRequested()}
+              variant="destructive"
+              size="sm"
+              className="h-7 text-xs"
+            >
+              <Square size={11} className="mr-1 fill-current" />
+              {isStopRequested() ? 'Stopping…' : 'STOP'}
+            </Button>
+          </div>
           <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
             <div
               className="h-full bg-primary transition-all"

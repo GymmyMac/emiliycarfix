@@ -2,6 +2,17 @@ import { supabase } from '@/lib/supabase';
 
 const SUPABASE_URL = 'https://flpzjbasdsfwoeruyxgp.supabase.co';
 
+// ---------- Global stop flag ----------
+// Lets the UI halt long-running batch loops between vehicle iterations
+// without having to wire AbortControllers through every call.
+let _stopRequested = false;
+export function requestStop() { _stopRequested = true; }
+export function clearStop() { _stopRequested = false; }
+export function isStopRequested() { return _stopRequested; }
+export class WikiStoppedError extends Error {
+  constructor() { super('Stopped by user'); this.name = 'WikiStoppedError'; }
+}
+
 export interface PriorityVehicle {
   id: string;
   slug: string;

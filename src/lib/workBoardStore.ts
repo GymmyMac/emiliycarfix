@@ -24,7 +24,7 @@ export interface WorkCardData {
   errorText?: string;
 }
 
-export type ActivityIcon = '✓' | '✗' | '⟳' | '▶' | '👁' | '✏' | '📋';
+export type ActivityIcon = '✓' | '✗' | '⟳' | '▶' | '👁' | '✏' | '📋' | '⏹';
 
 export interface ActivityEntry {
   id: string;
