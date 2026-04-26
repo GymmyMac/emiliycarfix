@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, Check, RefreshCw, X, Rocket, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
+import { Sparkles, Check, RefreshCw, X, Rocket, AlertTriangle, ChevronDown, ChevronRight, Maximize2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   fetchPriorityVehicles,
   generateSampleForVehicle,
