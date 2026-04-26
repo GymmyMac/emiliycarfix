@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, Check, RefreshCw, X, Rocket, AlertTriangle } from 'lucide-react';
+import { Sparkles, Check, RefreshCw, X, Rocket, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import {
   fetchPriorityVehicles,
   generateSampleForVehicle,
@@ -74,21 +74,29 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
 
   const reject = () => onReject?.();
 
+  const logResult = (r: DeployResult) => {
+    if (r.status === 'live') workBoard.pushActivity('✓', `Wiki page live — ${r.make} ${r.model}`);
+    else if (r.status === 'skipped') workBoard.pushActivity('⟳', `Skipped (already has content) — ${r.make} ${r.model}`);
+    else workBoard.pushActivity('✗', `Failed — ${r.make} ${r.model}: ${r.reason}`);
+  };
+
   const approveAndRun = async () => {
+    // Guard: only execute when explicitly approved (samples exist & user clicked this).
+    if (samples.length === 0) return;
     setPhase('deploying');
     workBoard.pushActivity('▶', `Wiki batch started — ${vehicles.length} vehicles`);
     const results: DeployResult[] = [];
 
+    // Deploy already-sampled vehicles using the cached wiki content.
     for (const s of samples) {
-      const r = await writeWikiToDb(s.vehicle, s.wiki);
+      const r = await writeWikiToDb(s.vehicle, s.wiki, s.raw);
       results.push(r);
       setDeployResults([...results]);
       setDeployProgress({ current: results.length, total: vehicles.length });
-      if (r.success) workBoard.pushActivity('✓', `Wiki page live — ${r.make} ${r.model}`);
-      else if (r.skipped) workBoard.pushActivity('⟳', `Skipped (already has content) — ${r.make} ${r.model}`);
-      else workBoard.pushActivity('✗', `Failed — ${r.make} ${r.model}: ${r.error}`);
+      logResult(r);
     }
 
+    // Generate + deploy the remaining vehicles.
     const remaining = vehicles.filter(v => !sampledIds.has(v.id));
     for (const v of remaining) {
       workBoard.pushActivity('⟳', `Generating — ${v.make} ${v.model} ${v.generation}`);
@@ -96,16 +104,42 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
       results.push(r);
       setDeployResults([...results]);
       setDeployProgress({ current: results.length, total: vehicles.length });
-      if (r.success) workBoard.pushActivity('✓', `Wiki page live — ${r.make} ${r.model}`);
-      else if (r.skipped) workBoard.pushActivity('⟳', `Skipped (already has content) — ${r.make} ${r.model}`);
-      else workBoard.pushActivity('✗', `Failed — ${r.make} ${r.model}: ${r.error}`);
+      logResult(r);
     }
 
     setPhase('done');
-    const live = results.filter(r => r.success).length;
-    const skipped = results.filter(r => r.skipped).length;
-    const failed = results.filter(r => !r.success && !r.skipped).length;
-    onDone?.(`${live} live, ${skipped} skipped${failed ? `, ${failed} failed` : ''}`);
+    const live = results.filter(r => r.status === 'live').length;
+    const skipped = results.filter(r => r.status === 'skipped').length;
+    const failed = results.filter(r => r.status === 'failed').length;
+    onDone?.(`${live} live · ${skipped} skipped · ${failed} failed`);
+  };
+
+  const retryFailed = async () => {
+    const failedResults = deployResults.filter(r => r.status === 'failed');
+    if (failedResults.length === 0) return;
+    setPhase('deploying');
+    workBoard.pushActivity('▶', `Retrying ${failedResults.length} failed vehicle${failedResults.length === 1 ? '' : 's'}`);
+
+    const updated = [...deployResults];
+    let done = 0;
+    for (const failed of failedResults) {
+      const v = vehicles.find(x => x.id === failed.vehicleId);
+      if (!v) { done++; continue; }
+      workBoard.pushActivity('⟳', `Retrying — ${v.make} ${v.model} ${v.generation}`);
+      const r = await deployVehicle(v);
+      const idx = updated.findIndex(x => x.vehicleId === v.id);
+      if (idx >= 0) updated[idx] = r; else updated.push(r);
+      setDeployResults([...updated]);
+      done++;
+      setDeployProgress({ current: deployResults.length - failedResults.length + done, total: deployResults.length });
+      logResult(r);
+    }
+
+    setPhase('done');
+    const live = updated.filter(r => r.status === 'live').length;
+    const skipped = updated.filter(r => r.status === 'skipped').length;
+    const stillFailed = updated.filter(r => r.status === 'failed').length;
+    onDone?.(`${live} live · ${skipped} skipped · ${stillFailed} failed`);
   };
 
   return (
@@ -175,7 +209,7 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
               <>
                 <Button onClick={approveAndRun} disabled={phase === 'sampling'} size="sm" className="h-7 text-xs">
                   <Rocket size={11} className="mr-1" />
-                  Approve &amp; Run ({vehicles.length})
+                  Approve &amp; Run Full Batch ({vehicles.length})
                 </Button>
                 <Button onClick={writeSample} variant="outline" size="sm" disabled={phase === 'sampling' || allSampled}
                   className="h-7 text-xs">
@@ -202,23 +236,91 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
               style={{ width: `${deployProgress.total ? (deployProgress.current / deployProgress.total) * 100 : 0}%` }}
             />
           </div>
-          <DeployList results={deployResults} />
+          <SummaryRow results={deployResults} />
+          <FailedList results={deployResults} />
         </div>
       )}
 
       {phase === 'done' && (
         <div className="space-y-2">
-          <div className="flex items-center gap-2 text-xs text-success">
-            <Check size={12} />
-            <span>
-              {deployResults.filter(r => r.success).length} live · {deployResults.filter(r => r.skipped).length} skipped
-              {deployResults.filter(r => !r.success && !r.skipped).length > 0 && (
-                <> · {deployResults.filter(r => !r.success && !r.skipped).length} failed</>
-              )}
-            </span>
-          </div>
-          <DeployList results={deployResults} />
+          <SummaryRow results={deployResults} />
+          <FailedList results={deployResults} />
+          {deployResults.some(r => r.status === 'failed') && (
+            <Button onClick={retryFailed} size="sm" variant="outline" className="h-7 text-xs">
+              <RefreshCw size={11} className="mr-1" />
+              Retry Failed ({deployResults.filter(r => r.status === 'failed').length})
+            </Button>
+          )}
         </div>
+      )}
+    </div>
+  );
+}
+
+function SummaryRow({ results }: { results: DeployResult[] }) {
+  const live = results.filter(r => r.status === 'live').length;
+  const skipped = results.filter(r => r.status === 'skipped').length;
+  const failed = results.filter(r => r.status === 'failed').length;
+  return (
+    <div className="flex items-center gap-3 text-xs flex-wrap">
+      <span className="flex items-center gap-1 text-success"><Check size={12} /> {live} live</span>
+      <span className="text-muted-foreground">— skipped {skipped} (already had content)</span>
+      <span className={failed > 0 ? 'text-destructive' : 'text-muted-foreground'}>
+        ✗ {failed} failed
+      </span>
+    </div>
+  );
+}
+
+function FailedList({ results }: { results: DeployResult[] }) {
+  const failed = results.filter(r => r.status === 'failed');
+  const [open, setOpen] = useState(true);
+  if (failed.length === 0) return null;
+  return (
+    <div className="rounded border border-destructive/30 bg-destructive/5">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-2 py-1.5 text-[11px] font-semibold text-destructive"
+      >
+        <span className="flex items-center gap-1">
+          {open ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+          Failed vehicles ({failed.length})
+        </span>
+      </button>
+      {open && (
+        <div className="divide-y divide-destructive/20">
+          {failed.map((r) => <FailedRow key={r.vehicleId} result={r} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FailedRow({ result }: { result: DeployResult }) {
+  const [showRaw, setShowRaw] = useState(false);
+  const hasRaw = !!result.raw && result.raw.length > 0;
+  return (
+    <div className="px-2 py-1.5 text-[11px] space-y-1">
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-foreground">
+          ✗ {result.make} {result.model} {result.generation}
+          <span className="text-destructive ml-1.5">— {result.reason}</span>
+        </span>
+        {hasRaw && (
+          <button
+            type="button"
+            onClick={() => setShowRaw(s => !s)}
+            className="shrink-0 text-[10px] text-muted-foreground hover:text-foreground"
+          >
+            {showRaw ? 'Hide response' : 'Show response ›'}
+          </button>
+        )}
+      </div>
+      {showRaw && hasRaw && (
+        <pre className="text-[10px] bg-muted/50 rounded p-2 overflow-x-auto whitespace-pre-wrap max-h-40 overflow-y-auto">
+          {result.raw}
+        </pre>
       )}
     </div>
   );
@@ -256,22 +358,6 @@ function SampleCard({ index, sample }: { index: number; sample: SamplePreview })
           <div className="text-[11px] text-foreground whitespace-pre-wrap line-clamp-3">{wiki.wof_notes}</div>
         </div>
       )}
-    </div>
-  );
-}
-
-function DeployList({ results }: { results: DeployResult[] }) {
-  if (results.length === 0) return null;
-  return (
-    <div className="max-h-32 overflow-y-auto rounded border border-border divide-y divide-border">
-      {results.map((r, i) => (
-        <div key={i} className="flex items-center justify-between px-2 py-1 text-[11px]">
-          <span className="text-foreground">{r.make} {r.model}</span>
-          <span className={r.success ? 'text-success' : r.skipped ? 'text-muted-foreground' : 'text-destructive'}>
-            {r.success ? '✓ live' : r.skipped ? '— skipped' : `✗ ${r.error || 'failed'}`}
-          </span>
-        </div>
-      ))}
     </div>
   );
 }
