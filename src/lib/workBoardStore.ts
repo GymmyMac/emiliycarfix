@@ -75,12 +75,18 @@ export const workBoard = new WorkBoardStore();
 
 export function useWorkBoard(): WorkCardData[] {
   const [, force] = useState(0);
-  useEffect(() => workBoard.subscribe(() => force((n) => n + 1)), []);
+  useEffect(() => {
+    const unsub = workBoard.subscribe(() => force((n) => n + 1));
+    return () => { unsub(); };
+  }, []);
   return workBoard.cards;
 }
 
 export function useActivityFeed(): ActivityEntry[] {
   const [, force] = useState(0);
-  useEffect(() => workBoard.subscribe(() => force((n) => n + 1)), []);
+  useEffect(() => {
+    const unsub = workBoard.subscribe(() => force((n) => n + 1));
+    return () => { unsub(); };
+  }, []);
   return workBoard.activity;
 }
