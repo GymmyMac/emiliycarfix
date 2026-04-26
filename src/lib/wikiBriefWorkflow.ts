@@ -151,8 +151,9 @@ export interface DeployResult {
   raw?: string;
 }
 
-/** Writes a parsed wiki object to vehicle_generations with a safety check
- *  that prevents overwriting a row that already has content. */
+/** Writes a parsed wiki object to vehicle_generations via the deploy-wiki-page
+ *  edge function (service-role server-side write — frontend anon key cannot
+ *  UPDATE this table because no UPDATE RLS policy exists). */
 export async function writeWikiToDb(
   vehicle: PriorityVehicle,
   wiki: ParsedWiki,
@@ -167,26 +168,24 @@ export async function writeWikiToDb(
     raw,
   };
 
-  const { data, error } = await supabase
-    .from('vehicle_generations')
-    .update({
-      seo_title: wiki.seo_title,
-      seo_description: wiki.seo_description,
-      aeo_intro: wiki.aeo_intro,
-      aeo_body: wiki.aeo_body,
-      aeo_context: wiki.aeo_context ?? null,
-      common_issues: wiki.common_issues,
-      wof_notes: wiki.wof_notes,
-      service_interval_km: wiki.service_interval_km,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', vehicle.id)
-    .is('aeo_intro', null)
-    .select('id');
+  try {
+    const { data, error } = await supabase.functions.invoke('deploy-wiki-page', {
+      body: { vehicle_id: vehicle.id, wiki_content: wiki },
+    });
 
-  if (error) return { ...base, status: 'failed', reason: `deploy error: ${error.message}` };
-  if (!data || data.length === 0) return { ...base, status: 'skipped', reason: 'already had content' };
-  return { ...base, status: 'live' };
+    if (error) {
+      return { ...base, status: 'failed', reason: `deploy invoke error: ${error.message}` };
+    }
+    if (data?.skipped) {
+      return { ...base, status: 'skipped', reason: data.reason || 'already had content' };
+    }
+    if (!data?.success) {
+      return { ...base, status: 'failed', reason: data?.error || 'deploy failed' };
+    }
+    return { ...base, status: 'live' };
+  } catch (e: any) {
+    return { ...base, status: 'failed', reason: `deploy error: ${e?.message || 'unknown'}` };
+  }
 }
 
 export async function deployVehicle(vehicle: PriorityVehicle): Promise<DeployResult> {
