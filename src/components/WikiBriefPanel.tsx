@@ -329,36 +329,84 @@ function FailedRow({ result }: { result: DeployResult }) {
 
 function SampleCard({ index, sample }: { index: number; sample: SamplePreview }) {
   const { vehicle, wiki } = sample;
+  const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-md border border-border bg-muted/40 p-2.5 space-y-1.5">
-      <div className="flex items-center justify-between">
-        <Badge variant="outline" className="text-[9px] px-1.5 py-0">Sample #{index}</Badge>
-        <span className="text-[10px] text-muted-foreground">{vehicle.make} {vehicle.model} {vehicle.generation}</span>
+    <>
+      <div className="rounded-md border border-border bg-muted/40 p-2.5 space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <Badge variant="outline" className="text-[9px] px-1.5 py-0">Sample #{index}</Badge>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[10px] text-muted-foreground truncate">{vehicle.make} {vehicle.model} {vehicle.generation}</span>
+            <button
+              type="button"
+              onClick={() => setOpen(true)}
+              className="shrink-0 inline-flex items-center gap-0.5 text-[10px] text-primary hover:underline"
+            >
+              <Maximize2 size={10} /> Expand
+            </button>
+          </div>
+        </div>
+        {wiki.seo_title && (
+          <div>
+            <div className="text-[9px] uppercase text-muted-foreground">SEO Title</div>
+            <div className="text-[11px] text-foreground">{wiki.seo_title}</div>
+          </div>
+        )}
+        {wiki.aeo_intro && (
+          <div>
+            <div className="text-[9px] uppercase text-muted-foreground">Intro</div>
+            <div className="text-[11px] text-foreground whitespace-pre-wrap line-clamp-3">{wiki.aeo_intro}</div>
+          </div>
+        )}
+        {wiki.common_issues && (
+          <div>
+            <div className="text-[9px] uppercase text-muted-foreground">Common Issues</div>
+            <div className="text-[11px] text-foreground whitespace-pre-wrap line-clamp-3">{wiki.common_issues}</div>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="text-[10px] text-primary hover:underline"
+        >
+          Read full sample ›
+        </button>
       </div>
-      {wiki.seo_title && (
-        <div>
-          <div className="text-[9px] uppercase text-muted-foreground">SEO Title</div>
-          <div className="text-[11px] text-foreground">{wiki.seo_title}</div>
-        </div>
-      )}
-      {wiki.aeo_intro && (
-        <div>
-          <div className="text-[9px] uppercase text-muted-foreground">Intro</div>
-          <div className="text-[11px] text-foreground whitespace-pre-wrap">{wiki.aeo_intro}</div>
-        </div>
-      )}
-      {wiki.common_issues && (
-        <div>
-          <div className="text-[9px] uppercase text-muted-foreground">Common Issues</div>
-          <div className="text-[11px] text-foreground whitespace-pre-wrap line-clamp-4">{wiki.common_issues}</div>
-        </div>
-      )}
-      {wiki.wof_notes && (
-        <div>
-          <div className="text-[9px] uppercase text-muted-foreground">WOF Notes</div>
-          <div className="text-[11px] text-foreground whitespace-pre-wrap line-clamp-3">{wiki.wof_notes}</div>
-        </div>
-      )}
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              Sample #{index} — {vehicle.make} {vehicle.model} {vehicle.generation}
+              <span className="text-xs font-normal text-muted-foreground ml-2">
+                ({vehicle.years_start}{vehicle.years_end ? `–${vehicle.years_end}` : '+'})
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <Field label="SEO Title" value={wiki.seo_title} />
+            <Field label="SEO Description" value={wiki.seo_description} />
+            <Field label="Intro" value={wiki.aeo_intro} />
+            <Field label="Body" value={wiki.aeo_body} />
+            <Field label="Context" value={wiki.aeo_context ?? undefined} />
+            <Field label="Common Issues" value={wiki.common_issues} />
+            <Field label="WOF Notes" value={wiki.wof_notes} />
+            {wiki.service_interval_km != null && (
+              <Field label="Service Interval (km)" value={String(wiki.service_interval_km)} />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function Field({ label, value }: { label: string; value?: string }) {
+  if (!value) return null;
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">{label}</div>
+      <div className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{value}</div>
     </div>
   );
 }
