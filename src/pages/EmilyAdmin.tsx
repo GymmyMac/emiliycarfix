@@ -408,9 +408,8 @@ function PendingActionsCard() {
   useEffect(() => { load(); const i = setInterval(load, 30000); return () => clearInterval(i); }, [load]);
 
   const approve = async (a: any) => {
-    const note = prompt('Any notes for Emily? (optional)') || null;
     const { error } = await supabase.from('emily_pending_actions').update({
-      status: 'approved', approved_at: new Date().toISOString(), james_notes: note,
+      status: 'approved', approved_at: new Date().toISOString(),
     }).eq('id', a.id);
     if (error) toast({ title: 'Failed', description: error.message, variant: 'destructive' });
     else { toast({ title: 'Approved', description: a.title }); load(); }
