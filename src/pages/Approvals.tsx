@@ -214,6 +214,7 @@ export default function Approvals() {
       supabase.from('mkt_seo_queue')
         .select('*')
         .eq('james_approved', false)
+        .eq('status', 'pending')
         .not('draft_content', 'is', null)
         .order('priority_score', { ascending: false }),
       supabase.from('mkt_seo_queue')
