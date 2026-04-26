@@ -90,6 +90,7 @@ async function callEmilyForVehicle(vehicle: PriorityVehicle): Promise<string> {
     headers: { 'Content-Type': 'application/json', ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}) },
     body: JSON.stringify({
       message: taskMessage,
+      messages: [{ role: 'user', content: taskMessage }],
       session_id: `admin-wiki-${vehicle.slug}-${Date.now()}`,
     }),
   });
