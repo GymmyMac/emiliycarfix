@@ -70,6 +70,7 @@ export function TaskLauncher({ onPickTask }: Props) {
                   </div>
                 ))}
               </div>
+              )}
             </div>
           );
         })}
