@@ -4,66 +4,67 @@
 
 @layer base {
   :root {
-    /* CARFIX Dark Professional Theme */
-    --background: 216 28% 7%;              /* #0d1117 */
-    --foreground: 213 14% 80%;             /* #c9d1d9 */
+    /* Cowork Light Theme — warm off-white surface, purple Emily accent */
+    --background: 60 9% 98%;                /* #F9F9F8 */
+    --foreground: 0 0% 10%;                 /* #1A1A1A */
 
-    --card: 215 22% 11%;                   /* #161b22 */
-    --card-foreground: 213 14% 80%;
+    --card: 0 0% 100%;                      /* #FFFFFF */
+    --card-foreground: 0 0% 10%;
 
-    --popover: 215 22% 11%;
-    --popover-foreground: 213 14% 80%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
 
-    --primary: 212 100% 48%;               /* #58a6ff - LOAD blue */
+    --primary: 262 83% 58%;                 /* #7C3AED purple — Emily */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 215 14% 16%;              /* #21262d */
-    --secondary-foreground: 213 14% 80%;
+    --secondary: 220 14% 96%;               /* #F3F4F6 */
+    --secondary-foreground: 0 0% 10%;
 
-    --muted: 215 14% 16%;
-    --muted-foreground: 215 9% 55%;        /* #8b949e */
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;         /* #6B7280 */
 
-    --accent: 215 14% 16%;
-    --accent-foreground: 213 14% 80%;
+    --accent: 262 83% 96%;                  /* purple-tinted hover */
+    --accent-foreground: 262 83% 35%;
 
-    --destructive: 356 75% 63%;            /* #f85149 */
+    --destructive: 0 72% 51%;               /* #DC2626 */
     --destructive-foreground: 0 0% 100%;
 
-    --border: 215 14% 16%;                 /* #21262d */
-    --input: 215 14% 16%;
-    --ring: 212 100% 48%;
+    --border: 220 13% 91%;                  /* #E5E7EB */
+    --input: 220 13% 91%;
+    --ring: 262 83% 58%;
 
     --radius: 0.5rem;
 
-    --sidebar-background: 216 28% 7%;
-    --sidebar-foreground: 213 14% 80%;
-    --sidebar-primary: 212 100% 48%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 0 0% 10%;
+    --sidebar-primary: 262 83% 58%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 215 14% 16%;
-    --sidebar-accent-foreground: 213 14% 80%;
-    --sidebar-border: 215 14% 16%;
-    --sidebar-ring: 212 100% 48%;
+    --sidebar-accent: 220 14% 96%;
+    --sidebar-accent-foreground: 0 0% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 262 83% 58%;
 
-    /* Phase colours */
-    --phase-form: 142 58% 49%;             /* #3fb950 */
-    --phase-load: 212 100% 67%;            /* #58a6ff */
-    --phase-launch: 267 79% 71%;           /* #a371f7 */
-    --phase-storm: 27 87% 61%;             /* #f0883e */
-    --phase-perform: 295 93% 56%;          /* #e040fb */
+    /* Phase colours (kept for legacy components) */
+    --phase-form: 142 71% 45%;              /* #16A34A */
+    --phase-load: 217 91% 60%;              /* #3B82F6 */
+    --phase-launch: 262 83% 58%;            /* #7C3AED */
+    --phase-storm: 25 95% 53%;              /* #F97316 */
+    --phase-perform: 295 80% 50%;
 
     /* PSYOPS stream colours */
-    --stream-disrupt: 356 75% 63%;         /* #f85149 */
-    --stream-educate: 212 100% 67%;        /* #58a6ff */
-    --stream-convert: 142 58% 49%;         /* #3fb950 */
-    --stream-amplify: 267 79% 71%;         /* #a371f7 */
+    --stream-disrupt: 0 72% 51%;
+    --stream-educate: 217 91% 60%;
+    --stream-convert: 142 71% 45%;
+    --stream-amplify: 262 83% 58%;
 
     /* Status */
-    --success: 142 58% 49%;               /* #3fb950 */
-    --warning: 40 72% 49%;                /* #d29922 */
-    --info: 212 100% 67%;                 /* #58a6ff */
+    --success: 158 64% 39%;                 /* #10B981 */
+    --warning: 38 92% 50%;                  /* #F59E0B */
+    --info: 217 91% 60%;
 
     /* Surface variants */
-    --surface-raised: 215 19% 13%;         /* #1c2128 */
+    --surface-raised: 220 14% 96%;          /* #F3F4F6 */
+    --emily: 262 83% 58%;                   /* Emily purple alias */
   }
 }
 
@@ -74,6 +75,26 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer utilities {
+  .shadow-card {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  }
+  .shadow-card-hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Pen writing animation for "In Progress" cards */
+  @keyframes pen-write {
+    0%, 100% { transform: translateX(-2px) rotate(-8deg); }
+    50% { transform: translateX(2px) rotate(8deg); }
+  }
+  .animate-pen-write {
+    animation: pen-write 1.2s ease-in-out infinite;
+    transform-origin: bottom left;
   }
 }
