@@ -85,15 +85,22 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
     else workBoard.pushActivity('✗', `Failed — ${r.make} ${r.model}: ${r.reason}`);
   };
 
+  const stop = () => {
+    requestStop();
+    workBoard.pushActivity('⏹', 'Stop requested — halting after current vehicle');
+  };
+
   const approveAndRun = async () => {
     // Guard: only execute when explicitly approved (samples exist & user clicked this).
     if (samples.length === 0) return;
+    clearStop();
     setPhase('deploying');
     workBoard.pushActivity('▶', `Wiki batch started — ${vehicles.length} vehicles`);
     const results: DeployResult[] = [];
 
     // Deploy already-sampled vehicles using the cached wiki content.
     for (const s of samples) {
+      if (isStopRequested()) break;
       const r = await writeWikiToDb(s.vehicle, s.wiki, s.raw);
       results.push(r);
       setDeployResults([...results]);
@@ -104,6 +111,7 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
     // Generate + deploy the remaining vehicles.
     const remaining = vehicles.filter(v => !sampledIds.has(v.id));
     for (const v of remaining) {
+      if (isStopRequested()) break;
       workBoard.pushActivity('⟳', `Generating — ${v.make} ${v.model} ${v.generation}`);
       const r = await deployVehicle(v);
       results.push(r);
@@ -112,11 +120,14 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
       logResult(r);
     }
 
+    const stopped = isStopRequested();
     setPhase('done');
     const live = results.filter(r => r.status === 'live').length;
     const skipped = results.filter(r => r.status === 'skipped').length;
     const failed = results.filter(r => r.status === 'failed').length;
-    onDone?.(`${live} live · ${skipped} skipped · ${failed} failed`);
+    if (stopped) workBoard.pushActivity('⏹', `Batch halted — ${results.length}/${vehicles.length} processed`);
+    onDone?.(`${live} live · ${skipped} skipped · ${failed} failed${stopped ? ' · stopped' : ''}`);
+    clearStop();
   };
 
   const retryFailed = async () => {
