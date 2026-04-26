@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Sparkles, Check, RefreshCw, X, Rocket, AlertTriangle, ChevronDown, ChevronRight, Maximize2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import DOMPurify from 'dompurify';
 import {
   fetchPriorityVehicles,
   generateSampleForVehicle,
@@ -403,10 +404,18 @@ function SampleCard({ index, sample }: { index: number; sample: SamplePreview })
 
 function Field({ label, value }: { label: string; value?: string }) {
   if (!value) return null;
+  const looksLikeHtml = /<\/?[a-z][\s\S]*?>/i.test(value);
   return (
     <div>
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1">{label}</div>
-      <div className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{value}</div>
+      {looksLikeHtml ? (
+        <div
+          className="prose prose-sm max-w-none text-foreground prose-headings:text-foreground prose-headings:font-semibold prose-h3:text-sm prose-h3:mt-3 prose-h3:mb-1 prose-p:my-1.5 prose-p:leading-relaxed prose-strong:text-foreground prose-ul:my-1.5 prose-li:my-0.5"
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(value) }}
+        />
+      ) : (
+        <div className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{value}</div>
+      )}
     </div>
   );
 }
