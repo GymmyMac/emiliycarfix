@@ -40,7 +40,6 @@ export function detectWikiBrief(message: string): { matched: boolean; batchLimit
   const mentionsRanks = /\branks?\b\s*\d+\s*[-–to]+\s*\d+/.test(text);
   if (!mentionsWiki && !mentionsVehicleWiki && !mentionsRanks) return { matched: false, batchLimit: 0 };
 
-  // Batch size detection
   let limit = 25;
   const rangeMatch = text.match(/ranks?\s*(\d+)\s*[-–to]+\s*(\d+)/);
   if (rangeMatch) {
@@ -60,29 +59,49 @@ export async function fetchPriorityVehicles(batchLimit: number): Promise<Priorit
   return (data as PriorityVehicle[]) || [];
 }
 
-function parseWikiJson(raw: string): ParsedWiki | null {
-  if (!raw) return null;
-  const trimmed = raw.trim();
-  try {
-    return JSON.parse(trimmed);
-  } catch {
-    const fenced = trimmed.match(/```json\s*([\s\S]*?)```/);
-    if (fenced) {
-      try { return JSON.parse(fenced[1].trim()); } catch { /* fallthrough */ }
+/** Robust JSON extractor — handles raw JSON, ```json blocks, plain ``` blocks,
+ *  and balanced first-{...} extraction with depth tracking. */
+export function extractJSON(text: string): ParsedWiki | null {
+  if (!text?.trim()) return null;
+
+  // 1. Direct parse
+  try { return JSON.parse(text.trim()); } catch { /* continue */ }
+
+  // 2. ```json ... ``` block
+  const fenced = text.match(/```json\s*([\s\S]*?)```/);
+  if (fenced) {
+    try { return JSON.parse(fenced[1].trim()); } catch { /* continue */ }
+  }
+
+  // 3. Any ``` ... ``` block
+  const anyFence = text.match(/```\s*([\s\S]*?)```/);
+  if (anyFence) {
+    try { return JSON.parse(anyFence[1].trim()); } catch { /* continue */ }
+  }
+
+  // 4. Balanced first {...} object
+  const start = text.indexOf('{');
+  if (start !== -1) {
+    let depth = 0, end = -1;
+    for (let i = start; i < text.length; i++) {
+      if (text[i] === '{') depth++;
+      else if (text[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
     }
-    const firstBrace = trimmed.indexOf('{');
-    const lastBrace = trimmed.lastIndexOf('}');
-    if (firstBrace >= 0 && lastBrace > firstBrace) {
-      try { return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1)); } catch { /* nope */ }
+    if (end !== -1) {
+      try { return JSON.parse(text.slice(start, end + 1)); } catch { /* fallthrough */ }
     }
   }
+
   return null;
 }
 
-async function callEmilyForVehicle(vehicle: PriorityVehicle): Promise<string> {
+function buildTaskMessage(vehicle: PriorityVehicle): string {
   const years = `${vehicle.years_start}–${vehicle.years_end ?? 'onwards'}`;
-  const taskMessage = `VW_${vehicle.slug} (ID: ${vehicle.id}, Make: ${vehicle.make}, Model: ${vehicle.model}, Generation: ${vehicle.generation}, Years: ${years})`;
+  return `VW_${vehicle.slug} (ID: ${vehicle.id}, Make: ${vehicle.make}, Model: ${vehicle.model}, Generation: ${vehicle.generation}, Years: ${years})`;
+}
 
+async function callEmilyForVehicle(vehicle: PriorityVehicle): Promise<string> {
+  const taskMessage = buildTaskMessage(vehicle);
   const { data: sess } = await supabase.auth.getSession();
   const jwt = sess?.session?.access_token;
   const res = await fetch(`${SUPABASE_URL}/functions/v1/emily-chat`, {
@@ -101,25 +120,42 @@ async function callEmilyForVehicle(vehicle: PriorityVehicle): Promise<string> {
 
 export async function generateSampleForVehicle(vehicle: PriorityVehicle): Promise<SamplePreview> {
   const raw = await callEmilyForVehicle(vehicle);
-  const wiki = parseWikiJson(raw);
+  const wiki = extractJSON(raw);
   if (!wiki?.aeo_intro) {
     throw new Error('Emily did not return parseable wiki content for this vehicle.');
   }
   return { vehicle, wiki, raw };
 }
 
+export type DeployStatus = 'live' | 'skipped' | 'failed';
+
 export interface DeployResult {
+  vehicleId: string;
   slug: string;
   make: string;
   model: string;
-  success: boolean;
-  skipped?: boolean;
-  error?: string;
+  generation: string;
+  status: DeployStatus;
+  reason?: string;
+  raw?: string;
 }
 
 /** Writes a parsed wiki object to vehicle_generations with a safety check
  *  that prevents overwriting a row that already has content. */
-export async function writeWikiToDb(vehicle: PriorityVehicle, wiki: ParsedWiki): Promise<DeployResult> {
+export async function writeWikiToDb(
+  vehicle: PriorityVehicle,
+  wiki: ParsedWiki,
+  raw?: string,
+): Promise<DeployResult> {
+  const base = {
+    vehicleId: vehicle.id,
+    slug: vehicle.slug,
+    make: vehicle.make,
+    model: vehicle.model,
+    generation: vehicle.generation,
+    raw,
+  };
+
   const { data, error } = await supabase
     .from('vehicle_generations')
     .update({
@@ -137,20 +173,31 @@ export async function writeWikiToDb(vehicle: PriorityVehicle, wiki: ParsedWiki):
     .is('aeo_intro', null)
     .select('id');
 
-  if (error) return { slug: vehicle.slug, make: vehicle.make, model: vehicle.model, success: false, error: error.message };
-  if (!data || data.length === 0) return { slug: vehicle.slug, make: vehicle.make, model: vehicle.model, success: false, skipped: true };
-  return { slug: vehicle.slug, make: vehicle.make, model: vehicle.model, success: true };
+  if (error) return { ...base, status: 'failed', reason: `deploy error: ${error.message}` };
+  if (!data || data.length === 0) return { ...base, status: 'skipped', reason: 'already had content' };
+  return { ...base, status: 'live' };
 }
 
 export async function deployVehicle(vehicle: PriorityVehicle): Promise<DeployResult> {
+  const base = {
+    vehicleId: vehicle.id,
+    slug: vehicle.slug,
+    make: vehicle.make,
+    model: vehicle.model,
+    generation: vehicle.generation,
+  };
+
+  let raw = '';
   try {
-    const raw = await callEmilyForVehicle(vehicle);
-    const wiki = parseWikiJson(raw);
-    if (!wiki?.aeo_intro) {
-      return { slug: vehicle.slug, make: vehicle.make, model: vehicle.model, success: false, error: 'Unparseable response' };
-    }
-    return await writeWikiToDb(vehicle, wiki);
+    raw = await callEmilyForVehicle(vehicle);
   } catch (e: any) {
-    return { slug: vehicle.slug, make: vehicle.make, model: vehicle.model, success: false, error: e?.message || 'Unknown error' };
+    return { ...base, status: 'failed', reason: `emily-chat error: ${e?.message || 'unknown'}`, raw: '' };
   }
+
+  const wiki = extractJSON(raw);
+  if (!wiki?.aeo_intro) {
+    return { ...base, status: 'failed', reason: 'no valid JSON returned', raw };
+  }
+
+  return await writeWikiToDb(vehicle, wiki, raw);
 }
