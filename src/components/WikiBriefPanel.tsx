@@ -243,9 +243,22 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
 
       {phase === 'deploying' && (
         <div className="space-y-2">
-          <p className="text-xs text-foreground">
-            Deploying <span className="font-semibold text-primary">{deployProgress.current}</span> of {deployProgress.total}…
-          </p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs text-foreground">
+              Deploying <span className="font-semibold text-primary">{deployProgress.current}</span> of {deployProgress.total}
+              {isStopRequested() ? <span className="text-destructive ml-1">— stopping…</span> : '…'}
+            </p>
+            <Button
+              onClick={stop}
+              disabled={isStopRequested()}
+              variant="destructive"
+              size="sm"
+              className="h-7 text-xs"
+            >
+              <Square size={11} className="mr-1 fill-current" />
+              {isStopRequested() ? 'Stopping…' : 'STOP'}
+            </Button>
+          </div>
           <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
             <div
               className="h-full bg-primary transition-all"
