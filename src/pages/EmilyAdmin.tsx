@@ -10,6 +10,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
 import { Send, Sparkles, Plus, RefreshCw, X, Check, FileUp, Brain, Settings2, MessageSquare, Activity, Zap, AlertTriangle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { detectWikiBrief } from '@/lib/wikiBriefWorkflow';
+import { WikiBriefPanel } from '@/components/WikiBriefPanel';
 
 const SUPABASE_URL = 'https://flpzjbasdsfwoeruyxgp.supabase.co';
 
@@ -18,6 +20,8 @@ interface ChatMessage {
   role: 'user' | 'emily';
   content: string;
   timestamp: Date;
+  kind?: 'wiki-brief';
+  wikiBatchLimit?: number;
 }
 
 const QUICK_PROMPTS = [
