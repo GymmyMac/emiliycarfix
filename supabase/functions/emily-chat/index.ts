@@ -132,24 +132,41 @@ Tone: Direct, strategic, data-informed. You're a trusted CMO-level advisor, not 
       systemPrompt += ideasContext;
     }
 
-    // --- 4. CALL OPENROUTER ---
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${EMILY_OPENROUTER_KEY}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": supabaseUrl,
-        "X-Title": "CARFIX Emily",
-      },
-      body: JSON.stringify({
-        model: "openrouter/auto",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...conversationHistory,
-          { role: "user", content: message },
-        ],
-      }),
-    });
+    // --- 4. CALL OPENROUTER (with timeout guard) ---
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120_000); // 120s, under 150s edge limit
+
+    let response: Response;
+    try {
+      response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${EMILY_OPENROUTER_KEY}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": supabaseUrl,
+          "X-Title": "CARFIX Emily",
+        },
+        body: JSON.stringify({
+          model: "anthropic/claude-3.5-sonnet",
+          max_tokens: 4096,
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...conversationHistory,
+            { role: "user", content: message },
+          ],
+        }),
+      });
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err instanceof Error && err.name === "AbortError") {
+        return new Response(JSON.stringify({
+          error: "Emily took too long to respond. For large multi-item requests (e.g. 15 wiki pages at once), break it into smaller batches of 2–3 items.",
+        }), { status: 504, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      throw err;
+    }
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const status = response.status;
