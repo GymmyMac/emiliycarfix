@@ -10,6 +10,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
 import { Send, Sparkles, Plus, RefreshCw, X, Check, FileUp, Brain, Settings2, MessageSquare, Activity, Zap, AlertTriangle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { detectWikiBrief } from '@/lib/wikiBriefWorkflow';
+import { WikiBriefPanel } from '@/components/WikiBriefPanel';
 
 const SUPABASE_URL = 'https://flpzjbasdsfwoeruyxgp.supabase.co';
 
@@ -18,6 +20,8 @@ interface ChatMessage {
   role: 'user' | 'emily';
   content: string;
   timestamp: Date;
+  kind?: 'wiki-brief';
+  wikiBatchLimit?: number;
 }
 
 const QUICK_PROMPTS = [
@@ -115,6 +119,25 @@ function ChatPanel() {
     const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: text.trim(), timestamp: new Date() };
     setMessages((m) => [...m, userMsg]);
     setInput('');
+
+    // Wiki brief intercept: skip the Emily round-trip and run the
+    // confirm → sample → approve → execute workflow inline.
+    const wiki = detectWikiBrief(text);
+    if (wiki.matched) {
+      setMessages((m) => [
+        ...m,
+        {
+          id: crypto.randomUUID(),
+          role: 'emily',
+          content: `Got it — I'll line up a wiki batch (~${wiki.batchLimit} pages) from the priority queue. Review the list, then click **Write Sample** so you can sign off on quality before I deploy.`,
+          timestamp: new Date(),
+          kind: 'wiki-brief',
+          wikiBatchLimit: wiki.batchLimit,
+        },
+      ]);
+      return;
+    }
+
     setIsTyping(true);
 
     try {
@@ -186,7 +209,7 @@ function ChatPanel() {
         )}
         {messages.map((m) => (
           <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${
+            <div className={`${m.kind === 'wiki-brief' ? 'max-w-[95%] w-full' : 'max-w-[85%]'} rounded-xl px-4 py-3 text-sm ${
               m.role === 'user'
                 ? 'bg-[#1E3A5F] text-white'
                 : 'bg-[#0F172A] border-l-2 border-l-[#F59E0B] text-[#E2E8F0]'
@@ -200,6 +223,29 @@ function ChatPanel() {
               <div className="prose prose-sm prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-headings:font-bold prose-headings:text-white prose-strong:text-white prose-code:text-[#F59E0B] prose-code:bg-[#0F172A] prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:font-mono prose-code:before:content-none prose-code:after:content-none prose-pre:bg-[#0F172A] prose-pre:border prose-pre:border-[#334155]">
                 <ReactMarkdown>{m.content}</ReactMarkdown>
               </div>
+              {m.kind === 'wiki-brief' && (
+                <div className="mt-3">
+                  <WikiBriefPanel
+                    batchLimit={m.wikiBatchLimit ?? 25}
+                    onDone={(summary) => {
+                      setMessages((prev) => [...prev, {
+                        id: crypto.randomUUID(),
+                        role: 'emily',
+                        content: `✓ ${summary}`,
+                        timestamp: new Date(),
+                      }]);
+                    }}
+                    onReject={() => {
+                      setMessages((prev) => [...prev, {
+                        id: crypto.randomUUID(),
+                        role: 'emily',
+                        content: 'No problem — revise the brief and send it again when ready.',
+                        timestamp: new Date(),
+                      }]);
+                    }}
+                  />
+                </div>
+              )}
               <div className="text-[10px] text-[#64748B] mt-1.5">
                 {m.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </div>
