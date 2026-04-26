@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { TASK_LIBRARY, TASK_GROUPS, type TaskDefinition } from '@/lib/taskPrompts';
 import { PromptEditor } from './PromptEditor';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, ChevronDown } from 'lucide-react';
 
 interface Props {
   onPickTask: (task: TaskDefinition) => void;
@@ -9,6 +9,10 @@ interface Props {
 
 export function TaskLauncher({ onPickTask }: Props) {
   const [editingPrompt, setEditingPrompt] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
+  const toggleGroup = (key: string) =>
+    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
 
   return (
     <aside className="w-60 shrink-0 h-full overflow-y-auto bg-card border-r border-border">
@@ -20,12 +24,20 @@ export function TaskLauncher({ onPickTask }: Props) {
       <div className="p-2 space-y-3">
         {TASK_GROUPS.map((group) => {
           const items = TASK_LIBRARY.filter((t) => t.group === group.key);
+          const isCollapsed = !!collapsed[group.key];
           return (
             <div key={group.key}>
-              <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.key)}
+                className="w-full flex items-center gap-1.5 px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground font-semibold hover:text-foreground transition-colors"
+              >
+                {isCollapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
                 <span>{group.icon}</span>
-                <span>{group.label}</span>
-              </div>
+                <span className="flex-1 text-left">{group.label}</span>
+                <span className="text-muted-foreground/60 normal-case tracking-normal">{items.length}</span>
+              </button>
+              {!isCollapsed && (
               <div className="space-y-1">
                 {items.map((task) => (
                   <div key={task.type}>
@@ -58,6 +70,7 @@ export function TaskLauncher({ onPickTask }: Props) {
                   </div>
                 ))}
               </div>
+              )}
             </div>
           );
         })}
