@@ -35,6 +35,17 @@ serve(async (req) => {
       });
     }
 
+    const normalizedMessage = String(message).trim();
+    const isOversizedRequest = normalizedMessage.length > 3500 || /prioritis(e|z)\s+in\s+this\s+order|high\s+—|medium\s+—|surface each page as a pending action/i.test(normalizedMessage);
+    if (isOversizedRequest) {
+      return new Response(JSON.stringify({
+        error: "This request is too large for a single Emily chat run. Send 2–3 vehicles per message and Emily will handle them in batches without timing out.",
+      }), {
+        status: 422,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const EMILY_OPENROUTER_KEY = Deno.env.get("EMILY_OPENROUTER_KEY");
     if (!EMILY_OPENROUTER_KEY) throw new Error("EMILY_OPENROUTER_KEY is not configured");
 
