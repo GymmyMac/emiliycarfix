@@ -119,6 +119,25 @@ function ChatPanel() {
     const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: text.trim(), timestamp: new Date() };
     setMessages((m) => [...m, userMsg]);
     setInput('');
+
+    // Wiki brief intercept: skip the Emily round-trip and run the
+    // confirm → sample → approve → execute workflow inline.
+    const wiki = detectWikiBrief(text);
+    if (wiki.matched) {
+      setMessages((m) => [
+        ...m,
+        {
+          id: crypto.randomUUID(),
+          role: 'emily',
+          content: `Got it — I'll line up a wiki batch (~${wiki.batchLimit} pages) from the priority queue. Review the list, then click **Write Sample** so you can sign off on quality before I deploy.`,
+          timestamp: new Date(),
+          kind: 'wiki-brief',
+          wikiBatchLimit: wiki.batchLimit,
+        },
+      ]);
+      return;
+    }
+
     setIsTyping(true);
 
     try {
