@@ -129,8 +129,11 @@ function ChatPanel() {
           session_id: sessionId,
         }),
       });
-      const json = await res.json();
-      const reply = json?.response || json?.error || 'No response';
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json?.error || `Emily request failed (${res.status})`);
+      }
+      const reply = json?.response || 'No response';
       setMessages((m) => [...m, { id: crypto.randomUUID(), role: 'emily', content: reply, timestamp: new Date() }]);
     } catch (e: any) {
       setMessages((m) => [...m, { id: crypto.randomUUID(), role: 'emily', content: `Error: ${e?.message || 'unknown'}`, timestamp: new Date() }]);
