@@ -133,12 +133,14 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
   const retryFailed = async () => {
     const failedResults = deployResults.filter(r => r.status === 'failed');
     if (failedResults.length === 0) return;
+    clearStop();
     setPhase('deploying');
     workBoard.pushActivity('▶', `Retrying ${failedResults.length} failed vehicle${failedResults.length === 1 ? '' : 's'}`);
 
     const updated = [...deployResults];
     let done = 0;
     for (const failed of failedResults) {
+      if (isStopRequested()) break;
       const v = vehicles.find(x => x.id === failed.vehicleId);
       if (!v) { done++; continue; }
       workBoard.pushActivity('⟳', `Retrying — ${v.make} ${v.model} ${v.generation}`);
@@ -151,11 +153,14 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
       logResult(r);
     }
 
+    const stopped = isStopRequested();
     setPhase('done');
     const live = updated.filter(r => r.status === 'live').length;
     const skipped = updated.filter(r => r.status === 'skipped').length;
     const stillFailed = updated.filter(r => r.status === 'failed').length;
-    onDone?.(`${live} live · ${skipped} skipped · ${stillFailed} failed`);
+    if (stopped) workBoard.pushActivity('⏹', 'Retry halted by user');
+    onDone?.(`${live} live · ${skipped} skipped · ${stillFailed} failed${stopped ? ' · stopped' : ''}`);
+    clearStop();
   };
 
   return (
