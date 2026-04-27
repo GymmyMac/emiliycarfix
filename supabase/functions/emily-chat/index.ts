@@ -199,6 +199,13 @@ Tone: Direct, strategic, data-informed. You're a trusted CMO-level advisor, not 
     const aiData = await response.json();
     const content = aiData.choices?.[0]?.message?.content || "";
 
+    if (!content) {
+      console.error("OpenRouter returned empty content. Full payload:", JSON.stringify(aiData));
+      return new Response(JSON.stringify({
+        error: `Emily's model returned an empty response. This usually means the model slug is invalid or the provider rejected the request. Raw: ${JSON.stringify(aiData).slice(0, 400)}`,
+      }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     return new Response(JSON.stringify({ response: content, context_docs: contextDocs }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
