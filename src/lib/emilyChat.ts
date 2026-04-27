@@ -45,7 +45,10 @@ export async function callEmilyChat(
 
       const json = await res.json().catch(() => ({} as any));
 
-      if (res.ok) {
+      // Treat empty response as a failure (model returned nothing) — retryable
+      const emptyResponse = res.ok && (!json?.response || String(json.response).trim() === '');
+
+      if (res.ok && !emptyResponse) {
         return json as EmilyChatResponse;
       }
 
@@ -54,8 +57,10 @@ export async function callEmilyChat(
         throw new Error(json?.error || `Request failed (${res.status})`);
       }
 
-      // 5xx — retryable
-      const reason = json?.message || json?.error || `HTTP ${res.status}`;
+      // 5xx OR empty 200 — retryable
+      const reason = emptyResponse
+        ? 'Emily returned an empty response (model failure)'
+        : (json?.message || json?.error || `HTTP ${res.status}`);
       lastErr = new Error(reason);
       console.warn(`[emily-chat] attempt ${attempt}/${maxAttempts} failed:`, res.status, reason);
 

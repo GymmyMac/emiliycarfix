@@ -23,6 +23,7 @@ async function embed(text: string, apiKey: string): Promise<number[]> {
   return data.data[0].embedding;
 }
 
+// emily-chat v2 — model fallback chain + empty-content guard (redeploy marker)
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
