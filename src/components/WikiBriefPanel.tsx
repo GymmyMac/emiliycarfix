@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Sparkles, Check, RefreshCw, X, Rocket, AlertTriangle, ChevronDown, ChevronRight, Maximize2, Square } from 'lucide-react';
@@ -16,25 +16,51 @@ import {
   type SamplePreview,
   type DeployResult,
 } from '@/lib/wikiBriefWorkflow';
-import { workBoard } from '@/lib/workBoardStore';
+import { workBoard, type WikiBatchState } from '@/lib/workBoardStore';
 
 interface Props {
   batchLimit: number;
+  cardId?: string;                       // when present, panel persists state back to the card
+  persistedState?: WikiBatchState | null; // hydrate from a previously persisted batch (resume)
   onDone?: (summary: string) => void;
   onReject?: () => void;
 }
 
 type Phase = 'loading' | 'confirm' | 'sampling' | 'review' | 'deploying' | 'done' | 'error';
 
-export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
-  const [phase, setPhase] = useState<Phase>('loading');
-  const [vehicles, setVehicles] = useState<PriorityVehicle[]>([]);
-  const [samples, setSamples] = useState<SamplePreview[]>([]);
+export function WikiBriefPanel({ batchLimit, cardId, persistedState, onDone, onReject }: Props) {
+  const hasPersisted = !!(persistedState && persistedState.vehicles?.length);
+  const [phase, setPhase] = useState<Phase>(hasPersisted ? (persistedState!.approved ? 'deploying' : 'review') : 'loading');
+  const [vehicles, setVehicles] = useState<PriorityVehicle[]>(hasPersisted ? persistedState!.vehicles : []);
+  const [samples, setSamples] = useState<SamplePreview[]>(hasPersisted ? persistedState!.samples || [] : []);
   const [error, setError] = useState<string | null>(null);
-  const [deployProgress, setDeployProgress] = useState({ current: 0, total: 0 });
-  const [deployResults, setDeployResults] = useState<DeployResult[]>([]);
+  const [deployProgress, setDeployProgress] = useState(
+    hasPersisted
+      ? { current: persistedState!.results?.length || 0, total: persistedState!.vehicles.length }
+      : { current: 0, total: 0 }
+  );
+  const [deployResults, setDeployResults] = useState<DeployResult[]>(hasPersisted ? persistedState!.results || [] : []);
+  const resumedRef = useRef(false);
 
+  // Persist the current panel state back to the card so a refresh can resume.
+  // Coalesced via the card patch + workBoardStore's microtask save.
+  const persist = (patch: Partial<WikiBatchState>) => {
+    if (!cardId) return;
+    const current: WikiBatchState = {
+      vehicles,
+      samples,
+      cursor: 0,
+      approved: false,
+      results: deployResults,
+      ...((workBoard.cards.find(c => c.id === cardId)?.wikiBatchState) || {}),
+      ...patch,
+    };
+    workBoard.updateCard(cardId, { wikiBatchState: current });
+  };
+
+  // Initial load — only when not resuming.
   useEffect(() => {
+    if (hasPersisted) return; // skip fetch when resuming
     let cancel = false;
     (async () => {
       try {
@@ -54,7 +80,7 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
       }
     })();
     return () => { cancel = true; };
-  }, [batchLimit]);
+  }, [batchLimit, hasPersisted]);
 
   const sampledIds = useMemo(() => new Set(samples.map(s => s.vehicle.id)), [samples]);
   const nextToSample = useMemo(() => vehicles.find(v => !sampledIds.has(v.id)) || null, [vehicles, sampledIds]);
@@ -90,26 +116,36 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
     workBoard.pushActivity('⏹', 'Stop requested — halting after current vehicle');
   };
 
-  const approveAndRun = async () => {
-    // Guard: only execute when explicitly approved (samples exist & user clicked this).
-    if (samples.length === 0) return;
+  const approveAndRun = async (resume = false) => {
+    // Guard: when starting fresh, samples must exist (user explicitly approved).
+    // When resuming, samples may already be deployed — we trust the persisted state.
+    if (!resume && samples.length === 0) return;
     clearStop();
     setPhase('deploying');
-    workBoard.pushActivity('▶', `Wiki batch started — ${vehicles.length} vehicles`);
-    const results: DeployResult[] = [];
+    if (!resume) workBoard.pushActivity('▶', `Wiki batch started — ${vehicles.length} vehicles`);
+    else workBoard.pushActivity('▶', `Resuming wiki batch — ${deployResults.length}/${vehicles.length} already done`);
 
-    // Deploy already-sampled vehicles using the cached wiki content.
+    // Mark approved + persist initial state so a refresh during the loop resumes correctly.
+    persist({ vehicles, samples, approved: true, results: deployResults });
+
+    const results: DeployResult[] = [...deployResults];
+    const alreadyDoneIds = new Set(results.map(r => r.vehicleId));
+
+    // Deploy already-sampled vehicles using the cached wiki content (skip if already deployed).
     for (const s of samples) {
       if (isStopRequested()) break;
+      if (alreadyDoneIds.has(s.vehicle.id)) continue;
       const r = await writeWikiToDb(s.vehicle, s.wiki, s.raw);
       results.push(r);
+      alreadyDoneIds.add(r.vehicleId);
       setDeployResults([...results]);
       setDeployProgress({ current: results.length, total: vehicles.length });
       logResult(r);
+      persist({ approved: true, results: [...results] });
     }
 
     // Generate + deploy the remaining vehicles.
-    const remaining = vehicles.filter(v => !sampledIds.has(v.id));
+    const remaining = vehicles.filter(v => !sampledIds.has(v.id) && !alreadyDoneIds.has(v.id));
     for (const v of remaining) {
       if (isStopRequested()) break;
       workBoard.pushActivity('⟳', `Generating — ${v.make} ${v.model} ${v.generation}`);
@@ -118,6 +154,7 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
       setDeployResults([...results]);
       setDeployProgress({ current: results.length, total: vehicles.length });
       logResult(r);
+      persist({ approved: true, results: [...results] });
     }
 
     const stopped = isStopRequested();
@@ -129,6 +166,31 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
     onDone?.(`${live} live · ${skipped} skipped · ${failed} failed${stopped ? ' · stopped' : ''}`);
     clearStop();
   };
+
+  // Auto-resume an approved batch that was interrupted by a refresh / tab close.
+  useEffect(() => {
+    if (resumedRef.current) return;
+    if (!hasPersisted || !persistedState?.approved) return;
+    if (phase !== 'deploying') return;
+    const total = persistedState.vehicles.length;
+    const done = persistedState.results?.length || 0;
+    if (done >= total) {
+      // Already complete — finalise.
+      setPhase('done');
+      const live = (persistedState.results || []).filter((r: DeployResult) => r.status === 'live').length;
+      const skipped = (persistedState.results || []).filter((r: DeployResult) => r.status === 'skipped').length;
+      const failed = (persistedState.results || []).filter((r: DeployResult) => r.status === 'failed').length;
+      onDone?.(`${live} live · ${skipped} skipped · ${failed} failed`);
+      resumedRef.current = true;
+      return;
+    }
+    resumedRef.current = true;
+    workBoard.pushActivity('▶', `Auto-resuming wiki batch after reload — ${done}/${total} done`);
+    // Kick off after a tick so initial render settles.
+    setTimeout(() => approveAndRun(true), 400);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   const retryFailed = async () => {
     const failedResults = deployResults.filter(r => r.status === 'failed');
@@ -228,7 +290,7 @@ export function WikiBriefPanel({ batchLimit, onDone, onReject }: Props) {
               </Button>
             ) : (
               <>
-                <Button onClick={approveAndRun} disabled={phase === 'sampling'} size="sm" className="h-7 text-xs">
+                <Button onClick={() => approveAndRun(false)} disabled={phase === 'sampling'} size="sm" className="h-7 text-xs">
                   <Rocket size={11} className="mr-1" />
                   Approve &amp; Run Full Batch ({vehicles.length})
                 </Button>

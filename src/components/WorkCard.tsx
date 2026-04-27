@@ -72,6 +72,8 @@ export function WorkCard({ card, onApprove, onReject }: Props) {
           <div className="pt-2">
             <WikiBriefPanel
               batchLimit={card.batchLimit ?? 25}
+              cardId={card.id}
+              persistedState={card.wikiBatchState ?? null}
               onDone={(summary) => {
                 workBoard.updateCard(card.id, { column: 'live', resultText: summary });
                 workBoard.pushActivity('✓', `Wiki batch complete — ${summary}`);
