@@ -9,6 +9,7 @@ import { TaskLauncher } from '@/components/TaskLauncher';
 import { WorkBoard } from '@/components/WorkBoard';
 import { ActivityFeed } from '@/components/ActivityFeed';
 import { BriefModal } from '@/components/BriefModal';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { workBoard } from '@/lib/workBoardStore';
 import { detectWikiBrief } from '@/lib/wikiBriefWorkflow';
 import { TASK_LIBRARY, getTask, loadPromptOverride, type TaskDefinition } from '@/lib/taskPrompts';
