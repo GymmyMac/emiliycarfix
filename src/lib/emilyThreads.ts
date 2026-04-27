@@ -72,6 +72,8 @@ export async function listThreads(limit = 50): Promise<ThreadSummary[]> {
   for (const row of data) {
     const sid = row.session_id as string;
     if (!sid) continue;
+    // Filter out one-shot task runs (they use 'task-<type>-<ts>' ids) — chat only
+    if (sid.startsWith('task-')) continue;
     const existing = bySession.get(sid);
     if (!existing) {
       bySession.set(sid, {
