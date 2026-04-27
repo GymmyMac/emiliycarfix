@@ -290,7 +290,7 @@ export function WikiBriefPanel({ batchLimit, cardId, persistedState, onDone, onR
               </Button>
             ) : (
               <>
-                <Button onClick={approveAndRun} disabled={phase === 'sampling'} size="sm" className="h-7 text-xs">
+                <Button onClick={() => approveAndRun(false)} disabled={phase === 'sampling'} size="sm" className="h-7 text-xs">
                   <Rocket size={11} className="mr-1" />
                   Approve &amp; Run Full Batch ({vehicles.length})
                 </Button>
