@@ -143,66 +143,113 @@ Tone: Direct, strategic, data-informed. You're a trusted CMO-level advisor, not 
       systemPrompt += ideasContext;
     }
 
-    // --- 4. CALL OPENROUTER (with timeout guard) ---
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120_000); // 120s, under 150s edge limit
+    // --- 4. CALL OPENROUTER with model fallback chain + per-model retry ---
+    // Failure modes covered:
+    //   - Provider 5xx (Anthropic upstream blip)  -> retry once, then next model
+    //   - Empty content (deprecated/rejected slug) -> next model
+    //   - Rate limit (429) / credits (402)        -> surface immediately
+    //   - Hard timeout (120s)                     -> surface as 504
+    const MODEL_FALLBACKS = [
+      "anthropic/claude-sonnet-4.5",
+      "anthropic/claude-3.5-sonnet",
+      "anthropic/claude-3-haiku",
+    ];
 
-    let response: Response;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120_000);
+
+    async function tryModel(modelSlug: string): Promise<{ ok: true; content: string } | { ok: false; status: number; reason: string; fatal: boolean }> {
+      try {
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            Authorization: `Bearer ${EMILY_OPENROUTER_KEY}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": supabaseUrl,
+            "X-Title": "CARFIX Emily",
+          },
+          body: JSON.stringify({
+            model: modelSlug,
+            max_tokens: 4096,
+            // Let OpenRouter route around a sick upstream provider automatically.
+            provider: { allow_fallbacks: true },
+            messages: [
+              { role: "system", content: systemPrompt },
+              ...conversationHistory,
+              { role: "user", content: message },
+            ],
+          }),
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          // 4xx (rate limit / credits / bad request) — fatal, do not try other models.
+          const fatal = response.status === 429 || response.status === 402 || (response.status >= 400 && response.status < 500);
+          console.error(`OpenRouter ${modelSlug} -> ${response.status}: ${errText}`);
+          return { ok: false, status: response.status, reason: errText, fatal };
+        }
+
+        const aiData = await response.json();
+        const content = aiData.choices?.[0]?.message?.content || "";
+        if (!content) {
+          console.warn(`OpenRouter ${modelSlug} returned empty content. Payload:`, JSON.stringify(aiData).slice(0, 400));
+          return { ok: false, status: 502, reason: "empty_content", fatal: false };
+        }
+        return { ok: true, content };
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") throw err;
+        console.warn(`OpenRouter ${modelSlug} threw:`, err);
+        return { ok: false, status: 500, reason: (err as Error)?.message || "network", fatal: false };
+      }
+    }
+
+    let content = "";
+    let lastFailure: { status: number; reason: string } | null = null;
+
     try {
-      response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          Authorization: `Bearer ${EMILY_OPENROUTER_KEY}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": supabaseUrl,
-          "X-Title": "CARFIX Emily",
-        },
-        body: JSON.stringify({
-          model: "anthropic/claude-sonnet-4.5",
-          max_tokens: 4096,
-          messages: [
-            { role: "system", content: systemPrompt },
-            ...conversationHistory,
-            { role: "user", content: message },
-          ],
-        }),
-      });
+      outer: for (const slug of MODEL_FALLBACKS) {
+        // Up to 2 attempts per slug (handles transient provider 5xx).
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          const result = await tryModel(slug);
+          if (result.ok) {
+            content = result.content;
+            if (slug !== MODEL_FALLBACKS[0]) console.warn(`emily-chat: served via fallback model ${slug}`);
+            break outer;
+          }
+          lastFailure = { status: result.status, reason: result.reason };
+          if (result.fatal) {
+            // Don't waste credits on fallbacks for 4xx — surface now.
+            clearTimeout(timeoutId);
+            if (result.status === 429) {
+              return new Response(JSON.stringify({ error: "Rate limit exceeded. Try again shortly." }), {
+                status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+              });
+            }
+            if (result.status === 402) {
+              return new Response(JSON.stringify({ error: "OpenRouter credits exhausted." }), {
+                status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+              });
+            }
+            throw new Error(`OpenRouter ${result.status}: ${result.reason}`);
+          }
+          if (attempt < 2) await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
     } catch (err) {
       clearTimeout(timeoutId);
       if (err instanceof Error && err.name === "AbortError") {
         return new Response(JSON.stringify({
-          error: "Emily took too long to respond. For large multi-item requests (e.g. 15 wiki pages at once), break it into smaller batches of 2–3 items.",
+          error: "Emily took too long to respond. For large multi-item requests, break into batches of 2–3 items.",
         }), { status: 504, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
       throw err;
     }
     clearTimeout(timeoutId);
 
-    if (!response.ok) {
-      const status = response.status;
-      if (status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Try again shortly." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (status === 402) {
-        return new Response(JSON.stringify({ error: "OpenRouter credits exhausted." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const errText = await response.text();
-      console.error("OpenRouter error:", status, errText);
-      throw new Error(`OpenRouter error: ${status}`);
-    }
-
-    const aiData = await response.json();
-    const content = aiData.choices?.[0]?.message?.content || "";
-
     if (!content) {
-      console.error("OpenRouter returned empty content. Full payload:", JSON.stringify(aiData));
       return new Response(JSON.stringify({
-        error: `Emily's model returned an empty response. This usually means the model slug is invalid or the provider rejected the request. Raw: ${JSON.stringify(aiData).slice(0, 400)}`,
+        error: `Emily's models all failed. Last error: ${lastFailure?.status ?? "?"} ${(lastFailure?.reason || "").slice(0, 300)}`,
       }), { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
