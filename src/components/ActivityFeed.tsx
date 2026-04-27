@@ -33,7 +33,7 @@ export function ActivityFeed() {
   const emailCount = todayEntries.filter((e) => /email|sms/i.test(e.text) && e.icon === '✓').length;
 
   return (
-    <aside className="w-[300px] shrink-0 h-full flex flex-col bg-card border-l border-border">
+    <aside className="h-full w-full flex flex-col bg-card border-l border-border">
       <div className="px-4 py-3 border-b border-border">
         <h2 className="text-sm font-semibold text-foreground">Activity</h2>
         <p className="text-[11px] text-muted-foreground mt-0.5">
