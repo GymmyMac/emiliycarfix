@@ -111,22 +111,45 @@ function buildTaskMessage(vehicle: PriorityVehicle): string {
   return `VW_${vehicle.slug} (ID: ${vehicle.id}, Make: ${vehicle.make}, Model: ${vehicle.model}, Generation: ${vehicle.generation}, Years: ${years})`;
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function callEmilyForVehicle(vehicle: PriorityVehicle): Promise<string> {
   const taskMessage = buildTaskMessage(vehicle);
   const { data: sess } = await supabase.auth.getSession();
   const jwt = sess?.session?.access_token;
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/emily-chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}) },
-    body: JSON.stringify({
-      message: taskMessage,
-      messages: [{ role: 'user', content: taskMessage }],
-      session_id: `admin-wiki-${vehicle.slug}-${Date.now()}`,
-    }),
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json?.error || `Emily request failed (${res.status})`);
-  return json?.response || '';
+
+  // Retry transient 5xx errors (edge runtime cold-starts / rate spikes return 503)
+  const maxAttempts = 3;
+  let lastErr: Error | null = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(`${SUPABASE_URL}/functions/v1/emily-chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}) },
+        body: JSON.stringify({
+          message: taskMessage,
+          messages: [{ role: 'user', content: taskMessage }],
+          session_id: `admin-wiki-${vehicle.slug}-${Date.now()}`,
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.status >= 500 && res.status < 600) {
+        lastErr = new Error(json?.error || `Emily transient error ${res.status}`);
+        if (attempt < maxAttempts) {
+          await sleep(1500 * attempt); // 1.5s, 3s backoff
+          continue;
+        }
+        throw lastErr;
+      }
+      if (!res.ok) throw new Error(json?.error || `Emily request failed (${res.status})`);
+      return json?.response || '';
+    } catch (e: any) {
+      lastErr = e;
+      if (attempt >= maxAttempts) throw lastErr;
+      await sleep(1500 * attempt);
+    }
+  }
+  throw lastErr || new Error('Emily request failed');
 }
 
 export async function generateSampleForVehicle(vehicle: PriorityVehicle): Promise<SamplePreview> {
