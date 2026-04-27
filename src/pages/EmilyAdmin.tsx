@@ -14,8 +14,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { workBoard } from '@/lib/workBoardStore';
 import { detectWikiBrief } from '@/lib/wikiBriefWorkflow';
 import { TASK_LIBRARY, getTask, loadPromptOverride, type TaskDefinition } from '@/lib/taskPrompts';
-
-const SUPABASE_URL = 'https://flpzjbasdsfwoeruyxgp.supabase.co';
+import { callEmilyChat } from '@/lib/emilyChat';
 
 // ---------- Generic content task executor ----------
 async function runContentTask(task: TaskDefinition, brief: string, cardId: string) {
@@ -31,19 +30,11 @@ async function runContentTask(task: TaskDefinition, brief: string, cardId: strin
     .replace(/\{count\}/g, String(25));
 
   try {
-    const { data: sess } = await supabase.auth.getSession();
-    const jwt = sess?.session?.access_token;
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/emily-chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}) },
-      body: JSON.stringify({
-        message: prompt,
-        messages: [{ role: 'user', content: prompt }],
-        session_id: `task-${task.type}-${Date.now()}`,
-      }),
+    const json = await callEmilyChat({
+      message: prompt,
+      messages: [{ role: 'user', content: prompt }],
+      session_id: `task-${task.type}-${Date.now()}`,
     });
-    const json = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(json?.error || `Request failed (${res.status})`);
     const reply = json?.response || '';
     workBoard.updateCard(cardId, { resultText: reply, column: 'review' });
     workBoard.pushActivity('✏', `Draft ready — ${task.name}`);
@@ -131,19 +122,11 @@ function ChatBar() {
 
     setBusy(true);
     try {
-      const { data: sess } = await supabase.auth.getSession();
-      const jwt = sess?.session?.access_token;
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/emily-chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}) },
-        body: JSON.stringify({
-          message: text,
-          messages: [...messages.map((m) => ({ role: m.role === 'emily' ? 'assistant' : 'user', content: m.content })), { role: 'user', content: text }],
-          session_id: sessionId.current,
-        }),
+      const json = await callEmilyChat({
+        message: text,
+        messages: [...messages.map((m) => ({ role: m.role === 'emily' ? 'assistant' as const : 'user' as const, content: m.content })), { role: 'user', content: text }],
+        session_id: sessionId.current,
       });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json?.error || `Request failed (${res.status})`);
       setMessages((m) => [...m, { role: 'emily', content: json?.response || 'No response', ts: Date.now() }]);
     } catch (e: any) {
       setMessages((m) => [...m, { role: 'emily', content: `Error: ${e?.message}`, ts: Date.now() }]);
