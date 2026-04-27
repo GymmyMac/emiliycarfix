@@ -116,26 +116,36 @@ export function WikiBriefPanel({ batchLimit, cardId, persistedState, onDone, onR
     workBoard.pushActivity('⏹', 'Stop requested — halting after current vehicle');
   };
 
-  const approveAndRun = async () => {
-    // Guard: only execute when explicitly approved (samples exist & user clicked this).
-    if (samples.length === 0) return;
+  const approveAndRun = async (resume = false) => {
+    // Guard: when starting fresh, samples must exist (user explicitly approved).
+    // When resuming, samples may already be deployed — we trust the persisted state.
+    if (!resume && samples.length === 0) return;
     clearStop();
     setPhase('deploying');
-    workBoard.pushActivity('▶', `Wiki batch started — ${vehicles.length} vehicles`);
-    const results: DeployResult[] = [];
+    if (!resume) workBoard.pushActivity('▶', `Wiki batch started — ${vehicles.length} vehicles`);
+    else workBoard.pushActivity('▶', `Resuming wiki batch — ${deployResults.length}/${vehicles.length} already done`);
 
-    // Deploy already-sampled vehicles using the cached wiki content.
+    // Mark approved + persist initial state so a refresh during the loop resumes correctly.
+    persist({ vehicles, samples, approved: true, results: deployResults });
+
+    const results: DeployResult[] = [...deployResults];
+    const alreadyDoneIds = new Set(results.map(r => r.vehicleId));
+
+    // Deploy already-sampled vehicles using the cached wiki content (skip if already deployed).
     for (const s of samples) {
       if (isStopRequested()) break;
+      if (alreadyDoneIds.has(s.vehicle.id)) continue;
       const r = await writeWikiToDb(s.vehicle, s.wiki, s.raw);
       results.push(r);
+      alreadyDoneIds.add(r.vehicleId);
       setDeployResults([...results]);
       setDeployProgress({ current: results.length, total: vehicles.length });
       logResult(r);
+      persist({ approved: true, results: [...results] });
     }
 
     // Generate + deploy the remaining vehicles.
-    const remaining = vehicles.filter(v => !sampledIds.has(v.id));
+    const remaining = vehicles.filter(v => !sampledIds.has(v.id) && !alreadyDoneIds.has(v.id));
     for (const v of remaining) {
       if (isStopRequested()) break;
       workBoard.pushActivity('⟳', `Generating — ${v.make} ${v.model} ${v.generation}`);
@@ -144,6 +154,7 @@ export function WikiBriefPanel({ batchLimit, cardId, persistedState, onDone, onR
       setDeployResults([...results]);
       setDeployProgress({ current: results.length, total: vehicles.length });
       logResult(r);
+      persist({ approved: true, results: [...results] });
     }
 
     const stopped = isStopRequested();
@@ -155,6 +166,31 @@ export function WikiBriefPanel({ batchLimit, cardId, persistedState, onDone, onR
     onDone?.(`${live} live · ${skipped} skipped · ${failed} failed${stopped ? ' · stopped' : ''}`);
     clearStop();
   };
+
+  // Auto-resume an approved batch that was interrupted by a refresh / tab close.
+  useEffect(() => {
+    if (resumedRef.current) return;
+    if (!hasPersisted || !persistedState?.approved) return;
+    if (phase !== 'deploying') return;
+    const total = persistedState.vehicles.length;
+    const done = persistedState.results?.length || 0;
+    if (done >= total) {
+      // Already complete — finalise.
+      setPhase('done');
+      const live = (persistedState.results || []).filter((r: DeployResult) => r.status === 'live').length;
+      const skipped = (persistedState.results || []).filter((r: DeployResult) => r.status === 'skipped').length;
+      const failed = (persistedState.results || []).filter((r: DeployResult) => r.status === 'failed').length;
+      onDone?.(`${live} live · ${skipped} skipped · ${failed} failed`);
+      resumedRef.current = true;
+      return;
+    }
+    resumedRef.current = true;
+    workBoard.pushActivity('▶', `Auto-resuming wiki batch after reload — ${done}/${total} done`);
+    // Kick off after a tick so initial render settles.
+    setTimeout(() => approveAndRun(true), 400);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   const retryFailed = async () => {
     const failedResults = deployResults.filter(r => r.status === 'failed');
