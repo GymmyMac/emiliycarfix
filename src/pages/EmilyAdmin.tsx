@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Settings, Sparkles, ChevronDown, Square } from 'lucide-react';
+import { Send, Settings, Sparkles, ChevronDown, Square, MessageSquarePlus, History, Trash2, Pencil, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { TaskLauncher } from '@/components/TaskLauncher';
 import { WorkBoard } from '@/components/WorkBoard';
@@ -15,6 +15,17 @@ import { workBoard } from '@/lib/workBoardStore';
 import { detectWikiBrief } from '@/lib/wikiBriefWorkflow';
 import { TASK_LIBRARY, getTask, loadPromptOverride, type TaskDefinition } from '@/lib/taskPrompts';
 import { callEmilyChat } from '@/lib/emilyChat';
+import {
+  getActiveSessionId,
+  setActiveSessionId,
+  newSessionId,
+  listThreads,
+  loadThread,
+  saveTurn,
+  renameThread,
+  deleteThread,
+  type ThreadSummary,
+} from '@/lib/emilyThreads';
 
 // ---------- Generic content task executor ----------
 async function runContentTask(task: TaskDefinition, brief: string, cardId: string) {
