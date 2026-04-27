@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Settings, Sparkles, ChevronDown, Square } from 'lucide-react';
+import { Send, Settings, Sparkles, ChevronDown, Square, MessageSquarePlus, History, Trash2, Pencil, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { TaskLauncher } from '@/components/TaskLauncher';
 import { WorkBoard } from '@/components/WorkBoard';
@@ -15,6 +15,17 @@ import { workBoard } from '@/lib/workBoardStore';
 import { detectWikiBrief } from '@/lib/wikiBriefWorkflow';
 import { TASK_LIBRARY, getTask, loadPromptOverride, type TaskDefinition } from '@/lib/taskPrompts';
 import { callEmilyChat } from '@/lib/emilyChat';
+import {
+  getActiveSessionId,
+  setActiveSessionId,
+  newSessionId,
+  listThreads,
+  loadThread,
+  saveTurn,
+  renameThread,
+  deleteThread,
+  type ThreadSummary,
+} from '@/lib/emilyThreads';
 
 // ---------- Generic content task executor ----------
 async function runContentTask(task: TaskDefinition, brief: string, cardId: string) {
@@ -81,13 +92,62 @@ function ChatBar() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<{ role: 'user' | 'emily'; content: string; ts: number }[]>([]);
   const [busy, setBusy] = useState(false);
-  const sessionId = useRef(crypto.randomUUID());
+  const [sessionId, setSessionId] = useState<string>(() => getActiveSessionId());
+  const [threadsOpen, setThreadsOpen] = useState(false);
+  const [threads, setThreads] = useState<ThreadSummary[]>([]);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
+
+  // Hydrate active thread from DB on mount and whenever sessionId changes
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const turns = await loadThread(sessionId);
+      if (!cancelled) setMessages(turns);
+    })();
+    return () => { cancelled = true; };
+  }, [sessionId]);
+
+  // Refresh threads when drawer opens
+  useEffect(() => {
+    if (threadsOpen) {
+      listThreads().then(setThreads);
+    }
+  }, [threadsOpen, messages.length]);
 
   useEffect(() => {
     if (open) scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, open]);
+
+  const startNewThread = () => {
+    const id = newSessionId();
+    setSessionId(id);
+    setMessages([]);
+    setInput('');
+  };
+
+  const switchThread = (id: string) => {
+    setActiveSessionId(id);
+    setSessionId(id);
+    setThreadsOpen(false);
+  };
+
+  const handleDelete = async (id: string) => {
+    await deleteThread(id);
+    setThreads((t) => t.filter((x) => x.session_id !== id));
+    if (id === sessionId) startNewThread();
+  };
+
+  const submitRename = (id: string) => {
+    if (renameValue.trim()) {
+      renameThread(id, renameValue);
+      setThreads((t) => t.map((x) => (x.session_id === id ? { ...x, title: renameValue.trim().slice(0, 80) } : x)));
+    }
+    setRenaming(null);
+    setRenameValue('');
+  };
 
   const send = async () => {
     const text = input.trim();
@@ -125,9 +185,12 @@ function ChatBar() {
       const json = await callEmilyChat({
         message: text,
         messages: [...messages.map((m) => ({ role: m.role === 'emily' ? 'assistant' as const : 'user' as const, content: m.content })), { role: 'user', content: text }],
-        session_id: sessionId.current,
+        session_id: sessionId,
       });
-      setMessages((m) => [...m, { role: 'emily', content: json?.response || 'No response', ts: Date.now() }]);
+      const reply = json?.response || 'No response';
+      setMessages((m) => [...m, { role: 'emily', content: reply, ts: Date.now() }]);
+      // Persist the turn so the thread can be resumed later
+      saveTurn(sessionId, text, reply).catch((e) => console.warn('[emily] saveTurn failed', e));
     } catch (e: any) {
       setMessages((m) => [...m, { role: 'emily', content: `Error: ${e?.message}`, ts: Date.now() }]);
     } finally {
@@ -145,17 +208,111 @@ function ChatBar() {
   useEffect(() => { autoGrow(); }, [input]);
 
   return (
-    <div className="border-t border-border/60 bg-gradient-to-b from-background to-card/40">
+    <div className="border-t border-border/60 bg-gradient-to-b from-background to-card/40 relative">
+      {/* Threads drawer */}
+      {threadsOpen && (
+        <div className="absolute inset-0 z-30 flex">
+          <div className="w-80 max-w-[80%] h-full bg-card border-r border-border shadow-xl flex flex-col">
+            <div className="flex items-center justify-between px-4 h-12 border-b border-border">
+              <div className="text-sm font-semibold">Conversations</div>
+              <button onClick={() => setThreadsOpen(false)} className="text-muted-foreground hover:text-foreground">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="px-3 py-2 border-b border-border">
+              <Button size="sm" variant="outline" className="w-full justify-start gap-2" onClick={() => { startNewThread(); setThreadsOpen(false); }}>
+                <MessageSquarePlus size={14} /> New chat
+              </Button>
+            </div>
+            <div className="flex-1 overflow-y-auto py-1">
+              {threads.length === 0 && (
+                <div className="px-4 py-6 text-xs text-muted-foreground">No conversations yet.</div>
+              )}
+              {threads.map((t) => {
+                const active = t.session_id === sessionId;
+                const isRenaming = renaming === t.session_id;
+                return (
+                  <div
+                    key={t.session_id}
+                    className={`group px-3 py-2 mx-1 rounded-md cursor-pointer flex items-center gap-2 ${active ? 'bg-primary/10 text-foreground' : 'hover:bg-accent/40 text-muted-foreground'}`}
+                    onClick={() => !isRenaming && switchThread(t.session_id)}
+                  >
+                    <div className="flex-1 min-w-0">
+                      {isRenaming ? (
+                        <input
+                          autoFocus
+                          value={renameValue}
+                          onChange={(e) => setRenameValue(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') submitRename(t.session_id);
+                            if (e.key === 'Escape') { setRenaming(null); setRenameValue(''); }
+                          }}
+                          onBlur={() => submitRename(t.session_id)}
+                          className="w-full bg-background border border-border rounded px-2 py-1 text-xs"
+                        />
+                      ) : (
+                        <>
+                          <div className="text-xs font-medium truncate text-foreground">{t.title}</div>
+                          <div className="text-[10px] text-muted-foreground/70">
+                            {t.turns} {t.turns === 1 ? 'turn' : 'turns'} · {new Date(t.last_at).toLocaleDateString()}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    {!isRenaming && (
+                      <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setRenaming(t.session_id); setRenameValue(t.title); }}
+                          className="p-1 hover:text-foreground"
+                          title="Rename"
+                        >
+                          <Pencil size={11} />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); if (confirm('Delete this conversation?')) handleDelete(t.session_id); }}
+                          className="p-1 hover:text-destructive"
+                          title="Delete"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex-1 bg-background/60 backdrop-blur-sm" onClick={() => setThreadsOpen(false)} />
+        </div>
+      )}
+
       {/* Conversation — only when there are messages */}
       {messages.length > 0 && (
         <div className="relative">
-          <button
-            onClick={() => setOpen((o) => !o)}
-            className="absolute right-4 top-2 z-10 text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
-          >
-            {open ? 'Hide' : 'Show'} conversation
-            <ChevronDown size={12} className={`transition-transform ${open ? '' : '-rotate-90'}`} />
-          </button>
+          <div className="absolute right-4 top-2 z-10 flex items-center gap-3">
+            <button
+              onClick={() => setThreadsOpen(true)}
+              className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+              title="Past conversations"
+            >
+              <History size={12} /> History
+            </button>
+            <button
+              onClick={startNewThread}
+              className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+              title="Start a new conversation"
+            >
+              <MessageSquarePlus size={12} /> New
+            </button>
+            <button
+              onClick={() => setOpen((o) => !o)}
+              className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+            >
+              {open ? 'Hide' : 'Show'}
+              <ChevronDown size={12} className={`transition-transform ${open ? '' : '-rotate-90'}`} />
+            </button>
+          </div>
           {open && (
             <div ref={scrollRef} className="max-h-[40vh] overflow-y-auto px-6 pt-8 pb-4 space-y-5">
               {messages.map((m, i) => (
@@ -194,6 +351,24 @@ function ChatBar() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Empty-state header — give the user a way to reach history even with no messages */}
+      {messages.length === 0 && (
+        <div className="flex items-center justify-end gap-3 px-6 pt-2">
+          <button
+            onClick={() => setThreadsOpen(true)}
+            className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+          >
+            <History size={12} /> History
+          </button>
+          <button
+            onClick={startNewThread}
+            className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+          >
+            <MessageSquarePlus size={12} /> New chat
+          </button>
         </div>
       )}
 
