@@ -9,6 +9,7 @@ import { TaskLauncher } from '@/components/TaskLauncher';
 import { WorkBoard } from '@/components/WorkBoard';
 import { ActivityFeed } from '@/components/ActivityFeed';
 import { BriefModal } from '@/components/BriefModal';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { workBoard } from '@/lib/workBoardStore';
 import { detectWikiBrief } from '@/lib/wikiBriefWorkflow';
 import { TASK_LIBRARY, getTask, loadPromptOverride, type TaskDefinition } from '@/lib/taskPrompts';
@@ -225,15 +226,23 @@ export default function EmilyAdmin() {
       </header>
 
       {/* Three-panel body */}
-      <div className="flex-1 min-h-0 flex">
-        <TaskLauncher onPickTask={setBriefingTask} />
-
-        <main className="flex-1 min-w-0 flex flex-col">
-          <WorkBoard />
-          <ChatBar />
-        </main>
-
-        <ActivityFeed />
+      <div className="flex-1 min-h-0">
+        <ResizablePanelGroup direction="horizontal" className="h-full w-full">
+          <ResizablePanel defaultSize={18} minSize={12} maxSize={35}>
+            <TaskLauncher onPickTask={setBriefingTask} />
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize={62} minSize={30}>
+            <main className="h-full flex flex-col min-w-0">
+              <WorkBoard />
+              <ChatBar />
+            </main>
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel defaultSize={20} minSize={12} maxSize={40}>
+            <ActivityFeed />
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </div>
 
       <BriefModal

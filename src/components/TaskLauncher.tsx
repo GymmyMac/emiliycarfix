@@ -15,7 +15,7 @@ export function TaskLauncher({ onPickTask }: Props) {
     setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
 
   return (
-    <aside className="w-60 shrink-0 h-full overflow-y-auto bg-card border-r border-border">
+    <aside className="h-full w-full overflow-y-auto bg-card border-r border-border">
       <div className="px-4 py-3 border-b border-border sticky top-0 bg-card z-10">
         <h2 className="text-sm font-semibold text-foreground">Start a task</h2>
         <p className="text-[11px] text-muted-foreground mt-0.5">Brief Emily — she does the rest</p>
