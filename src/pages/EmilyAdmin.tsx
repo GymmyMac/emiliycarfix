@@ -86,7 +86,7 @@ function brief(task: TaskDefinition, briefText: string) {
 
 // ---------- Chat (kept, demoted) ----------
 function ChatBar() {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<{ role: 'user' | 'emily'; content: string; ts: number }[]>([]);
   const [busy, setBusy] = useState(false);
