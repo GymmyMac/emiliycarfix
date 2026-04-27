@@ -110,7 +110,7 @@ serve(async (req) => {
         .eq("session_id", session_id)
         .not("emily_response", "is", null)
         .order("created_at", { ascending: true })
-        .limit(10);
+        .limit(20);
 
       if (history) {
         conversationHistory = history.flatMap((row) => [
