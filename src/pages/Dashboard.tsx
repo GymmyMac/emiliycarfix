@@ -244,7 +244,7 @@ export default function Dashboard(){
 
       /* Update state */
       atomsR.current.forEach(a=>{a.angle+=a.speed*dt;});
-      nodesR.current.forEach(n=>{n.pulse=Math.max(0,n.pulse-.018*dt);});
+      nodesR.current.forEach(n=>{n.pulse=Math.max(0,n.pulse-.012*dt);});
       particles.current=particles.current.filter(p=>{p.t+=p.speed*dt;return p.t<1;});
 
       /* Project nodes */
