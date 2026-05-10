@@ -149,6 +149,12 @@ export default function Approvals() {
   const [channelLoading, setChannelLoading] = useState(false);
   const [runningIds, setRunningIds] = useState<Set<string>>(new Set());
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [newBrief, setNewBrief] = useState('');
+  const [newCadence, setNewCadence] = useState('paused');
+  const [savingNew, setSavingNew] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const toggleExpand = (id: string) => setExpandedItems(prev => {
     const n = new Set(prev);
