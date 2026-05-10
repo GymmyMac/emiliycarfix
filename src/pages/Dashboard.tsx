@@ -258,15 +258,33 @@ export default function Dashboard(){
         const sn=proj.find(p=>p.n.id===sid),tn=proj.find(p=>p.n.id===tid);
         if(!sn||!tn)return;
         const avgD=(sn.p.depth+tn.p.depth)/2;
-        ctx.strokeStyle=`rgba(99,102,241,${avgD<0?.03:.11})`;ctx.lineWidth=.8;
-        ctx.beginPath();
+        const front=avgD>=0;
+        const rgb=hexRgb(sn.n.color);
+        /* Build path once */
+        const pts:[number,number][]=[];
         for(let i=0;i<=22;i++){
           const u=slerp3(sn.n.u,tn.n.u,i/22);
           const w=applyRot(u,rx,ry);
           const p=project3(w,cx,cy,SR,FOV);
-          i?ctx.lineTo(p.sx,p.sy):ctx.moveTo(p.sx,p.sy);
+          pts.push([p.sx,p.sy]);
         }
+        /* Main line — coloured by source, clearly visible */
+        ctx.strokeStyle=`rgba(${rgb},${front?0.42:0.14})`;
+        ctx.lineWidth=front?1.2:0.9;
+        ctx.beginPath();
+        pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));
         ctx.stroke();
+        /* Soft additive bloom on front edges */
+        if(front){
+          ctx.save();
+          ctx.globalCompositeOperation='lighter';
+          ctx.strokeStyle=`rgba(${rgb},0.08)`;
+          ctx.lineWidth=2.5;
+          ctx.beginPath();
+          pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));
+          ctx.stroke();
+          ctx.restore();
+        }
         particles.current.filter(p=>p.src===sid&&p.tgt===tid).forEach(p=>{
           const u=slerp3(sn.n.u,tn.n.u,p.t);
           const w=applyRot(u,rx,ry);
