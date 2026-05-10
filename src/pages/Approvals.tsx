@@ -145,6 +145,12 @@ export default function Approvals() {
   const [channelLoading, setChannelLoading] = useState(false);
   const [runningIds, setRunningIds] = useState<Set<string>>(new Set());
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const toggleExpand = (id: string) => setExpandedItems(prev => {
+    const n = new Set(prev);
+    n.has(id) ? n.delete(id) : n.add(id);
+    return n;
+  });
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -343,6 +349,7 @@ export default function Approvals() {
               onOpenReview={handleOpenReview} onOpenChannels={handleOpenChannels}
               onApprove={handleApproveItem} onReject={handleRejectItem}
               onCadenceChange={handleCadenceChange} onToggleStatus={handleToggleStatus} onRunOne={handleRunOne}
+              expandedItems={expandedItems} onToggleExpand={toggleExpand}
             />
           ))}
           {draft.length > 0 && (
@@ -358,6 +365,7 @@ export default function Approvals() {
                   onOpenReview={handleOpenReview} onOpenChannels={handleOpenChannels}
                   onApprove={handleApproveItem} onReject={handleRejectItem}
                   onCadenceChange={handleCadenceChange} onToggleStatus={handleToggleStatus} onRunOne={handleRunOne}
+                  expandedItems={expandedItems} onToggleExpand={toggleExpand}
                 />
               ))}
             </>
@@ -383,6 +391,8 @@ interface RowProps {
   onCadenceChange: (id: string, cadence: string) => void;
   onToggleStatus: (ct: ContentType) => void;
   onRunOne: (ct: ContentType) => void;
+  expandedItems: Set<string>;
+  onToggleExpand: (id: string) => void;
 }
 
 function PipelineRow({
@@ -390,6 +400,7 @@ function PipelineRow({
   briefText, setBriefText, savingBrief, queueItems, queueLoading, isRunning,
   onOpenBrief, onSaveBrief, onOpenReview, onOpenChannels,
   onApprove, onReject, onCadenceChange, onToggleStatus, onRunOne,
+  expandedItems, onToggleExpand,
 }: RowProps) {
   const isDraft = ct.status === 'draft';
   const isPaused = ct.status === 'paused';
@@ -632,8 +643,16 @@ function PipelineRow({
                         {item.title || item.target_keyword || item.platform || item.id}
                       </div>
                       {(item.draft_content || item.draft_copy) && (
-                        <div className="text-xs text-gray-500 mt-1 line-clamp-2">
-                          {(item.draft_content || item.draft_copy || '').slice(0, 200)}…
+                        <div className="mt-1">
+                          <div className={`text-xs text-gray-600 whitespace-pre-wrap leading-relaxed ${expandedItems.has(item.id) ? '' : 'line-clamp-2'}`}>
+                            {item.draft_content || item.draft_copy}
+                          </div>
+                          <button
+                            onClick={() => onToggleExpand(item.id)}
+                            className="text-xs text-blue-500 hover:text-blue-700 mt-1"
+                          >
+                            {expandedItems.has(item.id) ? '▲ collapse' : '▼ read full article'}
+                          </button>
                         </div>
                       )}
                       <div className="text-xs text-gray-400 mt-1">
