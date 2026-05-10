@@ -219,7 +219,7 @@ export default function Dashboard(){
       ctx.fillStyle=atm;ctx.beginPath();ctx.arc(cx,cy,SR*1.4,0,Math.PI*2);ctx.fill();
 
       /* Wireframe sphere */
-      ctx.strokeStyle='rgba(99,102,241,0.055)';ctx.lineWidth=.5;
+      ctx.strokeStyle='rgba(99,102,241,0.09)';ctx.lineWidth=.5;
       for(let li=1;li<=5;li++){
         const cp=-1+li/3,sp=Math.sqrt(Math.max(0,1-cp*cp));
         ctx.beginPath();
