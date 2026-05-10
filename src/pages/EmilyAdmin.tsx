@@ -288,7 +288,7 @@ function ChatBar() {
 
       {/* Conversation — only when there are messages */}
       {messages.length > 0 && (
-        <div className="relative">
+        <div className="relative flex-1 min-h-0 flex flex-col">
           <div className="absolute right-4 top-2 z-10 flex items-center gap-3">
             <button
               onClick={() => setThreadsOpen(true)}
