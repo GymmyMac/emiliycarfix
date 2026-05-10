@@ -18,6 +18,7 @@ interface ContentType {
   ga4_avg_duration_sec: number;
   ga4_conversions: number;
   engagement_score: number;
+  ga4_unique_pages: number;
   pipeline_generating: number;
   pipeline_to_review: number;
   pipeline_approved: number;
@@ -518,7 +519,11 @@ function PipelineRow({
   const channelsOpen = openChannels === ct.id;
   const isSocialPosts = ct.slug === 'social-posts';
 
-  const liveCount = ct.pipeline_published > 0 ? ct.pipeline_published : ct.ga4_page_views;
+  // For dynamically-generated page types, use GA4 unique page count as the true live number.
+  // For editorial/social types, use the pipeline published count.
+  const liveCount = (ct.slug === 'vehicle-wiki' || ct.slug === 'aeo-parts' || ct.slug === 'seo-articles')
+    ? (ct.ga4_unique_pages > 0 ? ct.ga4_unique_pages : ct.pipeline_published)
+    : (ct.pipeline_published > 0 ? ct.pipeline_published : ct.ga4_page_views);
 
   return (
     <div>
