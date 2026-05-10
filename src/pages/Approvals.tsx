@@ -98,6 +98,15 @@ async function fetchReviewItems(ct: ContentType, platformFilter?: string): Promi
       .order('created_at', { ascending: false }).limit(10);
     return (data || []) as QueueItem[];
   }
+  if (ct.slug === 'reddit') {
+    const { data } = await supabase.from('mkt_seo_queue')
+      .select('id, title, target_keyword, draft_content, created_at, status, content_type')
+      .eq('content_type', 'reddit')
+      .in('status', ['pending', 'generated'])
+      .eq('james_approved', false)
+      .order('created_at', { ascending: false }).limit(10);
+    return (data || []) as QueueItem[];
+  }
   return [];
 }
 
