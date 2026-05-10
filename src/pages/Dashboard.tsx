@@ -196,7 +196,17 @@ export default function Dashboard(){
       const W=canvas.width/dpr,H=canvas.height/dpr;
       const cx=W/2,cy=H/2,SR=Math.min(W,H)*.32,FOV=3.2;
 
-      if(!drag.current.on)rot.current.y+=.0005*dt;
+      if(!drag.current.on){
+        /* Apply angular velocity with exponential damping (~0.985 per 16ms frame) */
+        rot.current.x+=vel.current.x*dt;
+        rot.current.y+=vel.current.y*dt;
+        const damp=Math.pow(0.985,dt/16.67);
+        vel.current.x*=damp;
+        vel.current.y*=damp;
+        /* Ambient drift only when nearly stopped */
+        const speed=Math.hypot(vel.current.x,vel.current.y);
+        if(speed<0.0002)vel.current.y+=(0.00008-vel.current.y)*0.02;
+      }
       const rx=rot.current.x,ry=rot.current.y;
 
       ctx.save();
