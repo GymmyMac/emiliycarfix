@@ -391,6 +391,8 @@ interface RowProps {
   onCadenceChange: (id: string, cadence: string) => void;
   onToggleStatus: (ct: ContentType) => void;
   onRunOne: (ct: ContentType) => void;
+  expandedItems: Set<string>;
+  onToggleExpand: (id: string) => void;
 }
 
 function PipelineRow({
@@ -398,6 +400,7 @@ function PipelineRow({
   briefText, setBriefText, savingBrief, queueItems, queueLoading, isRunning,
   onOpenBrief, onSaveBrief, onOpenReview, onOpenChannels,
   onApprove, onReject, onCadenceChange, onToggleStatus, onRunOne,
+  expandedItems, onToggleExpand,
 }: RowProps) {
   const isDraft = ct.status === 'draft';
   const isPaused = ct.status === 'paused';
