@@ -66,8 +66,14 @@ export default function Approvals() {
   const [savingBrief, setSavingBrief] = useState(false);
   const [queueItems, setQueueItems] = useState<QueueItem[]>([]);
   const [queueLoading, setQueueLoading] = useState(false);
+  const [runningIds, setRunningIds] = useState<Set<string>>(new Set());
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
-  // Load content types + GA4 stats from the view
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 3000);
+  };
+
   const loadContentTypes = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -104,7 +110,6 @@ export default function Approvals() {
     setOpenReview(ct.id);
     setQueueLoading(true);
     setQueueItems([]);
-    // Query the relevant queue table for pending items
     let table = 'mkt_content_queue';
     if (ct.slug === 'vehicle-wiki') table = 'mkt_seo_queue';
     if (ct.slug === 'aeo-parts') table = 'partslot_aeo_queue';
@@ -140,6 +145,31 @@ export default function Approvals() {
     setContentTypes(prev => prev.map(ct => ct.id === ctId ? { ...ct, cadence } : ct));
   };
 
+  // Toggle active ↔ paused (or draft → active)
+  const handleToggleStatus = async (ct: ContentType) => {
+    const newStatus = ct.status === 'active' ? 'paused' : 'active';
+    await supabase.from('emily_content_types')
+      .update({ status: newStatus, updated_at: new Date().toISOString() })
+      .eq('id', ct.id);
+    setContentTypes(prev => prev.map(c => c.id === ct.id ? { ...c, status: newStatus } : c));
+    showToast(`${ct.name} ${newStatus === 'active' ? 'enabled' : 'paused'}`);
+  };
+
+  // Write a run trigger — AG/Emily picks this up and generates one batch
+  const handleRunOne = async (ct: ContentType) => {
+    if (runningIds.has(ct.id)) return;
+    setRunningIds(prev => new Set([...prev, ct.id]));
+    await supabase.from('emily_run_triggers').insert({
+      content_type_id: ct.id,
+      content_type_slug: ct.slug,
+      status: 'pending',
+    });
+    showToast(`Run triggered for ${ct.name} — Emily will pick this up shortly`);
+    setTimeout(() => {
+      setRunningIds(prev => { const n = new Set(prev); n.delete(ct.id); return n; });
+    }, 8000);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -152,11 +182,18 @@ export default function Approvals() {
     .filter(ct => ct.ga4_sessions > 0)
     .sort((a, b) => b.engagement_score - a.engagement_score);
 
-  const active = contentTypes.filter(ct => ct.status === 'active');
+  const active = contentTypes.filter(ct => ct.status === 'active' || ct.status === 'paused');
   const draft = contentTypes.filter(ct => ct.status === 'draft');
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-8">
+
+      {/* Toast */}
+      {toastMsg && (
+        <div className="fixed top-4 right-4 z-50 bg-gray-900 text-white text-xs px-4 py-2 rounded-lg shadow-lg transition-opacity">
+          {toastMsg}
+        </div>
+      )}
 
       {/* ── SCOREBOARD ── */}
       <div>
@@ -166,7 +203,7 @@ export default function Approvals() {
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {contentTypes.map((ct, idx) => {
+          {contentTypes.map((ct) => {
             const rank = ranked.findIndex(r => r.id === ct.id);
             const rankColor = rank >= 0 && rank < 3 ? RANK_COLORS[rank] : undefined;
             const poolLabel = ct.target_pool_table ? (POOL_LABELS[ct.target_pool_table] || 'in pool') : null;
@@ -206,7 +243,7 @@ export default function Approvals() {
                   <div className="mt-2 text-xs text-gray-400 border-t border-gray-100 pt-2">
                     {isNew
                       ? <span className="text-purple-600 font-medium">set up to start</span>
-                      : <span>{fmt(ct.target_count - ct.ga4_page_views)} {poolLabel} remaining</span>
+                      : <span>{fmt(Math.max(0, ct.target_count - ct.ga4_page_views))} {poolLabel} remaining</span>
                     }
                   </div>
                 )}
@@ -224,13 +261,14 @@ export default function Approvals() {
         </div>
 
         {/* Column headers */}
-        <div className="grid items-center mb-1 px-3" style={{ gridTemplateColumns: '1fr 100px 80px 80px 80px 110px' }}>
+        <div className="grid items-center mb-1 px-3" style={{ gridTemplateColumns: '1fr 100px 80px 80px 80px 110px 100px' }}>
           <div className="text-xs text-purple-600 border-b-2 border-purple-400 pb-1">content type · one brief</div>
           <div className="text-xs text-amber-600 border-b-2 border-amber-400 pb-1 text-center">generating</div>
           <div className="text-xs text-blue-600 border-b-2 border-blue-400 pb-1 text-center">to review</div>
           <div className="text-xs text-emerald-600 border-b-2 border-emerald-400 pb-1 text-center">approved</div>
           <div className="text-xs text-gray-400 border-b-2 border-gray-200 pb-1 text-center">live</div>
-          <div className="text-xs text-gray-400 pb-1 text-right">cadence</div>
+          <div className="text-xs text-gray-400 pb-1 text-center">cadence</div>
+          <div className="text-xs text-gray-400 pb-1 text-right">controls</div>
         </div>
 
         <div className="space-y-1.5">
@@ -245,12 +283,15 @@ export default function Approvals() {
               savingBrief={savingBrief}
               queueItems={queueItems}
               queueLoading={queueLoading}
+              isRunning={runningIds.has(ct.id)}
               onOpenBrief={handleOpenBrief}
               onSaveBrief={handleSaveBrief}
               onOpenReview={handleOpenReview}
               onApprove={handleApproveItem}
               onReject={handleRejectItem}
               onCadenceChange={handleCadenceChange}
+              onToggleStatus={handleToggleStatus}
+              onRunOne={handleRunOne}
             />
           ))}
 
@@ -270,12 +311,15 @@ export default function Approvals() {
                   savingBrief={savingBrief}
                   queueItems={queueItems}
                   queueLoading={queueLoading}
+                  isRunning={false}
                   onOpenBrief={handleOpenBrief}
                   onSaveBrief={handleSaveBrief}
                   onOpenReview={handleOpenReview}
                   onApprove={handleApproveItem}
                   onReject={handleRejectItem}
                   onCadenceChange={handleCadenceChange}
+                  onToggleStatus={handleToggleStatus}
+                  onRunOne={handleRunOne}
                 />
               ))}
             </>
@@ -295,20 +339,25 @@ interface RowProps {
   savingBrief: boolean;
   queueItems: QueueItem[];
   queueLoading: boolean;
+  isRunning: boolean;
   onOpenBrief: (ct: ContentType) => void;
   onSaveBrief: (id: string) => void;
   onOpenReview: (ct: ContentType) => void;
   onApprove: (item: QueueItem, ct: ContentType) => void;
   onReject: (item: QueueItem, ct: ContentType) => void;
   onCadenceChange: (id: string, cadence: string) => void;
+  onToggleStatus: (ct: ContentType) => void;
+  onRunOne: (ct: ContentType) => void;
 }
 
 function PipelineRow({
   ct, openBrief, openReview, briefText, setBriefText, savingBrief,
-  queueItems, queueLoading,
-  onOpenBrief, onSaveBrief, onOpenReview, onApprove, onReject, onCadenceChange
+  queueItems, queueLoading, isRunning,
+  onOpenBrief, onSaveBrief, onOpenReview, onApprove, onReject, onCadenceChange,
+  onToggleStatus, onRunOne,
 }: RowProps) {
   const isDraft = ct.status === 'draft';
+  const isPaused = ct.status === 'paused';
   const briefOpen = openBrief === ct.id;
   const reviewOpen = openReview === ct.id;
 
@@ -316,15 +365,20 @@ function PipelineRow({
     <div>
       {/* Main row */}
       <div
-        className={`rounded-lg border bg-white overflow-hidden transition-colors ${isDraft ? 'opacity-60 border-dashed' : 'hover:border-gray-300'}`}
-        style={{ borderColor: isDraft ? '#d1d5db' : '#e5e7eb' }}
+        className={`rounded-lg border bg-white overflow-hidden transition-colors ${
+          isDraft ? 'opacity-60 border-dashed' : isPaused ? 'opacity-70' : 'hover:border-gray-300'
+        }`}
+        style={{ borderColor: isDraft ? '#d1d5db' : isPaused ? '#fbbf24' : '#e5e7eb' }}
       >
-        <div className="grid items-center px-3 py-2.5" style={{ gridTemplateColumns: '1fr 100px 80px 80px 80px 110px' }}>
+        <div className="grid items-center px-3 py-2.5" style={{ gridTemplateColumns: '1fr 100px 80px 80px 80px 110px 100px' }}>
 
           {/* Name + brief button */}
           <div className="flex items-center gap-2 min-w-0">
             <div className="min-w-0">
-              <div className="text-sm font-medium text-gray-900 truncate">{ct.name}</div>
+              <div className="flex items-center gap-1.5">
+                <div className="text-sm font-medium text-gray-900 truncate">{ct.name}</div>
+                {isPaused && <span className="text-xs text-amber-500 font-medium">paused</span>}
+              </div>
               <div className="text-xs text-gray-400 truncate">{ct.description}</div>
             </div>
             <button
@@ -369,7 +423,7 @@ function PipelineRow({
           </div>
 
           {/* Cadence */}
-          <div className="flex justify-end">
+          <div className="flex justify-center">
             {isDraft ? (
               <span className="text-xs text-gray-300">not set</span>
             ) : (
@@ -388,6 +442,38 @@ function PipelineRow({
                 <option value="on trigger">on trigger</option>
                 <option value="paused">paused</option>
               </select>
+            )}
+          </div>
+
+          {/* Controls */}
+          <div className="flex items-center justify-end gap-1.5">
+            {/* Enable / Pause toggle */}
+            <button
+              onClick={() => onToggleStatus(ct)}
+              title={ct.status === 'active' ? 'Pause this content type' : 'Enable this content type'}
+              className={`text-xs px-2 py-1 rounded border transition-colors ${
+                ct.status === 'active'
+                  ? 'border-gray-200 text-gray-400 hover:border-amber-300 hover:text-amber-600 hover:bg-amber-50'
+                  : 'border-emerald-300 text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
+              }`}
+            >
+              {ct.status === 'active' ? '⏸' : '▶'}
+            </button>
+
+            {/* Run one now */}
+            {!isDraft && (
+              <button
+                onClick={() => onRunOne(ct)}
+                disabled={isRunning}
+                title="Trigger one run now"
+                className={`text-xs px-2 py-1 rounded border transition-colors ${
+                  isRunning
+                    ? 'border-purple-200 text-purple-400 bg-purple-50 cursor-not-allowed'
+                    : 'border-gray-200 text-gray-400 hover:border-purple-300 hover:text-purple-600 hover:bg-purple-50'
+                }`}
+              >
+                {isRunning ? '…' : '▷ run'}
+              </button>
             )}
           </div>
         </div>
