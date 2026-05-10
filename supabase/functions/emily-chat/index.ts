@@ -23,6 +23,12 @@ async function embed(text: string, apiKey: string): Promise<number[]> {
   return data.data[0].embedding;
 }
 
+function truncateText(value: unknown, maxChars: number): string {
+  if (typeof value !== "string") return "";
+  if (value.length <= maxChars) return value;
+  return `${value.slice(0, maxChars)}\n…[truncated]`;
+}
+
 // emily-chat v2 — model fallback chain + empty-content guard (redeploy marker)
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
