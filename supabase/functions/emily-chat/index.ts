@@ -70,9 +70,14 @@ serve(async (req) => {
       if (matchError) {
         console.error("Vector search error:", matchError);
       } else if (matches && matches.length > 0) {
+        // Cap each chunk to keep total context well under the 200k token model limit.
+        // Some mkt_documents rows hold huge blobs (>500k chars) which blew past the limit.
+        const MAX_CHARS_PER_CHUNK = 4000;
         contextChunks = matches.map((m: any) => ({
           title: m.title,
-          content: m.content,
+          content: typeof m.content === "string" && m.content.length > MAX_CHARS_PER_CHUNK
+            ? m.content.slice(0, MAX_CHARS_PER_CHUNK) + "\n…[truncated]"
+            : m.content,
           similarity: m.similarity,
         }));
         // Deduplicate titles for the UI pills
