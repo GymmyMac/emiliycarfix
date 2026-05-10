@@ -98,7 +98,7 @@ function buildAtoms(nodes:GNode[]):GAtom[]{
       const shell=Math.floor(i/18),incl=Math.random()*Math.PI*2,ci=Math.cos(incl),si=Math.sin(incl);
       atoms.push({
         nid:node.id,angle:Math.random()*Math.PI*2,
-        speed:(0.004+Math.random()*.007)*(Math.random()>.5?1:-1),
+        speed:(0.002+Math.random()*.0035)*(Math.random()>.5?1:-1),
         orbitR:node.baseR*(1.3+shell*.38+Math.random()*.15),
         b1:{x:b1b.x*ci+b2b.x*si,y:b1b.y*ci+b2b.y*si,z:b1b.z*ci+b2b.z*si},
         b2:{x:-b1b.x*si+b2b.x*ci,y:-b1b.y*si+b2b.y*ci,z:-b1b.z*si+b2b.z*ci},
