@@ -15,68 +15,11 @@ import { Calendar } from '@/components/ui/calendar';
 import { toast } from 'sonner';
 import {
   CheckCircle2, XCircle, SkipForward, Pencil, Search,
-  CalendarIcon, Image as ImageIcon, ChevronDown, ExternalLink,
-  Loader2, Plus, Rocket, Send,
+  CalendarIcon, Loader2, Plus, Rocket, Send,
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { format, formatDistanceToNow } from 'date-fns';
 import PageHeader from '@/components/PageHeader';
-
-/* ─── Social Card Component ─── */
-function SocialCard({ item, onApprove, onReject, onEdit, onLightbox }: {
-  item: SocialItem;
-  onApprove: (id: string) => void;
-  onReject: (id: string) => void;
-  onEdit: (item: SocialItem) => void;
-  onLightbox: (url: string | null) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const stream = item.psyops_stream?.toLowerCase() || '';
-  const badgeClass = STREAM_BADGE[stream] || 'bg-muted/20 text-muted-foreground';
-  const platClass = PLATFORM_COLORS[item.platform?.toLowerCase() || ''] || 'bg-muted/20 text-muted-foreground';
-  const copy = item.draft_copy || '';
-  const truncated = copy.length > 280;
-
-  return (
-    <Card className="border-border">
-      <CardContent className="p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          {item.platform && <Badge variant="outline" className={`${platClass} border-transparent text-[11px] font-semibold`}>{item.platform}</Badge>}
-          {stream && <Badge variant="outline" className={`${badgeClass} border-transparent text-[11px] font-semibold`}>{stream.toUpperCase()}</Badge>}
-          <Badge variant="outline" className="text-[10px] border-border">{item.status}</Badge>
-        </div>
-        <div className="font-mono text-sm text-foreground whitespace-pre-wrap">
-          {expanded || !truncated ? copy : copy.slice(0, 280) + '...'}
-          {truncated && (
-            <button className="text-primary text-xs ml-1" onClick={() => setExpanded(!expanded)}>
-              {expanded ? 'Collapse' : 'Expand'}
-            </button>
-          )}
-        </div>
-        {item.image_url && (
-          <button onClick={() => onLightbox(item.image_url)} className="block">
-            <img src={item.image_url} alt="Content" className="w-[200px] h-[150px] object-cover rounded-md border border-border" />
-          </button>
-        )}
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <span>{item.scheduled_for ? `Scheduled: ${format(new Date(item.scheduled_for), 'd MMM HH:mm')}` : 'Not scheduled'}</span>
-          <span>Created: {format(new Date(item.created_at), 'd MMM')}</span>
-        </div>
-        <div className="flex items-center gap-2 justify-end">
-          <Button size="sm" className="h-8 text-xs bg-success hover:bg-success/90 text-primary-foreground" onClick={() => onApprove(item.id)}>
-            <CheckCircle2 size={14} className="mr-1" /> Approve
-          </Button>
-          <Button size="sm" variant="outline" className="h-8 text-xs border-primary text-primary hover:bg-primary/10" onClick={() => onEdit(item)}>
-            <Pencil size={14} className="mr-1" /> Edit
-          </Button>
-          <Button size="sm" variant="outline" className="h-8 text-xs border-destructive text-destructive hover:bg-destructive/10" onClick={() => onReject(item.id)}>
-            <XCircle size={14} className="mr-1" /> Reject
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
 
 /* ─── Types ─── */
 interface AeoArticle {
@@ -159,22 +102,17 @@ function wordCount(text: string | null) {
 
 export default function Approvals() {
   const [searchParams] = useSearchParams();
-  const defaultTab = searchParams.get('tab') === 'editorial' ? 'editorial' : 'queue';
+  const tabParam = searchParams.get('tab');
+  const defaultTab = tabParam === 'editorial' ? 'editorial' : tabParam === 'publish' ? 'publish' : 'review';
+
   const [loading, setLoading] = useState(true);
-  const [queuedArticles, setQueuedArticles] = useState<AeoArticle[]>([]);
   const [articles, setArticles] = useState<AeoArticle[]>([]);
   const [approvedArticles, setApprovedArticles] = useState<AeoArticle[]>([]);
-  const [socialItems, setSocialItems] = useState<SocialItem[]>([]);
-  const [publishedArticles, setPublishedArticles] = useState<AeoArticle[]>([]);
   const [editorialItems, setEditorialItems] = useState<EditorialItem[]>([]);
   const [editorialStatusFilter, setEditorialStatusFilter] = useState<string>('pending');
   const [expandedEditorialId, setExpandedEditorialId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [expandedQueueId, setExpandedQueueId] = useState<string | null>(null);
   const [streamFilter, setStreamFilter] = useState<string>('all');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const [contentTypeFilter, setContentTypeFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<string>('priority');
   const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set());
 
   // Edit modal state
@@ -206,15 +144,11 @@ export default function Approvals() {
   const [generatingNow, setGeneratingNow] = useState(false);
 
   const fetchData = useCallback(async () => {
-    const [queuedRes, aeoRes, approvedRes, socialRes, publishedRes, editorialRes] = await Promise.all([
-      supabase.from('mkt_seo_queue')
-        .select('*')
-        .eq('status', 'pending')
-        .order('priority_score', { ascending: false }),
+    const [aeoRes, approvedRes, editorialRes] = await Promise.all([
       supabase.from('mkt_seo_queue')
         .select('*')
         .eq('james_approved', false)
-        .eq('status', 'pending')
+        .not('status', 'in', '("rejected","published")')
         .not('draft_content', 'is', null)
         .order('priority_score', { ascending: false }),
       supabase.from('mkt_seo_queue')
@@ -223,21 +157,10 @@ export default function Approvals() {
         .order('updated_at', { ascending: false }),
       supabase.from('mkt_content_queue')
         .select('*')
-        .eq('status', 'draft')
-        .order('created_at', { ascending: false }),
-      supabase.from('mkt_seo_queue')
-        .select('*')
-        .eq('status', 'published')
-        .order('updated_at', { ascending: false }),
-      supabase.from('mkt_content_queue')
-        .select('*')
         .order('created_at', { ascending: false }),
     ]);
-    if (queuedRes.data) setQueuedArticles(queuedRes.data);
     if (aeoRes.data) setArticles(aeoRes.data);
     if (approvedRes.data) setApprovedArticles(approvedRes.data);
-    if (socialRes.data) setSocialItems(socialRes.data);
-    if (publishedRes.data) setPublishedArticles(publishedRes.data);
     if (editorialRes.data) setEditorialItems(editorialRes.data);
     setLoading(false);
   }, []);
@@ -363,18 +286,6 @@ export default function Approvals() {
     );
   };
 
-  /* ─── Open queue item for editing ─── */
-  const openQueueItem = (article: AeoArticle) => {
-    setEditingQueueId(article.id);
-    setNewTopic(article.title || '');
-    setNewKeyword(article.target_keyword || '');
-    setNewStream((article.psyops_stream || 'educate').toLowerCase());
-    const score = article.priority_score ?? 50;
-    setNewPriority(score >= 70 ? 'high' : score >= 30 ? 'normal' : 'low');
-    setNewNotes('');
-    setShowAddModal(true);
-  };
-
   const openNewQueueModal = () => {
     setEditingQueueId(null);
     setNewTopic(''); setNewKeyword(''); setNewStream('educate'); setNewPriority('normal'); setNewNotes('');
@@ -398,11 +309,9 @@ export default function Approvals() {
     let itemId = editingQueueId;
 
     if (editingQueueId) {
-      // Update existing queue item
       const { error } = await supabase.from('mkt_seo_queue').update(fields).eq('id', editingQueueId);
       if (error) { setter(false); toast.error('Failed to update: ' + error.message); return; }
     } else {
-      // Insert new queue item
       const row = {
         ...fields,
         status: 'pending',
@@ -420,7 +329,7 @@ export default function Approvals() {
         await supabase.functions.invoke('emily-chat', {
           body: { task_id: itemId, title: newTopic.trim(), target_keyword: newKeyword.trim() || null },
         });
-        toast.success('Emily is generating content now. It will appear in Sign-off shortly.');
+        toast.success('Emily is generating content now. It will appear in Review shortly.');
       } catch {
         toast.success('Generation triggered but may take a moment.');
       }
@@ -456,39 +365,6 @@ export default function Approvals() {
     toast.success(`Published ${publishable.length} articles`);
   };
 
-  /* ─── Social actions ─── */
-  const approveSocial = async (id: string) => {
-    await supabase.from('mkt_content_queue').update({ status: 'approved', updated_at: new Date().toISOString() }).eq('id', id);
-    setSocialItems(prev => prev.filter(s => s.id !== id));
-    toast.success('Approved');
-  };
-
-  const rejectSocial = async (id: string) => {
-    if (!confirm('Reject this item?')) return;
-    await supabase.from('mkt_content_queue').update({ status: 'rejected', updated_at: new Date().toISOString() }).eq('id', id);
-    setSocialItems(prev => prev.filter(s => s.id !== id));
-    toast.success('Rejected');
-  };
-
-  const openEditSocial = (s: SocialItem) => {
-    setEditSocial(s);
-    setEditDraft(s.draft_copy || '');
-    setEditImageUrl(s.image_url || '');
-    setEditSchedule(s.scheduled_for ? new Date(s.scheduled_for) : undefined);
-  };
-
-  const saveEditSocial = async () => {
-    if (!editSocial) return;
-    await supabase.from('mkt_content_queue').update({
-      draft_copy: editDraft, image_url: editImageUrl || null,
-      scheduled_for: editSchedule?.toISOString() || null,
-      updated_at: new Date().toISOString(),
-    }).eq('id', editSocial.id);
-    setEditSocial(null);
-    toast.success('Updated');
-    fetchData();
-  };
-
   /* ─── Editorial actions ─── */
   const approveEditorial = async (id: string) => {
     await supabase.from('mkt_content_queue').update({ status: 'approved', approved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', id);
@@ -513,18 +389,24 @@ export default function Approvals() {
     fetchData();
   };
 
+  const saveEditSocial = async () => {
+    if (!editSocial) return;
+    await supabase.from('mkt_content_queue').update({
+      draft_copy: editDraft, image_url: editImageUrl || null,
+      scheduled_for: editSchedule?.toISOString() || null,
+      updated_at: new Date().toISOString(),
+    }).eq('id', editSocial.id);
+    setEditSocial(null);
+    toast.success('Updated');
+    fetchData();
+  };
+
   /* ─── Filtering ─── */
   const editorialPendingCount = editorialItems.filter(e => e.status === 'pending').length;
   const filterEditorial = editorialItems
     .filter(e => editorialStatusFilter === 'all' || e.status === editorialStatusFilter)
     .filter(e => streamFilter === 'all' || e.psyops_stream?.toLowerCase() === streamFilter)
     .filter(e => !search || e.draft_copy?.toLowerCase().includes(search.toLowerCase()));
-
-  const filterQueued = queuedArticles
-    .filter(a => streamFilter === 'all' || a.psyops_stream?.toLowerCase() === streamFilter)
-    .filter(a => categoryFilter === 'all' || a.category?.toLowerCase() === categoryFilter)
-    .filter(a => contentTypeFilter === 'all' || a.content_type?.toLowerCase() === contentTypeFilter)
-    .filter(a => !search || [a.title, a.target_keyword, a.category].some(f => f?.toLowerCase().includes(search.toLowerCase())));
 
   const filterArticles = articles
     .filter(a => !skippedIds.has(a.id))
@@ -533,35 +415,11 @@ export default function Approvals() {
 
   const filterApproved = approvedArticles
     .filter(a => streamFilter === 'all' || a.psyops_stream?.toLowerCase() === streamFilter)
-    .filter(a => categoryFilter === 'all' || a.category?.toLowerCase() === categoryFilter)
     .filter(a => !search || [a.title, a.target_keyword, a.category].some(f => f?.toLowerCase().includes(search.toLowerCase())));
 
-  const filterSocial = socialItems
-    .filter(s => streamFilter === 'all' || s.psyops_stream?.toLowerCase() === streamFilter)
-    .filter(s => !search || s.draft_copy?.toLowerCase().includes(search.toLowerCase()));
-
-  const filterPublished = publishedArticles
-    .filter(a => streamFilter === 'all' || a.psyops_stream?.toLowerCase() === streamFilter)
-    .filter(a => categoryFilter === 'all' || a.category?.toLowerCase() === categoryFilter)
-    .filter(a => !search || [a.title, a.target_keyword, a.category].some(f => f?.toLowerCase().includes(search.toLowerCase())));
-
-  const publishedCategories = [...new Set(publishedArticles.map(a => a.category).filter(Boolean))] as string[];
-  const streamCounts = publishedArticles.reduce<Record<string, number>>((acc, a) => {
-    const s = a.psyops_stream?.toLowerCase() || 'unknown';
-    acc[s] = (acc[s] || 0) + 1;
-    return acc;
-  }, {});
-  const totalPublishedWords = publishedArticles.reduce((sum, a) => sum + wordCount(a.draft_content), 0);
-
-  // Queue stats
-  const queuedCategories = [...new Set(queuedArticles.map(a => a.category).filter(Boolean))] as string[];
-  const queuedContentTypes = [...new Set(queuedArticles.map(a => a.content_type).filter(Boolean))] as string[];
-  const queuedByType = queuedArticles.reduce<Record<string, number>>((acc, a) => {
-    const t = a.content_type || 'unknown';
-    acc[t] = (acc[t] || 0) + 1;
-    return acc;
-  }, {});
-  const estimatedDays = Math.ceil(queuedArticles.length / 11); // ~10-12/day avg
+  const reviewCount = articles.length;
+  const publishCount = approvedArticles.length;
+  const totalActionable = reviewCount + editorialPendingCount + publishCount;
 
   if (loading) {
     return (
@@ -576,20 +434,40 @@ export default function Approvals() {
   return (
     <div className="space-y-6 max-w-[1400px]">
       <div className="flex items-start justify-between gap-4">
-        <PageHeader title="Approvals" description="Content waiting for your decision — review, approve, or reject articles and social posts." />
+        <PageHeader title="Approvals" description="Content waiting for your decision — review, approve, or publish." />
         <Button size="sm" className="h-8 text-xs shrink-0" onClick={openNewQueueModal}>
           <Plus size={14} className="mr-1" /> Add to Queue
         </Button>
       </div>
 
+      {/* Action summary banner */}
+      <Card className={`border-border ${totalActionable > 0 ? 'bg-warning/10 border-warning/30' : 'bg-secondary/50'}`}>
+        <CardContent className="p-3">
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <span className={`font-semibold ${totalActionable > 0 ? 'text-warning' : 'text-foreground'}`}>
+              {reviewCount} to review
+            </span>
+            <span className="text-muted-foreground">·</span>
+            <span className={`font-semibold ${editorialPendingCount > 0 ? 'text-warning' : 'text-foreground'}`}>
+              {editorialPendingCount} editorial
+            </span>
+            <span className="text-muted-foreground">·</span>
+            <span className={`font-semibold ${publishCount > 0 ? 'text-warning' : 'text-foreground'}`}>
+              {publishCount} to publish
+            </span>
+            {totalActionable === 0 && (
+              <span className="text-xs text-muted-foreground ml-auto">All caught up.</span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
       <Tabs defaultValue={defaultTab} className="w-full">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
           <TabsList className="bg-secondary flex-wrap">
-            <TabsTrigger value="queue">Queue ({queuedArticles.length})</TabsTrigger>
-            <TabsTrigger value="signoff">Sign-off ({articles.length})</TabsTrigger>
-            <TabsTrigger value="approved">Approved ({approvedArticles.length})</TabsTrigger>
+            <TabsTrigger value="review">Review ({reviewCount})</TabsTrigger>
             <TabsTrigger value="editorial">Editorial ({editorialPendingCount})</TabsTrigger>
-            <TabsTrigger value="published">Published ({publishedArticles.length})</TabsTrigger>
+            <TabsTrigger value="publish">Publish ({publishCount})</TabsTrigger>
           </TabsList>
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -617,184 +495,8 @@ export default function Approvals() {
           </div>
         </div>
 
-        {/* ═══ QUEUE TAB ═══ */}
-        <TabsContent value="queue" className="space-y-4">
-          {/* Summary stats */}
-          <Card className="border-border bg-secondary/50">
-            <CardContent className="p-4 space-y-2">
-              <div className="flex flex-wrap items-center gap-4 text-sm">
-                <span className="text-foreground font-semibold">{queuedArticles.length} queued</span>
-                <span className="text-muted-foreground">·</span>
-                <span className="text-xs text-muted-foreground">~{estimatedDays} days at current rate</span>
-              </div>
-              {Object.keys(queuedByType).length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  {Object.entries(queuedByType)
-                    .sort((a, b) => b[1] - a[1])
-                    .map(([type, count]) => (
-                      <span key={type}>{count} {CONTENT_TYPE_LABELS[type] || type}</span>
-                    ))
-                    .reduce<React.ReactNode[]>((acc, el, i) => {
-                      if (i > 0) acc.push(<span key={`sep-${i}`}>·</span>);
-                      acc.push(el);
-                      return acc;
-                    }, [])}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Queue filters */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <Select value={contentTypeFilter} onValueChange={setContentTypeFilter}>
-              <SelectTrigger className="w-40 h-8 text-xs bg-secondary border-border">
-                <SelectValue placeholder="Content Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {queuedContentTypes.map(ct => (
-                  <SelectItem key={ct} value={ct.toLowerCase()}>{CONTENT_TYPE_LABELS[ct] || ct}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-40 h-8 text-xs bg-secondary border-border">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {queuedCategories.map(cat => (
-                  <SelectItem key={cat} value={cat.toLowerCase()}>{cat}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {filterQueued.length === 0 ? (
-            <Card><CardContent className="p-8 text-center">
-              <p className="text-foreground">No articles in the queue. The pipeline is clear.</p>
-            </CardContent></Card>
-          ) : (
-            <div className="border border-border rounded-lg overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-secondary/70 text-muted-foreground text-xs">
-                      <th className="text-left p-3 font-medium w-12">ID</th>
-                      <th className="text-left p-3 font-medium">Title</th>
-                      <th className="text-left p-3 font-medium">Type</th>
-                      <th className="text-left p-3 font-medium">Category</th>
-                      <th className="text-right p-3 font-medium">Priority</th>
-                      <th className="text-left p-3 font-medium">Stream</th>
-                      <th className="text-center p-3 font-medium">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {filterQueued.map(article => {
-                      const stream = article.psyops_stream?.toLowerCase() || '';
-                      const badgeClass = STREAM_BADGE[stream] || 'bg-muted/20 text-muted-foreground';
-                      const typeLabel = CONTENT_TYPE_LABELS[article.content_type || ''] || article.content_type || '—';
-                      const isExpanded = expandedQueueId === article.id;
-                      return (
-                        <React.Fragment key={article.id}>
-                          <tr className="hover:bg-secondary/30">
-                            <td className="p-3 text-xs text-muted-foreground font-mono">
-                              {article.task_id ? article.task_id.slice(0, 8) : article.id.slice(0, 8)}
-                            </td>
-                            <td className="p-3">
-                              <button
-                                onClick={() => setExpandedQueueId(isExpanded ? null : article.id)}
-                                className="text-primary hover:underline font-medium line-clamp-1 text-left flex items-center gap-1"
-                              >
-                                <ChevronDown size={14} className={`shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                                {article.title}
-                              </button>
-                            </td>
-                            <td className="p-3">
-                              <Badge variant="outline" className="text-[10px] border-border font-normal">{typeLabel}</Badge>
-                            </td>
-                            <td className="p-3 text-muted-foreground text-xs">{article.category || '—'}</td>
-                            <td className="p-3 text-right">
-                              {article.priority_score != null ? (
-                                <span className="text-xs font-bold text-foreground bg-secondary px-2 py-0.5 rounded">{article.priority_score}</span>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">—</span>
-                              )}
-                            </td>
-                            <td className="p-3">
-                              {stream && <Badge variant="outline" className={`${badgeClass} border-transparent text-[10px] font-semibold`}>{stream.toUpperCase()}</Badge>}
-                            </td>
-                            <td className="p-3 text-center">
-                              <div className="flex items-center justify-center gap-1">
-                                <Button size="sm" variant="outline" className="h-7 text-[11px] border-destructive text-destructive hover:bg-destructive/10 px-2" onClick={() => rejectArticle(article.id)}>
-                                  <XCircle size={12} className="mr-1" /> Remove
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                          {isExpanded && (
-                            <tr>
-                              <td colSpan={7} className="bg-secondary/30 p-4">
-                                <div className="space-y-3 max-w-3xl">
-                                  {/* Meta details */}
-                                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
-                                    {article.target_keyword && (
-                                      <div><span className="text-muted-foreground">Target Keyword:</span> <span className="text-foreground font-medium">{article.target_keyword}</span></div>
-                                    )}
-                                    {article.content_type && (
-                                      <div><span className="text-muted-foreground">Content Type:</span> <span className="text-foreground font-medium">{CONTENT_TYPE_LABELS[article.content_type] || article.content_type}</span></div>
-                                    )}
-                                    {article.psyops_stream && (
-                                      <div><span className="text-muted-foreground">Stream:</span> <span className="text-foreground font-medium">{article.psyops_stream}</span></div>
-                                    )}
-                                    {article.priority_score != null && (
-                                      <div><span className="text-muted-foreground">Priority Score:</span> <span className="text-foreground font-medium">{article.priority_score}</span></div>
-                                    )}
-                                  </div>
-
-                                  {/* Draft content or placeholder */}
-                                  {article.draft_content ? (
-                                    <div className="bg-background rounded-md p-4 border border-border">
-                                      <p className="text-xs text-muted-foreground mb-2 font-semibold">Draft Content ({wordCount(article.draft_content)} words)</p>
-                                      <div className="font-mono text-xs text-foreground whitespace-pre-wrap max-h-80 overflow-y-auto">
-                                        {article.draft_content}
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="bg-background rounded-md p-4 border border-border text-center">
-                                      <p className="text-sm text-muted-foreground italic">This article has not been generated yet. It is in the queue and will be written by Emily.</p>
-                                    </div>
-                                  )}
-
-                                  {/* Notes - using any available field */}
-                                  {(article as any).notes && (
-                                    <div className="text-xs">
-                                      <span className="text-muted-foreground">Notes:</span> <span className="text-foreground">{(article as any).notes}</span>
-                                    </div>
-                                  )}
-
-                                  {/* Inline actions */}
-                                  <div className="flex items-center gap-2 pt-1">
-                                    <Button size="sm" variant="outline" className="h-7 text-[11px] border-primary text-primary hover:bg-primary/10" onClick={() => openQueueItem(article)}>
-                                      <Pencil size={12} className="mr-1" /> Edit
-                                    </Button>
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ═══ SIGN-OFF TAB ═══ */}
-        <TabsContent value="signoff" className="space-y-4">
+        {/* ═══ REVIEW TAB ═══ */}
+        <TabsContent value="review" className="space-y-4">
           {filterArticles.length === 0 ? (
             <Card><CardContent className="p-8 text-center">
               <p className="text-foreground">No articles awaiting approval. Emily's next run will populate this queue.</p>
@@ -808,7 +510,6 @@ export default function Approvals() {
               return (
                 <Card key={article.id} className="border-border">
                   <CardContent className="p-4 space-y-3">
-                    {/* Header */}
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2 flex-wrap">
                         {stream && <Badge variant="outline" className={`${badgeClass} border-transparent text-[11px] font-semibold`}>{stream.toUpperCase()}</Badge>}
@@ -819,22 +520,18 @@ export default function Approvals() {
                       )}
                     </div>
 
-                    {/* Title */}
                     <h3 className="text-lg font-semibold text-foreground line-clamp-2">{article.title}</h3>
 
-                    {/* Keyword */}
                     {article.target_keyword && (
                       <p className="text-xs text-muted-foreground">Target: {article.target_keyword}</p>
                     )}
 
-                    {/* 90-second answer preview */}
                     {preview && (
                       <div className="bg-background rounded-md p-3 font-mono text-xs text-foreground">
                         {preview}{preview.length >= 200 ? '...' : ''}
                       </div>
                     )}
 
-                    {/* Metadata */}
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span>{wordCount(article.draft_content)} words</span>
                       {article.category && <span>{article.category}</span>}
@@ -842,7 +539,6 @@ export default function Approvals() {
                       <Badge variant="outline" className="text-[10px] border-border">{article.status}</Badge>
                     </div>
 
-                    {/* Actions */}
                     <div className="flex items-center gap-2 justify-end">
                       <Button size="sm" className="h-8 text-xs bg-success hover:bg-success/90 text-primary-foreground" onClick={() => approveArticle(article.id)}>
                         <CheckCircle2 size={14} className="mr-1" /> Approve
@@ -875,25 +571,111 @@ export default function Approvals() {
           )}
         </TabsContent>
 
-        {/* ═══ APPROVED TAB ═══ */}
-        <TabsContent value="approved" className="space-y-4">
-          {/* Category filter */}
-          {queuedCategories.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-40 h-8 text-xs bg-secondary border-border">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {[...new Set(approvedArticles.map(a => a.category).filter(Boolean))].map(cat => (
-                    <SelectItem key={cat as string} value={(cat as string).toLowerCase()}>{cat as string}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+        {/* ═══ EDITORIAL TAB ═══ */}
+        <TabsContent value="editorial" className="space-y-4">
+          <div className="flex items-center gap-2">
+            <Select value={editorialStatusFilter} onValueChange={setEditorialStatusFilter}>
+              <SelectTrigger className="w-40 h-8 text-xs bg-secondary border-border">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
+                <SelectItem value="published">Published</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
+                <SelectItem value="all">All Statuses</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {filterEditorial.length} item{filterEditorial.length !== 1 ? 's' : ''} · Social posts, emails, SMS, Canva briefs
+            </p>
+          </div>
+
+          {filterEditorial.length === 0 ? (
+            <Card><CardContent className="p-8 text-center">
+              <p className="text-foreground">No editorial items matching this filter.</p>
+            </CardContent></Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {filterEditorial.map(item => {
+                const stream = item.psyops_stream?.toLowerCase() || '';
+                const badgeClass = STREAM_BADGE[stream] || 'bg-muted/20 text-muted-foreground';
+                const platClass = PLATFORM_COLORS[item.platform?.toLowerCase() || ''] || 'bg-muted/20 text-muted-foreground';
+                const copy = item.draft_copy || '';
+                const isExpanded = expandedEditorialId === item.id;
+                const displayCopy = isExpanded || copy.length <= 200 ? copy : copy.slice(0, 200) + '...';
+
+                return (
+                  <Card key={item.id} className="border-border">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {item.platform && (
+                          <Badge variant="outline" className={`${platClass} border-transparent text-[11px] font-semibold`}>
+                            {item.platform}
+                          </Badge>
+                        )}
+                        {item.content_type && (
+                          <Badge variant="outline" className="text-[10px] border-border">
+                            {item.content_type.replace(/_/g, ' ')}
+                          </Badge>
+                        )}
+                        {stream && (
+                          <Badge variant="outline" className={`${badgeClass} border-transparent text-[10px] font-semibold`}>
+                            {stream.toUpperCase()}
+                          </Badge>
+                        )}
+                        <Badge variant="outline" className="text-[10px] border-border">{item.status}</Badge>
+                      </div>
+
+                      <div className="font-mono text-sm text-foreground whitespace-pre-wrap">
+                        {displayCopy}
+                        {copy.length > 200 && (
+                          <button
+                            className="text-primary text-xs ml-1"
+                            onClick={() => setExpandedEditorialId(isExpanded ? null : item.id)}
+                          >
+                            {isExpanded ? 'Collapse' : 'Expand'}
+                          </button>
+                        )}
+                      </div>
+
+                      {item.notes && (
+                        <p className="text-xs text-muted-foreground italic">Note: {item.notes}</p>
+                      )}
+
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span>Created: {format(new Date(item.created_at), 'd MMM')}</span>
+                        {item.approved_at && <span>Approved: {format(new Date(item.approved_at), 'd MMM')}</span>}
+                        {item.published_at && <span>Published: {format(new Date(item.published_at), 'd MMM')}</span>}
+                      </div>
+
+                      <div className="flex items-center gap-2 justify-end">
+                        {item.status === 'pending' && (
+                          <>
+                            <Button size="sm" className="h-8 text-xs bg-success hover:bg-success/90 text-primary-foreground" onClick={() => approveEditorial(item.id)}>
+                              <CheckCircle2 size={14} className="mr-1" /> Approve
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-8 text-xs border-destructive text-destructive hover:bg-destructive/10" onClick={() => rejectEditorial(item.id)}>
+                              <XCircle size={14} className="mr-1" /> Reject
+                            </Button>
+                          </>
+                        )}
+                        {item.status === 'approved' && (
+                          <Button size="sm" className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => publishEditorial(item.id)}>
+                            <Rocket size={14} className="mr-1" /> Publish Now
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
+        </TabsContent>
 
+        {/* ═══ PUBLISH TAB ═══ */}
+        <TabsContent value="publish" className="space-y-4">
           {filterApproved.length === 0 ? (
             <Card><CardContent className="p-8 text-center">
               <p className="text-foreground">No approved articles waiting to be published.</p>
@@ -978,222 +760,6 @@ export default function Approvals() {
                 </div>
               </div>
             </>
-          )}
-        </TabsContent>
-
-        {/* ═══ EDITORIAL TAB ═══ */}
-        <TabsContent value="editorial" className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Select value={editorialStatusFilter} onValueChange={setEditorialStatusFilter}>
-              <SelectTrigger className="w-40 h-8 text-xs bg-secondary border-border">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="approved">Approved</SelectItem>
-                <SelectItem value="published">Published</SelectItem>
-                <SelectItem value="rejected">Rejected</SelectItem>
-                <SelectItem value="all">All Statuses</SelectItem>
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {filterEditorial.length} item{filterEditorial.length !== 1 ? 's' : ''} · Social posts, emails, SMS, Canva briefs
-            </p>
-          </div>
-
-          {filterEditorial.length === 0 ? (
-            <Card><CardContent className="p-8 text-center">
-              <p className="text-foreground">No editorial items matching this filter.</p>
-            </CardContent></Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {filterEditorial.map(item => {
-                const stream = item.psyops_stream?.toLowerCase() || '';
-                const badgeClass = STREAM_BADGE[stream] || 'bg-muted/20 text-muted-foreground';
-                const platClass = PLATFORM_COLORS[item.platform?.toLowerCase() || ''] || 'bg-muted/20 text-muted-foreground';
-                const copy = item.draft_copy || '';
-                const isExpanded = expandedEditorialId === item.id;
-                const displayCopy = isExpanded || copy.length <= 200 ? copy : copy.slice(0, 200) + '...';
-
-                return (
-                  <Card key={item.id} className="border-border">
-                    <CardContent className="p-4 space-y-3">
-                      {/* Badges row */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {item.platform && (
-                          <Badge variant="outline" className={`${platClass} border-transparent text-[11px] font-semibold`}>
-                            {item.platform}
-                          </Badge>
-                        )}
-                        {item.content_type && (
-                          <Badge variant="outline" className="text-[10px] border-border">
-                            {item.content_type.replace(/_/g, ' ')}
-                          </Badge>
-                        )}
-                        {stream && (
-                          <Badge variant="outline" className={`${badgeClass} border-transparent text-[10px] font-semibold`}>
-                            {stream.toUpperCase()}
-                          </Badge>
-                        )}
-                        <Badge variant="outline" className="text-[10px] border-border">{item.status}</Badge>
-                      </div>
-
-                      {/* Draft copy */}
-                      <div className="font-mono text-sm text-foreground whitespace-pre-wrap">
-                        {displayCopy}
-                        {copy.length > 200 && (
-                          <button
-                            className="text-primary text-xs ml-1"
-                            onClick={() => setExpandedEditorialId(isExpanded ? null : item.id)}
-                          >
-                            {isExpanded ? 'Collapse' : 'Expand'}
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Notes */}
-                      {item.notes && (
-                        <p className="text-xs text-muted-foreground italic">Note: {item.notes}</p>
-                      )}
-
-                      {/* Timestamps */}
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        <span>Created: {format(new Date(item.created_at), 'd MMM')}</span>
-                        {item.approved_at && <span>Approved: {format(new Date(item.approved_at), 'd MMM')}</span>}
-                        {item.published_at && <span>Published: {format(new Date(item.published_at), 'd MMM')}</span>}
-                      </div>
-
-                      {/* Action buttons */}
-                      <div className="flex items-center gap-2 justify-end">
-                        {item.status === 'pending' && (
-                          <>
-                            <Button size="sm" className="h-8 text-xs bg-success hover:bg-success/90 text-primary-foreground" onClick={() => approveEditorial(item.id)}>
-                              <CheckCircle2 size={14} className="mr-1" /> Approve
-                            </Button>
-                            <Button size="sm" variant="outline" className="h-8 text-xs border-destructive text-destructive hover:bg-destructive/10" onClick={() => rejectEditorial(item.id)}>
-                              <XCircle size={14} className="mr-1" /> Reject
-                            </Button>
-                          </>
-                        )}
-                        {item.status === 'approved' && (
-                          <Button size="sm" className="h-8 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => publishEditorial(item.id)}>
-                            <Rocket size={14} className="mr-1" /> Publish Now
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </TabsContent>
-
-        {/* ═══ SOCIAL & CAMPAIGN (hidden but kept for social tab access) ═══ */}
-
-        {/* ═══ PUBLISHED TAB ═══ */}
-        <TabsContent value="published" className="space-y-4">
-          {/* Summary stats */}
-          <Card className="border-border bg-secondary/50">
-            <CardContent className="p-4">
-              <div className="flex flex-wrap items-center gap-4 text-sm">
-                <span className="text-foreground font-semibold">{publishedArticles.length} published</span>
-                <span className="text-muted-foreground">·</span>
-                {Object.entries(streamCounts).map(([stream, count]) => {
-                  const badgeClass = STREAM_BADGE[stream] || 'bg-muted/20 text-muted-foreground';
-                  return (
-                    <span key={stream} className="flex items-center gap-1">
-                      <Badge variant="outline" className={`${badgeClass} border-transparent text-[10px] font-semibold`}>{stream.toUpperCase()}</Badge>
-                      <span className="text-xs text-muted-foreground">{count}</span>
-                    </span>
-                  );
-                })}
-                <span className="text-muted-foreground">·</span>
-                <span className="text-xs text-muted-foreground">{totalPublishedWords.toLocaleString()} total words</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Category filter (published-only) */}
-          {publishedCategories.length > 0 && (
-            <div className="flex items-center gap-2">
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-40 h-8 text-xs bg-secondary border-border">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {publishedCategories.map(cat => (
-                    <SelectItem key={cat} value={cat.toLowerCase()}>{cat}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {filterPublished.length === 0 ? (
-            <Card><CardContent className="p-8 text-center">
-              <p className="text-foreground">No published articles yet.</p>
-            </CardContent></Card>
-          ) : (
-            <div className="border border-border rounded-lg overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-secondary/70 text-muted-foreground text-xs">
-                      <th className="text-left p-3 font-medium">Title</th>
-                      <th className="text-left p-3 font-medium">Stream</th>
-                      <th className="text-left p-3 font-medium">Category</th>
-                      <th className="text-right p-3 font-medium">Words</th>
-                      <th className="text-left p-3 font-medium">Published</th>
-                      <th className="text-center p-3 font-medium">Live</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {filterPublished.map(article => {
-                      const stream = article.psyops_stream?.toLowerCase() || '';
-                      const badgeClass = STREAM_BADGE[stream] || 'bg-muted/20 text-muted-foreground';
-                      const liveUrl = article.slug ? `https://carfix.co.nz/guides/${article.slug}` : null;
-                      return (
-                        <tr key={article.id} className="hover:bg-secondary/30">
-                          <td className="p-3">
-                            {liveUrl ? (
-                              <a href={liveUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline font-medium line-clamp-1">
-                                {article.title}
-                              </a>
-                            ) : (
-                              <span className="text-foreground font-medium line-clamp-1">{article.title}</span>
-                            )}
-                            {article.target_keyword && (
-                              <p className="text-[11px] text-muted-foreground mt-0.5">{article.target_keyword}</p>
-                            )}
-                          </td>
-                          <td className="p-3">
-                            {stream && <Badge variant="outline" className={`${badgeClass} border-transparent text-[10px] font-semibold`}>{stream.toUpperCase()}</Badge>}
-                          </td>
-                          <td className="p-3 text-muted-foreground text-xs">{article.category || '—'}</td>
-                          <td className="p-3 text-right text-muted-foreground text-xs">{wordCount(article.draft_content).toLocaleString()}</td>
-                          <td className="p-3 text-muted-foreground text-xs">
-                            {article.updated_at ? formatDistanceToNow(new Date(article.updated_at), { addSuffix: true }) : '—'}
-                          </td>
-                          <td className="p-3 text-center">
-                            {liveUrl ? (
-                              <a href={liveUrl} target="_blank" rel="noopener noreferrer">
-                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground hover:text-primary">
-                                  <ExternalLink size={14} />
-                                </Button>
-                              </a>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">—</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
           )}
         </TabsContent>
       </Tabs>
