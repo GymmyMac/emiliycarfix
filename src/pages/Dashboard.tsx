@@ -113,6 +113,7 @@ function buildAtoms(nodes:GNode[]):GAtom[]{
 export default function Dashboard(){
   const cvs=useRef<HTMLCanvasElement>(null);
   const rot=useRef({x:-0.3,y:0.4});
+  const vel=useRef({x:0,y:0});
   const drag=useRef<{on:boolean;lx:number;ly:number;nid:string|null}>({on:false,lx:0,ly:0,nid:null});
   const nodesR=useRef<GNode[]>([]);
   const atomsR=useRef<GAtom[]>([]);
