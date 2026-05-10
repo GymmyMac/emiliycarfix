@@ -19,6 +19,7 @@ interface ContentType {
   ga4_conversions: number;
   engagement_score: number;
   ga4_unique_pages: number;
+  total_live_pages: number;
   pipeline_generating: number;
   pipeline_to_review: number;
   pipeline_approved: number;
@@ -337,6 +338,11 @@ export default function Approvals() {
                   <span>{fmt(ct.ga4_sessions)} <span className="text-gray-400">sess</span></span>
                   <span>{fmtDuration(ct.ga4_avg_duration_sec)}</span>
                 </div>
+                {ct.total_live_pages > 0 && (
+                  <div className="mt-1.5 text-xs font-medium text-gray-700">
+                    {fmt(ct.total_live_pages)} <span className="text-gray-400 font-normal">live</span>
+                  </div>
+                )}
                 {isGenerating && (
                   <div className="mt-2 text-xs text-amber-600 border-t border-amber-100 pt-2 font-medium">
                     ⚡ {ct.pipeline_generating} generating now
@@ -521,9 +527,7 @@ function PipelineRow({
 
   // For dynamically-generated page types, use GA4 unique page count as the true live number.
   // For editorial/social types, use the pipeline published count.
-  const liveCount = (ct.slug === 'vehicle-wiki' || ct.slug === 'aeo-parts' || ct.slug === 'seo-articles')
-    ? (ct.ga4_unique_pages > 0 ? ct.ga4_unique_pages : ct.pipeline_published)
-    : (ct.pipeline_published > 0 ? ct.pipeline_published : ct.ga4_page_views);
+  const liveCount = ct.total_live_pages > 0 ? ct.total_live_pages : ct.pipeline_published;
 
   return (
     <div>
