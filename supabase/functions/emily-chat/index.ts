@@ -23,6 +23,12 @@ async function embed(text: string, apiKey: string): Promise<number[]> {
   return data.data[0].embedding;
 }
 
+function truncateText(value: unknown, maxChars: number): string {
+  if (typeof value !== "string") return "";
+  if (value.length <= maxChars) return value;
+  return `${value.slice(0, maxChars)}\n…[truncated]`;
+}
+
 // emily-chat v2 — model fallback chain + empty-content guard (redeploy marker)
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -75,9 +81,7 @@ serve(async (req) => {
         const MAX_CHARS_PER_CHUNK = 4000;
         contextChunks = matches.map((m: any) => ({
           title: m.title,
-          content: typeof m.content === "string" && m.content.length > MAX_CHARS_PER_CHUNK
-            ? m.content.slice(0, MAX_CHARS_PER_CHUNK) + "\n…[truncated]"
-            : m.content,
+          content: truncateText(m.content, MAX_CHARS_PER_CHUNK),
           similarity: m.similarity,
         }));
         // Deduplicate titles for the UI pills
@@ -118,10 +122,18 @@ serve(async (req) => {
         .limit(20);
 
       if (history) {
-        conversationHistory = history.flatMap((row) => [
-          { role: "user", content: row.user_message },
-          { role: "assistant", content: row.emily_response },
-        ]);
+        const MAX_HISTORY_TURNS = 6;
+        const MAX_CHARS_PER_HISTORY_MESSAGE = 3000;
+        conversationHistory = history
+          .slice(-MAX_HISTORY_TURNS)
+          .flatMap((row) => {
+            const messages = [] as { role: string; content: string }[];
+            const userMessage = truncateText(row.user_message, MAX_CHARS_PER_HISTORY_MESSAGE);
+            const assistantMessage = truncateText(row.emily_response, MAX_CHARS_PER_HISTORY_MESSAGE);
+            if (userMessage) messages.push({ role: "user", content: userMessage });
+            if (assistantMessage) messages.push({ role: "assistant", content: assistantMessage });
+            return messages;
+          });
       }
     }
 
@@ -147,6 +159,12 @@ Tone: Direct, strategic, data-informed. You're a trusted CMO-level advisor, not 
     // Append ideas awareness
     if (ideasContext) {
       systemPrompt += ideasContext;
+    }
+
+    const MAX_SYSTEM_PROMPT_CHARS = 60000;
+    if (systemPrompt.length > MAX_SYSTEM_PROMPT_CHARS) {
+      console.warn(`emily-chat system prompt trimmed from ${systemPrompt.length} to ${MAX_SYSTEM_PROMPT_CHARS} chars`);
+      systemPrompt = `${systemPrompt.slice(0, MAX_SYSTEM_PROMPT_CHARS)}\n\n…[system prompt truncated]`;
     }
 
     // --- 4. CALL OPENROUTER with model fallback chain + per-model retry ---
