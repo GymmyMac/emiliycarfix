@@ -1,478 +1,435 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 
+/* ── Node / Edge definitions ─────────────────────────────────────────────── */
 const NODE_DEFS = [
-  { id: 'emily',    label: 'Emily',    sublabel: 'AI Director',      color: '#f59e0b' },
-  { id: 'ag',       label: 'AG',       sublabel: 'Automation Ops',   color: '#14b8a6' },
-  { id: 'campaign', label: 'Campaign', sublabel: 'Social·Email·SMS', color: '#f43f5e' },
-  { id: 'content',  label: 'SEO/AEO', sublabel: 'Content Pipeline',  color: '#3b82f6' },
-  { id: 'enrich',   label: 'Enrich',  sublabel: 'AEO Pipeline',      color: '#84cc16' },
-  { id: 'parts',    label: 'Parts',   sublabel: 'Catalogue',         color: '#10b981' },
-  { id: 'vehicles', label: 'Vehicles', sublabel: 'Fleet & Fitment',  color: '#06b6d4' },
-  { id: 'brain',    label: 'Brain',   sublabel: 'Patterns & DTC',    color: '#8b5cf6' },
-  { id: 'youtube',  label: 'YouTube', sublabel: 'Videos & Maps',     color: '#ef4444' },
-  { id: 'vector',   label: 'Vector',  sublabel: 'Knowledge Index',   color: '#ec4899' },
-  { id: 'intel',    label: 'Intel',   sublabel: 'Competitor Data',   color: '#f97316' },
-  { id: 'memory',   label: 'Memory',  sublabel: 'Emily Learning',    color: '#a78bfa' },
+  { id:'emily',    label:'Emily',    sublabel:'AI Director',      color:'#f59e0b' },
+  { id:'ag',       label:'AG',       sublabel:'Automation Ops',   color:'#14b8a6' },
+  { id:'campaign', label:'Campaign', sublabel:'Social·Email·SMS', color:'#f43f5e' },
+  { id:'content',  label:'SEO/AEO', sublabel:'Content Pipeline',  color:'#3b82f6' },
+  { id:'enrich',   label:'Enrich',  sublabel:'AEO Pipeline',      color:'#84cc16' },
+  { id:'parts',    label:'Parts',   sublabel:'Catalogue',         color:'#10b981' },
+  { id:'vehicles', label:'Vehicles',sublabel:'Fleet & Fitment',   color:'#06b6d4' },
+  { id:'brain',    label:'Brain',   sublabel:'Patterns & DTC',    color:'#8b5cf6' },
+  { id:'youtube',  label:'YouTube', sublabel:'Videos & Maps',     color:'#ef4444' },
+  { id:'vector',   label:'Vector',  sublabel:'Knowledge Index',   color:'#ec4899' },
+  { id:'intel',    label:'Intel',   sublabel:'Competitor Data',   color:'#f97316' },
+  { id:'memory',   label:'Memory',  sublabel:'Emily Learning',    color:'#a78bfa' },
+] as const;
+
+const EDGES: [string,string][] = [
+  ['ag','emily'],['emily','campaign'],['emily','content'],['emily','enrich'],
+  ['content','vector'],['parts','enrich'],['enrich','content'],
+  ['vehicles','parts'],['vehicles','brain'],['youtube','brain'],
+  ['intel','brain'],['intel','content'],['brain','emily'],
+  ['memory','emily'],['vector','emily'],['campaign','emily'],
 ];
 
-const EDGES: [string, string][] = [
-  ['ag','emily'],['ag','campaign'],
-  ['emily','campaign'],['emily','content'],['emily','brain'],['emily','vector'],
-  ['campaign','vector'],['content','vector'],['content','intel'],
-  ['parts','enrich'],['enrich','content'],
-  ['brain','content'],['brain','vector'],
-  ['youtube','vehicles'],['vehicles','parts'],
-  ['intel','brain'],['memory','emily'],['memory','brain'],
-];
-
-const TABLE_EVENTS: Record<string, { src: string; tgt: string; label: string }[]> = {
-  emily_runs:              [{ src:'ag',      tgt:'emily',    label:'Emily run started' }],
-  mkt_seo_queue:           [{ src:'emily',   tgt:'content',  label:'SEO article generated' }],
-  mkt_content_queue:       [{ src:'emily',   tgt:'campaign', label:'Campaign content created' }],
-  partslot_aeo_queue:      [{ src:'parts',   tgt:'enrich',   label:'AEO item queued' }],
-  mkt_vectordb_documents:  [{ src:'content', tgt:'vector',   label:'Knowledge indexed' }],
-  part_enrichment_staging: [{ src:'enrich',  tgt:'content',  label:'Part enriched' }],
-  mkt_scheduler_log:       [{ src:'ag',      tgt:'emily',    label:'AG scheduler ran' }],
-  competitor_keywords:     [{ src:'intel',   tgt:'brain',    label:'Competitor keyword tracked' }],
-  emily_memory:            [{ src:'memory',  tgt:'emily',    label:'Emily memory updated' }],
+const TABLE_MAP: Record<string,{src:string;tgt:string;label:string}[]> = {
+  emily_runs:             [{src:'ag',      tgt:'emily',   label:'Emily run started'}],
+  mkt_seo_queue:          [{src:'emily',   tgt:'content', label:'SEO article generated'}],
+  mkt_content_queue:      [{src:'emily',   tgt:'campaign',label:'Campaign content created'}],
+  partslot_aeo_queue:     [{src:'parts',   tgt:'enrich',  label:'AEO item queued'}],
+  mkt_vectordb_documents: [{src:'content', tgt:'vector',  label:'Knowledge indexed'}],
+  part_enrichment_staging:[{src:'enrich',  tgt:'content', label:'Part enriched'}],
+  mkt_scheduler_log:      [{src:'ag',      tgt:'emily',   label:'AG scheduler ran'}],
+  competitor_keywords:    [{src:'intel',   tgt:'brain',   label:'Competitor keyword tracked'}],
+  emily_memory:           [{src:'memory',  tgt:'emily',   label:'Emily memory updated'}],
 };
 
 const FALLBACK: Record<string,number> = {
   emily:437, ag:18034, campaign:5691, content:634, enrich:7234,
-  parts:58992, vehicles:42253, brain:24442, youtube:246301,
+  parts:58992, vehicles:42253, brain:177420, youtube:246301,
   vector:27966, intel:5521, memory:74,
 };
 
-interface PhysicsNode {
-  id:string; label:string; sublabel:string; color:string;
-  count:number; radius:number;
-  x:number; y:number; vx:number; vy:number; pulse:number;
-}
+/* ── 3D Vector math ──────────────────────────────────────────────────────── */
+type V3 = {x:number;y:number;z:number};
+const rotX=(v:V3,a:number):V3=>{const c=Math.cos(a),s=Math.sin(a);return{x:v.x,y:v.y*c-v.z*s,z:v.y*s+v.z*c};};
+const rotY=(v:V3,a:number):V3=>{const c=Math.cos(a),s=Math.sin(a);return{x:v.x*c+v.z*s,y:v.y,z:-v.x*s+v.z*c};};
+const applyRot=(v:V3,rx:number,ry:number):V3=>rotY(rotX(v,rx),ry);
+const cross3=(a:V3,b:V3):V3=>({x:a.y*b.z-a.z*b.y,y:a.z*b.x-a.x*b.z,z:a.x*b.y-a.y*b.x});
+const norm3=(v:V3):V3=>{const l=Math.sqrt(v.x*v.x+v.y*v.y+v.z*v.z)||1;return{x:v.x/l,y:v.y/l,z:v.z/l};};
+const dot3=(a:V3,b:V3)=>a.x*b.x+a.y*b.y+a.z*b.z;
+const slerp3=(a:V3,b:V3,t:number):V3=>{
+  const d=Math.max(-1,Math.min(1,dot3(a,b))),om=Math.acos(d);
+  if(Math.abs(om)<.001)return{x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,z:a.z+(b.z-a.z)*t};
+  const so=Math.sin(om);
+  return{
+    x:(Math.sin((1-t)*om)/so)*a.x+(Math.sin(t*om)/so)*b.x,
+    y:(Math.sin((1-t)*om)/so)*a.y+(Math.sin(t*om)/so)*b.y,
+    z:(Math.sin((1-t)*om)/so)*a.z+(Math.sin(t*om)/so)*b.z,
+  };
+};
+const fibSphere=(n:number,i:number):V3=>{
+  const phi=Math.acos(1-2*(i+.5)/n),theta=Math.PI*(1+Math.sqrt(5))*i;
+  return{x:Math.sin(phi)*Math.cos(theta),y:Math.cos(phi),z:Math.sin(phi)*Math.sin(theta)};
+};
+const project3=(w:V3,cx:number,cy:number,SR:number,FOV:number)=>{
+  const scale=FOV/(FOV-w.z);
+  return{sx:cx+w.x*SR*scale,sy:cy+w.y*SR*scale,scale,depth:w.z};
+};
+const hexRgb=(h:string)=>`${parseInt(h.slice(1,3),16)},${parseInt(h.slice(3,5),16)},${parseInt(h.slice(5,7),16)}`;
 
-/* Orbital atom — represents a single data record (log-scaled) */
-interface Atom {
-  nodeId: string;
-  angle: number;        // current position on orbit
-  orbitR: number;       // orbital radius from node centre
-  speed: number;        // rad/frame (signed = direction)
-  size: number;         // visual radius px
-  yScale: number;       // 0..1 — flattening for 3-D tilt illusion
-  opacity: number;
-}
+/* ── Types ───────────────────────────────────────────────────────────────── */
+interface GNode{id:string;label:string;sublabel:string;color:string;count:number;baseR:number;pulse:number;u:V3;}
+interface GAtom{nid:string;angle:number;speed:number;orbitR:number;b1:V3;b2:V3;size:number;opacity:number;}
+interface Particle{src:string;tgt:string;t:number;speed:number;}
+interface Feed{id:number;label:string;time:string;}
 
-interface LiveParticle {
-  id:string; srcId:string; tgtId:string; color:string;
-  t:number; speed:number; arcDir:number; size:number;
-}
-
-interface EventLog { id:string; label:string; color:string; timeStr:string; }
-
-function formatCount(n:number):string {
-  if(n>=1_000_000) return (n/1_000_000).toFixed(1)+'M';
-  if(n>=1_000)     return Math.round(n/1_000)+'k';
-  return n.toString();
-}
-
-function buildNodes(counts:Record<string,number>, W:number, H:number):PhysicsNode[] {
-  const cx=W/2, cy=H/2;
-  const max=Math.max(...Object.values(counts).filter(Boolean),1);
-  return NODE_DEFS.map((def,i)=>{
-    const angle=(i/NODE_DEFS.length)*Math.PI*2-Math.PI/2;
-    const spread=Math.min(W,H)*0.28;
-    const count=counts[def.id]||500;
-    const logR=Math.log10(count+1)/Math.log10(max+1);
-    return {
-      ...def, count, radius:16+42*logR,
-      x:cx+Math.cos(angle)*spread+(Math.random()-.5)*80,
-      y:cy+Math.sin(angle)*spread+(Math.random()-.5)*80,
-      vx:(Math.random()-.5)*1.2, vy:(Math.random()-.5)*1.2,
-      pulse:(i/NODE_DEFS.length)*Math.PI*2,
-    };
+/* ── Builders ────────────────────────────────────────────────────────────── */
+function buildNodes(counts:Record<string,number>):GNode[]{
+  const max=Math.max(...Object.values(counts),1);
+  return NODE_DEFS.map((d,i)=>{
+    const count=counts[d.id]??0;
+    return{...d,count,pulse:0,baseR:8+18*(Math.log10(count+1)/Math.log10(max+1)),u:fibSphere(NODE_DEFS.length,i)};
   });
 }
 
-/* Build orbital atom cloud — log-scaled count, max ~100 atoms per node */
-function buildAtoms(nodes:PhysicsNode[]):Atom[] {
+function buildAtoms(nodes:GNode[]):GAtom[]{
   const max=Math.max(...nodes.map(n=>n.count),1);
-  const atoms:Atom[]=[];
+  const atoms:GAtom[]=[];
   nodes.forEach(node=>{
     const logR=Math.log10(node.count+1)/Math.log10(max+1);
-    const total=Math.round(8+92*logR); // 8..100 atoms
+    const total=Math.round(6+80*logR);
+    const ref:V3=Math.abs(node.u.y)<.9?{x:0,y:1,z:0}:{x:1,y:0,z:0};
+    const b1b=norm3(cross3(node.u,ref)),b2b=norm3(cross3(node.u,b1b));
     for(let i=0;i<total;i++){
-      const shell=Math.floor(i/22);          // 0,1,2,3 shells
-      const orbitR=node.radius*(1.35+shell*0.38+(Math.random()*0.18));
+      const shell=Math.floor(i/18),incl=Math.random()*Math.PI*2,ci=Math.cos(incl),si=Math.sin(incl);
       atoms.push({
-        nodeId:node.id,
-        angle:Math.random()*Math.PI*2,
-        orbitR,
-        speed:(0.003+Math.random()*0.007)*(Math.random()>.5?1:-1),
-        size:0.5+Math.random()*1.1,
-        yScale:0.25+Math.random()*0.65,  // tilt: flat → round
-        opacity:0.12+Math.random()*0.32,
+        nid:node.id,angle:Math.random()*Math.PI*2,
+        speed:(0.004+Math.random()*.007)*(Math.random()>.5?1:-1),
+        orbitR:node.baseR*(1.3+shell*.38+Math.random()*.15),
+        b1:{x:b1b.x*ci+b2b.x*si,y:b1b.y*ci+b2b.y*si,z:b1b.z*ci+b2b.z*si},
+        b2:{x:-b1b.x*si+b2b.x*ci,y:-b1b.y*si+b2b.y*ci,z:-b1b.z*si+b2b.z*ci},
+        size:0.6+Math.random()*.9,opacity:0.14+Math.random()*.28,
       });
     }
   });
   return atoms;
 }
 
-function qbez(t:number,p0:number,p1:number,p2:number){
-  return (1-t)*(1-t)*p0+2*(1-t)*t*p1+t*t*p2;
-}
+/* ── Component ───────────────────────────────────────────────────────────── */
+export default function Dashboard(){
+  const cvs=useRef<HTMLCanvasElement>(null);
+  const rot=useRef({x:-0.3,y:0.4});
+  const drag=useRef<{on:boolean;lx:number;ly:number;nid:string|null}>({on:false,lx:0,ly:0,nid:null});
+  const nodesR=useRef<GNode[]>([]);
+  const atomsR=useRef<GAtom[]>([]);
+  const particles=useRef<Particle[]>([]);
+  const hoverR=useRef<string|null>(null);
+  const fid=useRef(0);
+  const raf=useRef(0);
+  const lt=useRef(0);
 
-export default function Dashboard() {
-  const canvasRef   =useRef<HTMLCanvasElement>(null);
-  const nodesRef    =useRef<PhysicsNode[]>([]);
-  const atomsRef    =useRef<Atom[]>([]);
-  const animRef     =useRef<number>(0);
-  const lastTimeRef =useRef<number>(0);
-  const hovIdRef    =useRef<string|null>(null);
-  const particlesRef=useRef<LiveParticle[]>([]);
-  const boostsRef   =useRef<Record<string,number>>({});
-  const eventLogRef =useRef<EventLog[]>([]);
+  const [ready,setReady]=useState(false);
+  const [feed,setFeed]=useState<Feed[]>([]);
+  const [tooltip,setTooltip]=useState<{label:string;count:number;x:number;y:number}|null>(null);
+  const [live,setLive]=useState(0);
+  const [grabbing,setGrabbing]=useState(false);
 
-  const [hovNode,setHovNode]           =useState<PhysicsNode|null>(null);
-  const [eventLog,setEventLog]         =useState<EventLog[]>([]);
-  const [isLive,setIsLive]             =useState(false);
-  const [totalRecords,setTotalRecords] =useState(0);
-  const [lastRefresh,setLastRefresh]   =useState<Date>(new Date());
-
-  /* ── Canvas resize ── */
+  /* Fetch counts */
   useEffect(()=>{
-    const canvas=canvasRef.current; if(!canvas)return;
-    const sync=()=>{
-      const p=canvas.parentElement; if(!p)return;
-      if(canvas.width!==p.clientWidth||canvas.height!==p.clientHeight){
-        canvas.width=p.clientWidth; canvas.height=p.clientHeight;
-      }
-    };
-    sync();
-    const ro=new ResizeObserver(sync);
-    ro.observe(canvas.parentElement!);
+    const TABLES:[string,string][]=[
+      ['emily_runs','emily'],['mkt_scheduler_log','ag'],
+      ['mkt_content_queue','campaign'],['mkt_seo_queue','content'],
+      ['partslot_aeo_queue','enrich'],['youtube_video_mappings','brain'],
+      ['sas_catalogue','parts'],['user_vehicles','vehicles'],
+      ['mkt_vectordb_documents','vector'],['competitor_keywords','intel'],
+      ['emily_memory','memory'],['youtube_videos','youtube'],
+    ];
+    Promise.all(TABLES.map(([t])=>supabase.from(t).select('*',{count:'exact',head:true})))
+      .then(results=>{
+        const c:Record<string,number>={};
+        results.forEach((r,i)=>{c[TABLES[i][1]]=r.count??FALLBACK[TABLES[i][1]];});
+        nodesR.current=buildNodes(c);
+        atomsR.current=buildAtoms(nodesR.current);
+        setReady(true);
+      })
+      .catch(()=>{
+        nodesR.current=buildNodes(FALLBACK);
+        atomsR.current=buildAtoms(nodesR.current);
+        setReady(true);
+      });
+  },[]);
+
+  /* Realtime */
+  useEffect(()=>{
+    const channels=Object.entries(TABLE_MAP).map(([table,evs])=>
+      supabase.channel(`rtg_${table}`)
+        .on('postgres_changes',{event:'INSERT',schema:'public',table},()=>{
+          evs.forEach(ev=>{
+            particles.current.push({src:ev.src,tgt:ev.tgt,t:0,speed:0.006+Math.random()*.006});
+            const n=nodesR.current.find(x=>x.id===ev.tgt);
+            if(n)n.pulse=1;
+            setLive(v=>v+1);
+            setFeed(f=>[{id:++fid.current,label:ev.label,time:new Date().toLocaleTimeString()},...f.slice(0,9)]);
+          });
+        }).subscribe()
+    );
+    return()=>{channels.forEach(c=>c.unsubscribe());};
+  },[]);
+
+  /* Resize observer */
+  useEffect(()=>{
+    const canvas=cvs.current;if(!canvas)return;
+    const ro=new ResizeObserver(()=>{
+      const rect=canvas.getBoundingClientRect();
+      const dpr=window.devicePixelRatio||1;
+      canvas.width=rect.width*dpr;
+      canvas.height=rect.height*dpr;
+    });
+    ro.observe(canvas);
     return()=>ro.disconnect();
   },[]);
 
-  /* ── Init ── */
+  /* Draw loop */
   useEffect(()=>{
-    const W=canvasRef.current?.width||1000;
-    const H=canvasRef.current?.height||700;
-    const nodes=buildNodes(FALLBACK,W,H);
-    nodesRef.current=nodes;
-    atomsRef.current=buildAtoms(nodes);
-    setTotalRecords(Object.values(FALLBACK).reduce((a,b)=>a+b,0));
-  },[]);
+    if(!ready)return;
+    const canvas=cvs.current;if(!canvas)return;
+    const ctx=canvas.getContext('2d');if(!ctx)return;
 
-  /* ── Live event ── */
-  const fireEvent=(tableName:string)=>{
-    const defs=TABLE_EVENTS[tableName]; if(!defs)return;
-    defs.forEach(({src,tgt,label})=>{
-      const color=NODE_DEFS.find(n=>n.id===src)?.color||'#fff';
-      if(particlesRef.current.length<35){
-        particlesRef.current.push({
-          id:Math.random().toString(36).slice(2),
-          srcId:src,tgtId:tgt,color,
-          t:0, speed:0.006+Math.random()*0.004,
-          arcDir:Math.random()>.5?1:-1,
-          size:5+Math.random()*3,
-        });
-      }
-      boostsRef.current[src]=1.0;
-      const entry:EventLog={
-        id:Math.random().toString(36).slice(2), label, color,
-        timeStr:new Date().toLocaleTimeString('en-NZ',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),
-      };
-      eventLogRef.current=[entry,...eventLogRef.current].slice(0,5);
-      setEventLog([...eventLogRef.current]);
-    });
-  };
+    const frame=(ts:number)=>{
+      const dt=Math.min(ts-lt.current,50);lt.current=ts;
+      const dpr=window.devicePixelRatio||1;
+      const W=canvas.width/dpr,H=canvas.height/dpr;
+      const cx=W/2,cy=H/2,SR=Math.min(W,H)*.32,FOV=3.2;
 
-  /* ── Supabase fetch ── */
-  const fetchCounts=async()=>{
-    try{
-      const [
-        emilyRuns,agRuns,campaignQ,seoQ,aeoQ,
-        enrichQ,vmapQ,partsQ,brainObs,brainDtc,brainPhys,
-        ytVids,ytMaps,vehGen,userVeh,
-        vectorDocs,compKw,memQ,pendQ,
-      ]=await Promise.all([
-        supabase.from('emily_runs')                .select('*',{count:'exact',head:true}),
-        supabase.from('mkt_scheduler_log')          .select('*',{count:'exact',head:true}),
-        supabase.from('mkt_content_queue')          .select('*',{count:'exact',head:true}),
-        supabase.from('mkt_seo_queue')              .select('*',{count:'exact',head:true}),
-        supabase.from('partslot_aeo_queue')         .select('*',{count:'exact',head:true}),
-        supabase.from('part_enrichment_staging')    .select('*',{count:'exact',head:true}),
-        supabase.from('sas_vehicle_map')            .select('*',{count:'exact',head:true}),
-        supabase.from('sas_catalogue')              .select('*',{count:'exact',head:true}),
-        supabase.from('brain_observation_patterns') .select('*',{count:'exact',head:true}),
-        supabase.from('brain_dtc_codes')            .select('*',{count:'exact',head:true}),
-        supabase.from('brain_physics_patterns')     .select('*',{count:'exact',head:true}),
-        supabase.from('youtube_videos')             .select('*',{count:'exact',head:true}),
-        supabase.from('youtube_video_vehicles')     .select('*',{count:'exact',head:true}),
-        supabase.from('vehicle_generations')        .select('*',{count:'exact',head:true}),
-        supabase.from('user_vehicles')              .select('*',{count:'exact',head:true}),
-        supabase.from('mkt_vectordb_documents')     .select('*',{count:'exact',head:true}),
-        supabase.from('competitor_keywords')        .select('*',{count:'exact',head:true}),
-        supabase.from('emily_memory')               .select('*',{count:'exact',head:true}),
-        supabase.from('emily_pending_actions')      .select('*',{count:'exact',head:true}),
-      ]);
-      const c:Record<string,number>={
-        emily:   emilyRuns.count ||FALLBACK.emily,
-        ag:      agRuns.count    ||FALLBACK.ag,
-        campaign:campaignQ.count ||FALLBACK.campaign,
-        content: (seoQ.count||0)+(aeoQ.count||0),
-        enrich:  (enrichQ.count||0)+(vmapQ.count||0),
-        parts:   partsQ.count    ||FALLBACK.parts,
-        vehicles:(vehGen.count||0)+(userVeh.count||0),
-        brain:   (brainObs.count||0)+(brainDtc.count||0)+(brainPhys.count||0),
-        youtube: (ytVids.count||0)+(ytMaps.count||0),
-        vector:  vectorDocs.count||FALLBACK.vector,
-        intel:   compKw.count    ||FALLBACK.intel,
-        memory:  (memQ.count||0)+(pendQ.count||0),
-      };
-      const W=canvasRef.current?.width||1000;
-      const H=canvasRef.current?.height||700;
-      const nodes=buildNodes(c,W,H);
-      nodesRef.current=nodes;
-      atomsRef.current=buildAtoms(nodes);
-      setTotalRecords(Object.values(c).reduce((a,b)=>a+b,0));
-      setLastRefresh(new Date());
-    }catch(err){console.warn('Graph fetch:',err);}
-  };
+      if(!drag.current.on)rot.current.y+=.0005*dt;
+      const rx=rot.current.x,ry=rot.current.y;
 
-  useEffect(()=>{fetchCounts();},[]);
+      ctx.save();
+      ctx.scale(dpr,dpr);
+      ctx.clearRect(0,0,W,H);
 
-  /* ── Realtime subscriptions ── */
-  useEffect(()=>{
-    const tables=Object.keys(TABLE_EVENTS);
-    let ch=supabase.channel('kg-live');
-    tables.forEach(table=>{
-      ch=ch.on('postgres_changes' as any,{event:'INSERT',schema:'public',table},()=>fireEvent(table));
-    });
-    ch.subscribe(s=>setIsLive(s==='SUBSCRIBED'));
-    return()=>{supabase.removeChannel(ch);};
-  },[]);
+      /* Atmosphere */
+      const atm=ctx.createRadialGradient(cx,cy,SR*.8,cx,cy,SR*1.4);
+      atm.addColorStop(0,'rgba(99,102,241,0.07)');atm.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=atm;ctx.beginPath();ctx.arc(cx,cy,SR*1.4,0,Math.PI*2);ctx.fill();
 
-  /* ── Animation loop ── */
-  useEffect(()=>{
-    const canvas=canvasRef.current; if(!canvas)return;
-    const ctx=canvas.getContext('2d'); if(!ctx)return;
-    const REP=16000,SPR=0.014,DAMP=0.84,CG=0.004;
-
-    function tick(time:number){
-      const dt=Math.min((time-lastTimeRef.current)/16.67,3);
-      lastTimeRef.current=time;
-      const nodes=nodesRef.current;
-      const W=canvas.width,H=canvas.height,cx=W/2,cy=H/2;
-      const REST=Math.min(W,H)*0.24;
-
-      /* Physics */
-      for(let i=0;i<nodes.length;i++){
-        const a=nodes[i]; let fx=0,fy=0;
-        for(let j=0;j<nodes.length;j++){
-          if(i===j)continue;
-          const b=nodes[j],dx=a.x-b.x,dy=a.y-b.y;
-          const d2=dx*dx+dy*dy+.1,d=Math.sqrt(d2),f=REP/d2;
-          fx+=(dx/d)*f; fy+=(dy/d)*f;
-        }
-        EDGES.forEach(([s,t])=>{
-          const oid=s===a.id?t:t===a.id?s:null; if(!oid)return;
-          const o=nodes.find(n=>n.id===oid); if(!o)return;
-          const dx=o.x-a.x,dy=o.y-a.y,d=Math.sqrt(dx*dx+dy*dy)||1;
-          const f=SPR*(d-REST); fx+=(dx/d)*f; fy+=(dy/d)*f;
-        });
-        fx-=CG*(a.x-cx); fy-=CG*(a.y-cy);
-        a.vx=(a.vx+fx*dt)*DAMP; a.vy=(a.vy+fy*dt)*DAMP;
-        a.pulse+=0.02; a.x+=a.vx*dt; a.y+=a.vy*dt;
-        const m=a.radius+16;
-        if(a.x<m){a.x=m;a.vx=Math.abs(a.vx)*.4;}
-        if(a.x>W-m){a.x=W-m;a.vx=-Math.abs(a.vx)*.4;}
-        if(a.y<m){a.y=m;a.vy=Math.abs(a.vy)*.4;}
-        if(a.y>H-m){a.y=H-m;a.vy=-Math.abs(a.vy)*.4;}
-      }
-
-      /* Decay boosts */
-      Object.keys(boostsRef.current).forEach(id=>{
-        boostsRef.current[id]*=0.94;
-        if(boostsRef.current[id]<0.01)delete boostsRef.current[id];
-      });
-
-      /* Background */
-      ctx.fillStyle='rgba(3,3,12,0.78)';
-      ctx.fillRect(0,0,W,H);
-
-      /* Static edges */
-      EDGES.forEach(([sid,tid])=>{
-        const s=nodes.find(n=>n.id===sid),t=nodes.find(n=>n.id===tid);
-        if(!s||!t)return;
-        const g=ctx.createLinearGradient(s.x,s.y,t.x,t.y);
-        g.addColorStop(0,s.color+'38'); g.addColorStop(.5,'#ffffff0e'); g.addColorStop(1,t.color+'38');
-        ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(t.x,t.y);
-        ctx.strokeStyle=g; ctx.lineWidth=1.1; ctx.stroke();
-      });
-
-      /* ── ORBITAL ATOMS ── */
-      atomsRef.current.forEach(atom=>{
-        const node=nodes.find(n=>n.id===atom.nodeId); if(!node)return;
-        atom.angle+=atom.speed*dt;
-        const ax=node.x+Math.cos(atom.angle)*atom.orbitR;
-        const ay=node.y+Math.sin(atom.angle)*atom.orbitR*atom.yScale;
-        /* only draw if in front (positive sin = front half of orbit) */
-        const inFront=Math.sin(atom.angle)>=0;
-        const alpha=inFront ? atom.opacity : atom.opacity*0.35;
-        const hexA=Math.round(alpha*255).toString(16).padStart(2,'0');
+      /* Wireframe sphere */
+      ctx.strokeStyle='rgba(99,102,241,0.055)';ctx.lineWidth=.5;
+      for(let li=1;li<=5;li++){
+        const cp=-1+li/3,sp=Math.sqrt(Math.max(0,1-cp*cp));
         ctx.beginPath();
-        ctx.arc(ax,ay,atom.size,0,Math.PI*2);
-        ctx.fillStyle=node.color+hexA;
-        ctx.fill();
-      });
-
-      /* Live arc particles */
-      particlesRef.current=particlesRef.current.filter(ev=>ev.t<1);
-      particlesRef.current.forEach(ev=>{
-        const src=nodes.find(n=>n.id===ev.srcId);
-        const tgt=nodes.find(n=>n.id===ev.tgtId);
-        if(!src||!tgt){ev.t=1;return;}
-        ev.t+=ev.speed*dt;
-        const t=Math.min(ev.t,1);
-        const mx=(src.x+tgt.x)/2,my=(src.y+tgt.y)/2;
-        const edx=tgt.x-src.x,edy=tgt.y-src.y;
-        const elen=Math.sqrt(edx*edx+edy*edy)||1;
-        const ah=Math.min(110,elen*.38);
-        const cpx=mx+(-edy/elen)*ah*ev.arcDir;
-        const cpy=my+(edx/elen)*ah*ev.arcDir;
-        const bx=qbez(t,src.x,cpx,tgt.x);
-        const by=qbez(t,src.y,cpy,tgt.y);
-        const alpha=t<.12?t/.12:t>.88?(1-t)/.12:1;
-        if(t>.04){
-          const t2=t-.04;
-          ctx.save(); ctx.globalAlpha=alpha*.22;
-          ctx.beginPath(); ctx.arc(qbez(t2,src.x,cpx,tgt.x),qbez(t2,src.y,cpy,tgt.y),ev.size*.5,0,Math.PI*2);
-          ctx.fillStyle=ev.color; ctx.fill(); ctx.restore();
+        for(let j=0;j<=60;j++){
+          const th=j/60*Math.PI*2;
+          const w=applyRot({x:sp*Math.cos(th),y:cp,z:sp*Math.sin(th)},rx,ry);
+          const p=project3(w,cx,cy,SR,FOV);
+          j?ctx.lineTo(p.sx,p.sy):ctx.moveTo(p.sx,p.sy);
         }
-        ctx.save(); ctx.globalAlpha=alpha;
-        ctx.shadowBlur=20; ctx.shadowColor=ev.color;
-        ctx.beginPath(); ctx.arc(bx,by,ev.size,0,Math.PI*2);
-        ctx.fillStyle=ev.color; ctx.fill(); ctx.restore();
+        ctx.closePath();ctx.stroke();
+      }
+      for(let li=0;li<8;li++){
+        const th=li/8*Math.PI*2;ctx.beginPath();
+        for(let j=0;j<=40;j++){
+          const ph=j/40*Math.PI;
+          const w=applyRot({x:Math.sin(ph)*Math.cos(th),y:Math.cos(ph),z:Math.sin(ph)*Math.sin(th)},rx,ry);
+          const p=project3(w,cx,cy,SR,FOV);
+          j?ctx.lineTo(p.sx,p.sy):ctx.moveTo(p.sx,p.sy);
+        }
+        ctx.stroke();
+      }
+
+      /* Update state */
+      atomsR.current.forEach(a=>{a.angle+=a.speed*dt;});
+      nodesR.current.forEach(n=>{n.pulse=Math.max(0,n.pulse-.018*dt);});
+      particles.current=particles.current.filter(p=>{p.t+=p.speed*dt;return p.t<1;});
+
+      /* Project nodes */
+      const proj=nodesR.current.map(n=>{
+        const w=applyRot(n.u,rx,ry);
+        return{n,w,p:project3(w,cx,cy,SR,FOV)};
       });
 
-      /* ── NODES (rendered on top of atoms) ── */
-      nodes.forEach(node=>{
-        const isHov=node.id===hovIdRef.current;
-        const boost=boostsRef.current[node.id]||0;
-        const pulse=Math.sin(node.pulse)*.09+1;
-        const r=node.radius*(isHov?1.18:pulse)*(1+boost*.28);
-        const glowR=r*(isHov||boost>.1?3.2:2.0);
-
-        const halo=ctx.createRadialGradient(node.x,node.y,r*.2,node.x,node.y,glowR);
-        halo.addColorStop(0,node.color+(isHov||boost>.3?'55':'22'));
-        halo.addColorStop(1,'transparent');
-        ctx.beginPath(); ctx.arc(node.x,node.y,glowR,0,Math.PI*2);
-        ctx.fillStyle=halo; ctx.fill();
-
-        ctx.save();
-        ctx.shadowBlur=isHov||boost>.3?38:14; ctx.shadowColor=node.color;
-        const sp=ctx.createRadialGradient(node.x-r*.28,node.y-r*.28,0,node.x,node.y,r);
-        sp.addColorStop(0,node.color+'ff'); sp.addColorStop(.55,node.color+'cc'); sp.addColorStop(1,node.color+'44');
-        ctx.beginPath(); ctx.arc(node.x,node.y,r,0,Math.PI*2);
-        ctx.fillStyle=sp; ctx.fill(); ctx.restore();
-
-        ctx.beginPath(); ctx.arc(node.x,node.y,r,0,Math.PI*2);
-        ctx.strokeStyle=node.color+(boost>.3?'ee':'99'); ctx.lineWidth=isHov?2:1.3; ctx.stroke();
-
-        const fs=Math.max(9,r*.36);
-        ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.shadowBlur=7; ctx.shadowColor='rgba(0,0,0,.95)';
-        ctx.fillStyle='#fff'; ctx.font=`bold ${fs}px -apple-system,sans-serif`;
-        ctx.fillText(node.label,node.x,node.y-fs*.4); ctx.restore();
-
-        ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
-        ctx.fillStyle='rgba(255,255,255,.58)'; ctx.font=`${Math.max(7,r*.25)}px -apple-system,sans-serif`;
-        ctx.fillText(formatCount(node.count),node.x,node.y+fs*.7); ctx.restore();
+      /* Edges + traveling particles */
+      EDGES.forEach(([sid,tid])=>{
+        const sn=proj.find(p=>p.n.id===sid),tn=proj.find(p=>p.n.id===tid);
+        if(!sn||!tn)return;
+        const avgD=(sn.p.depth+tn.p.depth)/2;
+        ctx.strokeStyle=`rgba(99,102,241,${avgD<0?.03:.11})`;ctx.lineWidth=.8;
+        ctx.beginPath();
+        for(let i=0;i<=22;i++){
+          const u=slerp3(sn.n.u,tn.n.u,i/22);
+          const w=applyRot(u,rx,ry);
+          const p=project3(w,cx,cy,SR,FOV);
+          i?ctx.lineTo(p.sx,p.sy):ctx.moveTo(p.sx,p.sy);
+        }
+        ctx.stroke();
+        particles.current.filter(p=>p.src===sid&&p.tgt===tid).forEach(p=>{
+          const u=slerp3(sn.n.u,tn.n.u,p.t);
+          const w=applyRot(u,rx,ry);
+          const pp=project3(w,cx,cy,SR,FOV);
+          const r=3.5*pp.scale;
+          const g=ctx.createRadialGradient(pp.sx,pp.sy,0,pp.sx,pp.sy,r*2.2);
+          g.addColorStop(0,sn.n.color);g.addColorStop(1,'rgba(0,0,0,0)');
+          ctx.beginPath();ctx.arc(pp.sx,pp.sy,r,0,Math.PI*2);ctx.fillStyle=g;ctx.fill();
+        });
       });
 
-      animRef.current=requestAnimationFrame(tick);
-    }
-    animRef.current=requestAnimationFrame(tick);
-    return()=>{if(animRef.current)cancelAnimationFrame(animRef.current);};
+      /* Depth-sorted draw queue (painter's algorithm) */
+      type DI={depth:number;draw:()=>void};
+      const dq:DI[]=[];
+
+      /* Atoms */
+      atomsR.current.forEach(a=>{
+        const nd=nodesR.current.find(x=>x.id===a.nid);if(!nd)return;
+        const nw=applyRot(nd.u,rx,ry);
+        const b1r=applyRot(a.b1,rx,ry),b2r=applyRot(a.b2,rx,ry);
+        const rs=a.orbitR/SR,ca=Math.cos(a.angle),sa=Math.sin(a.angle);
+        const av:V3={
+          x:nw.x+rs*(b1r.x*ca+b2r.x*sa),
+          y:nw.y+rs*(b1r.y*ca+b2r.y*sa),
+          z:nw.z+rs*(b1r.z*ca+b2r.z*sa),
+        };
+        const pp=project3(av,cx,cy,SR,FOV);
+        const fade=pp.depth<-.2?.18:1;
+        dq.push({depth:pp.depth,draw:()=>{
+          ctx.beginPath();ctx.arc(pp.sx,pp.sy,a.size*pp.scale,0,Math.PI*2);
+          ctx.fillStyle=`rgba(${hexRgb(nd.color)},${a.opacity*fade})`;ctx.fill();
+        }});
+      });
+
+      /* Nodes */
+      proj.forEach(({n,p:{sx,sy,scale,depth}})=>{
+        const isH=hoverR.current===n.id,r=(n.baseR+n.pulse*8)*scale;
+        dq.push({depth,draw:()=>{
+          /* Glow halo */
+          const gl=ctx.createRadialGradient(sx,sy,0,sx,sy,r*3);
+          gl.addColorStop(0,`rgba(${hexRgb(n.color)},${.14+n.pulse*.22})`);
+          gl.addColorStop(1,'rgba(0,0,0,0)');
+          ctx.beginPath();ctx.arc(sx,sy,r*3,0,Math.PI*2);ctx.fillStyle=gl;ctx.fill();
+          /* Core */
+          const gr=ctx.createRadialGradient(sx-r*.3,sy-r*.3,r*.1,sx,sy,r);
+          gr.addColorStop(0,'#fff');gr.addColorStop(.4,n.color);gr.addColorStop(1,`rgba(${hexRgb(n.color)},.5)`);
+          ctx.beginPath();ctx.arc(sx,sy,r,0,Math.PI*2);ctx.fillStyle=gr;ctx.fill();
+          if(isH){ctx.strokeStyle='rgba(255,255,255,0.9)';ctx.lineWidth=1.5;ctx.stroke();}
+          /* Labels */
+          const fs=Math.max(9,Math.round(11*scale));
+          ctx.font=`bold ${fs}px Inter,sans-serif`;
+          ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='top';
+          ctx.fillText(n.label,sx,sy+r+3*scale);
+          ctx.font=`${Math.max(7,Math.round(8*scale))}px Inter,sans-serif`;
+          ctx.fillStyle='rgba(255,255,255,0.42)';
+          ctx.fillText(n.count.toLocaleString(),sx,sy+r+(fs+5)*scale);
+          ctx.textBaseline='alphabetic';
+        }});
+      });
+
+      dq.sort((a,b)=>a.depth-b.depth);
+      dq.forEach(d=>d.draw());
+      ctx.restore();
+      raf.current=requestAnimationFrame(frame);
+    };
+
+    raf.current=requestAnimationFrame(frame);
+    return()=>cancelAnimationFrame(raf.current);
+  },[ready]);
+
+  /* Hit test helper */
+  const hitNode=useCallback((ex:number,ey:number)=>{
+    const canvas=cvs.current;if(!canvas)return null;
+    const rect=canvas.getBoundingClientRect();
+    const mx=ex-rect.left,my=ey-rect.top;
+    const cx=rect.width/2,cy=rect.height/2,SR=Math.min(rect.width,rect.height)*.32,FOV=3.2;
+    let best:string|null=null,bd=Infinity;
+    nodesR.current.forEach(n=>{
+      const w=applyRot(n.u,rot.current.x,rot.current.y);
+      const p=project3(w,cx,cy,SR,FOV);
+      const dist=Math.hypot(mx-p.sx,my-p.sy);
+      if(dist<(n.baseR+8)*p.scale&&dist<bd){bd=dist;best=n.id;}
+    });
+    return best;
   },[]);
 
-  function handleMouseMove(e:React.MouseEvent<HTMLCanvasElement>){
-    const canvas=canvasRef.current; if(!canvas)return;
-    const rect=canvas.getBoundingClientRect();
-    const mx=(e.clientX-rect.left)*(canvas.width/rect.width);
-    const my=(e.clientY-rect.top)*(canvas.height/rect.height);
-    const hit=nodesRef.current.find(n=>{const dx=n.x-mx,dy=n.y-my;return Math.sqrt(dx*dx+dy*dy)<=n.radius+14;})??null;
-    hovIdRef.current=hit?.id??null;
-    setHovNode(hit?{...hit}:null);
-  }
-  function handleMouseLeave(){hovIdRef.current=null;setHovNode(null);}
+  /* Pointer handlers */
+  const onDown=useCallback((e:React.PointerEvent)=>{
+    const nid=hitNode(e.clientX,e.clientY);
+    drag.current={on:true,lx:e.clientX,ly:e.clientY,nid};
+    (e.target as Element).setPointerCapture(e.pointerId);
+    setGrabbing(true);
+  },[hitNode]);
 
-  function handleRefresh(){
-    const W=canvasRef.current?.width||1000,H=canvasRef.current?.height||700;
-    const nodes=buildNodes(FALLBACK,W,H);
-    nodesRef.current=nodes; atomsRef.current=buildAtoms(nodes);
-    fetchCounts();
-  }
+  const onMove=useCallback((e:React.PointerEvent)=>{
+    const d=drag.current;
+    const dx=e.clientX-d.lx,dy=e.clientY-d.ly;
+    d.lx=e.clientX;d.ly=e.clientY;
+    if(d.on){
+      const drx=dy*.005,dry=dx*.005;
+      if(d.nid){
+        /* Drag individual node on sphere surface */
+        const n=nodesR.current.find(x=>x.id===d.nid);
+        if(n)n.u=norm3(rotY(rotX(n.u,drx),dry));
+      }else{
+        /* Rotate whole globe */
+        rot.current.x+=drx;rot.current.y+=dry;
+      }
+    }
+    const h=hitNode(e.clientX,e.clientY);
+    hoverR.current=h;
+    if(h){
+      const n=nodesR.current.find(x=>x.id===h);
+      const rect=cvs.current?.getBoundingClientRect();
+      if(n&&rect)setTooltip({label:`${n.label} — ${n.sublabel}`,count:n.count,x:e.clientX-rect.left,y:e.clientY-rect.top});
+    }else setTooltip(null);
+  },[hitNode]);
 
-  const totalStr=totalRecords>=1_000_000?(totalRecords/1_000_000).toFixed(2)+'M':Math.round(totalRecords/1_000)+'k';
+  const onUp=useCallback(()=>{
+    drag.current.on=false;drag.current.nid=null;setGrabbing(false);
+  },[]);
 
-  return (
-    <div className="relative w-full overflow-hidden" style={{height:'calc(100vh - 64px)',background:'#03030c'}}>
-
-      <div className="absolute top-5 left-6 z-10 pointer-events-none select-none">
-        <div style={{color:'rgba(255,255,255,.28)',fontSize:10,letterSpacing:'.4em',textTransform:'uppercase',fontWeight:300}}>CARFIX</div>
-        <div style={{display:'flex',alignItems:'center',gap:8,marginTop:2}}>
-          <div style={{color:'rgba(255,255,255,.65)',fontSize:13,letterSpacing:'.22em',textTransform:'uppercase',fontWeight:300}}>Knowledge Graph</div>
-          <div style={{display:'flex',alignItems:'center',gap:4}}>
-            <div style={{width:6,height:6,borderRadius:'50%',background:isLive?'#22c55e':'#6b7280',boxShadow:isLive?'0 0 6px #22c55e':'none'}}/>
-            <span style={{color:isLive?'#22c55e':'#6b7280',fontSize:9,letterSpacing:'.15em',fontWeight:300}}>{isLive?'LIVE':'CONNECTING'}</span>
-          </div>
-        </div>
-        <div style={{color:'rgba(255,255,255,.18)',fontSize:11,marginTop:4}}>
-          {NODE_DEFS.length} clusters · <span style={{color:'rgba(255,255,255,.40)'}}>{totalStr} records</span>
-        </div>
-        {eventLog.length>0&&(
-          <div style={{marginTop:10,display:'flex',flexDirection:'column',gap:4}}>
-            {eventLog.map((ev,i)=>(
-              <div key={ev.id} style={{display:'flex',alignItems:'center',gap:6,opacity:1-i*.18}}>
-                <div style={{width:5,height:5,borderRadius:'50%',background:ev.color,boxShadow:`0 0 4px ${ev.color}`,flexShrink:0}}/>
-                <span style={{color:'rgba(255,255,255,.42)',fontSize:10}}>{ev.label}</span>
-                <span style={{color:'rgba(255,255,255,.16)',fontSize:9}}>{ev.timeStr}</span>
-              </div>
-            ))}
-          </div>
-        )}
+  return(
+    <div className="relative w-full h-full bg-gray-950 overflow-hidden" style={{minHeight:600}}>
+      {/* Header */}
+      <div className="absolute top-4 left-6 z-10 pointer-events-none">
+        <div className="text-white font-bold text-lg tracking-wide">Knowledge Globe</div>
+        <div className="text-gray-500 text-xs mt-0.5">drag globe to rotate · drag nodes to reposition</div>
       </div>
 
-      <button onClick={handleRefresh} className="absolute top-5 right-6 z-10"
-        style={{background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.10)',borderRadius:8,color:'rgba(255,255,255,.38)',fontSize:11,padding:'5px 12px',cursor:'pointer',letterSpacing:'.08em'}}>
-        ↺ Refresh
-      </button>
+      {/* Live badge */}
+      <div className="absolute top-4 right-6 z-10 flex items-center gap-2 pointer-events-none">
+        <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"/>
+        <span className="text-green-400 text-xs font-mono">LIVE{live>0&&` +${live}`}</span>
+      </div>
 
-      <canvas ref={canvasRef} style={{display:'block',width:'100%',height:'100%'}}
-        onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}/>
+      {/* Canvas */}
+      <canvas
+        ref={cvs}
+        className="w-full h-full block"
+        style={{cursor:grabbing?'grabbing':'grab'}}
+        onPointerDown={onDown}
+        onPointerMove={onMove}
+        onPointerUp={onUp}
+        onPointerLeave={onUp}
+      />
 
-      {hovNode&&(
-        <div className="absolute bottom-6 left-6 rounded-xl pointer-events-none select-none"
-          style={{background:'rgba(3,3,12,.92)',border:`1px solid ${hovNode.color}40`,backdropFilter:'blur(14px)',padding:'14px 18px',minWidth:230}}>
-          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
-            <div style={{width:10,height:10,borderRadius:'50%',background:hovNode.color,boxShadow:`0 0 8px ${hovNode.color}`,flexShrink:0}}/>
-            <span style={{color:'#fff',fontWeight:600,fontSize:13}}>{hovNode.label}</span>
-          </div>
-          <p style={{color:'rgba(255,255,255,.33)',fontSize:11,margin:'0 0 10px 18px'}}>{hovNode.sublabel}</p>
-          <p style={{color:hovNode.color,fontFamily:'monospace',fontSize:28,fontWeight:700,lineHeight:1,margin:0}}>{hovNode.count.toLocaleString()}</p>
-          <p style={{color:'rgba(255,255,255,.20)',fontSize:11,marginTop:3}}>
-            {Math.round(8+92*(Math.log10(hovNode.count+1)/Math.log10(246302)))} orbital atoms · {hovNode.count.toLocaleString()} records
-          </p>
+      {/* Tooltip */}
+      {tooltip&&(
+        <div
+          className="absolute pointer-events-none z-20 bg-gray-900/90 border border-gray-700 rounded-lg px-3 py-2 text-xs shadow-xl"
+          style={{left:tooltip.x,top:tooltip.y-70,transform:'translateX(-50%)'}}>
+          <div className="text-white font-semibold">{tooltip.label}</div>
+          <div className="text-gray-400 mt-0.5">{tooltip.count.toLocaleString()} records</div>
         </div>
       )}
 
-      <div className="absolute bottom-6 right-6 z-10 pointer-events-none select-none"
-        style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'6px 16px'}}>
-        {NODE_DEFS.map(def=>(
-          <div key={def.id} style={{display:'flex',alignItems:'center',gap:7}}>
-            <div style={{width:7,height:7,borderRadius:'50%',background:def.color,boxShadow:`0 0 4px ${def.color}`,flexShrink:0}}/>
-            <span style={{color:'rgba(255,255,255,.28)',fontSize:10,fontWeight:300}}>{def.label}</span>
+      {/* Activity feed */}
+      {feed.length>0&&(
+        <div className="absolute bottom-4 left-4 z-10 space-y-0.5 pointer-events-none">
+          {feed.slice(0,5).map(f=>(
+            <div key={f.id} className="text-xs font-mono text-gray-400 truncate max-w-xs">
+              <span className="text-green-500">{f.time}</span>{' '}{f.label}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Legend */}
+      <div className="absolute bottom-4 right-4 z-10 grid grid-cols-2 gap-x-4 gap-y-0.5 pointer-events-none">
+        {NODE_DEFS.map(n=>(
+          <div key={n.id} className="flex items-center gap-1.5">
+            <div className="w-2 h-2 rounded-full flex-shrink-0" style={{background:n.color}}/>
+            <span className="text-gray-400 text-xs">{n.label}</span>
           </div>
         ))}
       </div>
