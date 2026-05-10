@@ -4,14 +4,13 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Settings, Sparkles, ChevronDown, Square, MessageSquarePlus, History, Trash2, Pencil, X } from 'lucide-react';
+import { Send, Settings, Sparkles, ChevronDown, ChevronRight, Square, MessageSquarePlus, History, Trash2, Pencil, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { TaskLauncher } from '@/components/TaskLauncher';
 import { WorkBoard } from '@/components/WorkBoard';
 import { ActivityFeed } from '@/components/ActivityFeed';
 import { BriefModal } from '@/components/BriefModal';
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
-import { workBoard } from '@/lib/workBoardStore';
+import { workBoard, useWorkBoard } from '@/lib/workBoardStore';
 import { detectWikiBrief } from '@/lib/wikiBriefWorkflow';
 import { TASK_LIBRARY, getTask, loadPromptOverride, type TaskDefinition } from '@/lib/taskPrompts';
 import { callEmilyChat } from '@/lib/emilyChat';
@@ -208,7 +207,7 @@ function ChatBar() {
   useEffect(() => { autoGrow(); }, [input]);
 
   return (
-    <div className="border-t border-border/60 bg-gradient-to-b from-background to-card/40 relative">
+    <div className="flex-1 min-h-0 flex flex-col border-t border-border/60 bg-gradient-to-b from-background to-card/40 relative">
       {/* Threads drawer */}
       {threadsOpen && (
         <div className="absolute inset-0 z-30 flex">
@@ -289,7 +288,7 @@ function ChatBar() {
 
       {/* Conversation — only when there are messages */}
       {messages.length > 0 && (
-        <div className="relative">
+        <div className="relative flex-1 min-h-0 flex flex-col">
           <div className="absolute right-4 top-2 z-10 flex items-center gap-3">
             <button
               onClick={() => setThreadsOpen(true)}
@@ -314,7 +313,7 @@ function ChatBar() {
             </button>
           </div>
           {open && (
-            <div ref={scrollRef} className="max-h-[40vh] overflow-y-auto px-6 pt-8 pb-4 space-y-5">
+            <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-6 pt-8 pb-4 space-y-5">
               {messages.map((m, i) => (
                 <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   {m.role === 'emily' && (
@@ -356,7 +355,10 @@ function ChatBar() {
 
       {/* Empty-state header — give the user a way to reach history even with no messages */}
       {messages.length === 0 && (
-        <div className="flex items-center justify-end gap-3 px-6 pt-2">
+        <div className="flex-1 min-h-0" />
+      )}
+      {messages.length === 0 && (
+        <div className="flex items-center justify-end gap-3 px-6 pt-2 shrink-0">
           <button
             onClick={() => setThreadsOpen(true)}
             className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
@@ -372,8 +374,8 @@ function ChatBar() {
         </div>
       )}
 
-      {/* Floating composer */}
-      <div className="px-4 py-4">
+      {/* Floating composer — pinned at bottom */}
+      <div className="shrink-0 px-4 py-4">
         <div className="mx-auto max-w-3xl">
           <div className="group relative flex items-end gap-2 rounded-3xl border border-border/70 bg-card shadow-sm focus-within:shadow-md focus-within:border-primary/40 transition-all px-3 py-2">
             <Textarea
@@ -406,48 +408,86 @@ function ChatBar() {
 // ---------- Page ----------
 export default function EmilyAdmin() {
   const [briefingTask, setBriefingTask] = useState<TaskDefinition | null>(null);
+  const cards = useWorkBoard();
+  const cardCount = cards.length;
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(cardCount > 0);
+
+  // Auto-expand the board when cards arrive (e.g., new brief routed here).
+  useEffect(() => {
+    if (cardCount > 0) setBoardOpen(true);
+  }, [cardCount]);
 
   return (
-    <div className="-mx-4 md:-mx-6 -my-4 md:-my-6 h-[calc(100vh-3.5rem)] md:h-screen flex flex-col bg-background text-foreground">
-      {/* Header */}
-      <header className="h-14 shrink-0 border-b border-border bg-card px-5 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-            <Sparkles size={16} className="text-primary" />
+    <div className="-mx-4 md:-mx-6 -my-4 md:-my-6 h-[calc(100vh-3.5rem)] md:h-screen flex bg-background text-foreground">
+      {/* Left column */}
+      <aside className="w-[240px] shrink-0 border-r border-border bg-card flex flex-col min-h-0">
+        {/* Emily status header */}
+        <div className="h-14 shrink-0 border-b border-border px-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
+              <Sparkles size={14} className="text-primary" />
+            </div>
+            <div>
+              <div className="text-sm font-semibold leading-tight text-foreground">Emily</div>
+              <span className="inline-flex items-center gap-1 text-[10px] text-success leading-tight">
+                <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                Ready
+              </span>
+            </div>
           </div>
-          <div>
-            <div className="text-sm font-semibold leading-tight text-foreground">Emily</div>
-            <div className="text-[10px] text-muted-foreground leading-tight">Operations Centre</div>
-          </div>
-          <span className="ml-3 inline-flex items-center gap-1.5 text-[11px] text-success">
-            <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
-            Ready
-          </span>
+          <Link to="/settings" className="text-muted-foreground hover:text-foreground transition-colors">
+            <Settings size={14} />
+          </Link>
         </div>
-        <Link to="/settings" className="text-muted-foreground hover:text-foreground transition-colors">
-          <Settings size={16} />
-        </Link>
-      </header>
 
-      {/* Three-panel body */}
-      <div className="flex-1 min-h-0">
-        <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-          <ResizablePanel defaultSize={18} minSize={12} maxSize={35}>
-            <TaskLauncher onPickTask={setBriefingTask} />
-          </ResizablePanel>
-          <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={62} minSize={30}>
-            <main className="h-full flex flex-col min-w-0">
+        {/* Task launcher */}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <TaskLauncher onPickTask={setBriefingTask} />
+        </div>
+
+        {/* Activity feed (collapsible, collapsed by default) */}
+        <div className="border-t border-border shrink-0 flex flex-col min-h-0">
+          <button
+            onClick={() => setActivityOpen((o) => !o)}
+            className="h-9 px-4 flex items-center justify-between text-[11px] uppercase tracking-wider font-semibold text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <span>Activity</span>
+            {activityOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          </button>
+          {activityOpen && (
+            <div className="max-h-[40vh] overflow-y-auto border-t border-border">
+              <ActivityFeed />
+            </div>
+          )}
+        </div>
+      </aside>
+
+      {/* Right column */}
+      <main className="flex-1 min-w-0 flex flex-col">
+        {/* WorkBoard (collapsible) */}
+        <div className="shrink-0 border-b border-border">
+          <button
+            onClick={() => setBoardOpen((o) => !o)}
+            className="w-full h-10 px-5 flex items-center justify-between text-xs font-semibold text-foreground hover:bg-accent/30 transition-colors"
+          >
+            <span className="inline-flex items-center gap-2">
+              {boardOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              Tasks ({cardCount})
+            </span>
+          </button>
+          {boardOpen && (
+            <div className="max-h-[45vh] overflow-y-auto border-t border-border">
               <WorkBoard />
-              <ChatBar />
-            </main>
-          </ResizablePanel>
-          <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={20} minSize={12} maxSize={40}>
-            <ActivityFeed />
-          </ResizablePanel>
-        </ResizablePanelGroup>
-      </div>
+            </div>
+          )}
+        </div>
+
+        {/* Chat — fills remaining height, composer always pinned at bottom */}
+        <div className="flex-1 min-h-0 flex flex-col">
+          <ChatBar />
+        </div>
+      </main>
 
       <BriefModal
         task={briefingTask}
