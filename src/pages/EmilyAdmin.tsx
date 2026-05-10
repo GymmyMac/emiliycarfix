@@ -355,7 +355,10 @@ function ChatBar() {
 
       {/* Empty-state header — give the user a way to reach history even with no messages */}
       {messages.length === 0 && (
-        <div className="flex items-center justify-end gap-3 px-6 pt-2">
+        <div className="flex-1 min-h-0" />
+      )}
+      {messages.length === 0 && (
+        <div className="flex items-center justify-end gap-3 px-6 pt-2 shrink-0">
           <button
             onClick={() => setThreadsOpen(true)}
             className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
