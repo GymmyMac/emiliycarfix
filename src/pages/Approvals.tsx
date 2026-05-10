@@ -353,10 +353,87 @@ export default function Approvals() {
 
       {/* ── PIPELINE ── */}
       <div>
-        <div className="flex items-baseline justify-between mb-3">
+        <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-medium text-gray-900">Production pipeline</h2>
-          <span className="text-xs text-gray-400">Emily runs daily at 6am</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-400">Emily runs daily at 6am</span>
+            <button
+              onClick={() => setShowNewForm(v => !v)}
+              className={`text-xs px-3 py-1.5 rounded border transition-colors ${showNewForm ? 'border-purple-400 text-purple-700 bg-purple-50' : 'border-gray-200 text-gray-500 hover:border-purple-300 hover:text-purple-600'}`}
+            >
+              + new content type
+            </button>
+          </div>
         </div>
+
+        {showNewForm && (
+          <div className="mb-4 rounded-lg border border-purple-200 bg-white overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+              <span className="text-xs font-medium text-gray-700">New content type</span>
+              <button onClick={() => setShowNewForm(false)} className="text-xs text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div className="p-4 grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Name <span className="text-red-400">*</span></label>
+                <input
+                  value={newName}
+                  onChange={e => setNewName(e.target.value)}
+                  placeholder="e.g. YouTube scripts"
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:border-purple-300"
+                />
+                {newName && (
+                  <div className="text-xs text-gray-400 mt-1">slug: <span className="font-mono">{slugify(newName)}</span></div>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs text-gray-400 mb-1">Cadence</label>
+                <select
+                  value={newCadence}
+                  onChange={e => setNewCadence(e.target.value)}
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-600 bg-white focus:outline-none focus:border-purple-300"
+                >
+                  <option value="paused">paused</option>
+                  <option value="daily">daily</option>
+                  <option value="3/week">3 / week</option>
+                  <option value="weekly">weekly</option>
+                  <option value="5/day">5 / day</option>
+                  <option value="10/day">10 / day</option>
+                  <option value="on trigger">on trigger</option>
+                  <option value="batch">batch all</option>
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs text-gray-400 mb-1">Description <span className="text-gray-300">(one line)</span></label>
+                <input
+                  value={newDescription}
+                  onChange={e => setNewDescription(e.target.value)}
+                  placeholder="e.g. Short-form video scripts for the CARFIX YouTube channel"
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-800 focus:outline-none focus:border-purple-300"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs text-gray-400 mb-1">Brief <span className="text-gray-300">(instruction to Emily)</span></label>
+                <textarea
+                  value={newBrief}
+                  onChange={e => setNewBrief(e.target.value)}
+                  rows={4}
+                  placeholder="Describe what Emily should generate, the tone, format, and any CARFIX-specific angles..."
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-800 resize-y focus:outline-none focus:border-purple-300"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-t border-gray-100">
+              <span className="text-xs text-gray-400">Saved as draft — activate it from the pipeline once the brief is ready</span>
+              <button
+                onClick={handleCreateContentType}
+                disabled={savingNew || !newName.trim()}
+                className="text-xs px-4 py-1.5 rounded border border-purple-300 text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+              >
+                {savingNew ? 'creating...' : 'create content type'}
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="grid items-center mb-1 px-3" style={{ gridTemplateColumns: '1fr 110px 80px 80px 70px 110px 100px' }}>
           <div className="text-xs text-purple-600 border-b-2 border-purple-400 pb-1">content type · one brief</div>
