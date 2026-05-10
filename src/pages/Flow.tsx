@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import PageHeader from '@/components/PageHeader';
 import { cn } from '@/lib/utils';
@@ -43,9 +42,6 @@ function ContentCard({
   stream,
   preview,
   accent,
-  publishLabel = 'PUBLISH',
-  onPublish,
-  onReject,
   extra,
 }: {
   title: string;
@@ -53,39 +49,23 @@ function ContentCard({
   stream?: string;
   preview?: string;
   accent: string;
-  publishLabel?: string;
-  onPublish: () => void;
-  onReject?: () => void;
   extra?: React.ReactNode;
 }) {
   return (
     <div className="border border-border rounded-md p-3 mb-2" style={{ borderLeftWidth: 3, borderLeftColor: accent }}>
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold text-sm text-foreground truncate">{title}</p>
-          <div className="flex flex-wrap gap-1.5 mt-1">
-            {category && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{category}</Badge>}
-            {stream && (
-              <Badge className={cn('text-[10px] px-1.5 py-0 uppercase', STREAM_COLOURS[stream.toLowerCase()] || 'bg-muted text-foreground')}>
-                {stream}
-              </Badge>
-            )}
-            {extra}
-          </div>
-          {preview && <p className="text-xs text-muted-foreground italic mt-1.5 line-clamp-2">{preview}</p>}
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold text-sm text-foreground truncate">{title}</p>
+        <div className="flex flex-wrap gap-1.5 mt-1">
+          {category && <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{category}</Badge>}
+          {stream && (
+            <Badge className={cn('text-[10px] px-1.5 py-0 uppercase', STREAM_COLOURS[stream.toLowerCase()] || 'bg-muted text-foreground')}>
+              {stream}
+            </Badge>
+          )}
+          {extra}
         </div>
-        <Button
-          size="sm"
-          className="shrink-0 h-8 text-xs font-bold"
-          style={{ backgroundColor: accent }}
-          onClick={onPublish}
-        >
-          {publishLabel}
-        </Button>
+        {preview && <p className="text-xs text-muted-foreground italic mt-1.5 line-clamp-2">{preview}</p>}
       </div>
-      {onReject && (
-        <button onClick={onReject} className="text-[10px] text-muted-foreground hover:text-destructive mt-1 float-right">✕ Reject</button>
-      )}
     </div>
   );
 }
@@ -140,9 +120,6 @@ const EMPTY_DATA: FlowData = {
   published: { seoTotal: 0, seoToday: 0, seoWeek: 0, seoRecent: [], partslotTotal: 0, aeoTotal: 0, ytVideos: 0, ytVehicles: 0, ytJobTypes: 0 },
   velocity: { seoPerDay: 0, seoQueueSize: 0, partslotComplete: 0, partslotPending: 0, aeoPerDay: 0, ytSearches: 0, ytVideos: 0, ytVehicles: 0, ytJobTypes: 0, ytQuotaUsed: 0 },
 };
-
-
-
 
 async function fetchFlowData(): Promise<FlowData> {
   const d = structuredClone(EMPTY_DATA);
@@ -201,7 +178,6 @@ async function fetchFlowData(): Promise<FlowData> {
     if (typeof r.aeo_json === 'object' && r.aeo_json) preview = (r.aeo_json as any).answer_first?.slice(0, 200) || '';
     return { ...r, preview, confidencePct: Math.round((r.confidence_score || 0) * 100) };
   });
-  // YouTube ready: filter to those without display_rank
   d.ready.youtube = (readyYt.data || []).filter((v: any) => {
     const vehicles = v.youtube_video_vehicles || [];
     return vehicles.some((vv: any) => vv.display_rank == null);
@@ -274,67 +250,6 @@ export default function Flow() {
     return () => clearInterval(iv);
   }, [load]);
 
-  // Actions
-  const publishSeo = async (id: string, title: string) => {
-    await supabase.from('mkt_seo_queue').update({ status: 'published', james_approved: true, approved_at: new Date().toISOString(), published_at: new Date().toISOString() }).eq('id', id);
-    toast.success(`✓ Published: ${title}`);
-    load();
-  };
-
-  const publishAllSeo = async () => {
-    const count = data.ready.seo.length;
-    await supabase.from('mkt_seo_queue').update({ status: 'published', james_approved: true, approved_at: new Date().toISOString(), published_at: new Date().toISOString() })
-      .eq('status', 'generated').not('draft_content', 'is', null).neq('content_type', 'partslot_aeo');
-    toast.success(`✓ Published ${count} articles`);
-    load();
-  };
-
-  const publishPartslot = async (id: string, title: string) => {
-    await supabase.from('mkt_seo_queue').update({ status: 'published', james_approved: true, approved_at: new Date().toISOString(), published_at: new Date().toISOString() }).eq('id', id);
-    toast.success(`✓ Published: ${title}`);
-    load();
-  };
-
-  const publishAllPartslot = async () => {
-    const count = data.ready.partslot.length;
-    await supabase.from('mkt_seo_queue').update({ status: 'published', james_approved: true, approved_at: new Date().toISOString(), published_at: new Date().toISOString() })
-      .eq('content_type', 'partslot_aeo').not('draft_content', 'is', null).not('status', 'in', '("published","rejected")');
-    toast.success(`✓ Published ${count} partslot articles`);
-    load();
-  };
-
-  const approveAeo = async (id: string, sku: string) => {
-    await supabase.from('part_enrichment_staging').update({ status: 'approved', updated_at: new Date().toISOString() }).eq('id', id);
-    toast.success(`✓ Approved: ${sku}`);
-    load();
-  };
-
-  const approveAllAeo = async () => {
-    const count = data.ready.aeo.length;
-    await supabase.from('part_enrichment_staging').update({ status: 'approved', updated_at: new Date().toISOString() }).eq('status', 'pending_review');
-    toast.success(`✓ Approved ${count} SKUs`);
-    load();
-  };
-
-  const excludeVideo = async (id: string) => {
-    await supabase.from('youtube_videos').update({ is_active: false }).eq('id', id);
-    toast.success('Video excluded');
-    load();
-  };
-
-  const rejectItem = async (table: string, id: string) => {
-    await supabase.from(table).update({ status: 'rejected' }).eq('id', id);
-    toast('Item rejected');
-    load();
-  };
-
-  const runRankingPass = async () => {
-    const { error } = await supabase.rpc('run_youtube_ranking_pass');
-    if (error) toast.error('Ranking failed: ' + error.message);
-    else toast.success('Ranking complete — videos now ranked by relevance.');
-    load();
-  };
-
   const ROW_LABELS = ['QUEUE', 'GENERATING', 'READY', 'PUBLISHED', 'VELOCITY'];
 
   const channels = [
@@ -344,9 +259,23 @@ export default function Flow() {
     { key: 'youtube', name: 'YOUTUBE', tagline: 'How-to videos for every job type', accent: ACCENTS.youtube },
   ];
 
+  // Totals for summary strip
+  const totalQueue = data.queue.seo + data.queue.partslot + data.queue.aeo + data.queue.ytSearches;
+  const totalGenerating = data.generating.seoCount + data.generating.partslotCount + (data.generating.aeoRunning ? 1 : 0) + data.generating.ytToday;
+  const totalReady = data.ready.seo.length + data.ready.partslot.length + data.ready.aeo.length + data.ready.youtube.length;
+  const totalPublished = data.published.seoTotal + data.published.partslotTotal + data.published.aeoTotal + data.published.ytVideos;
+
   return (
     <div className="p-4 md:p-6 w-full max-w-full overflow-x-auto">
       <PageHeader title="CONTENT FLOW" description="All four channels. Every stage. One view." />
+
+      {/* Summary strip */}
+      <div className="flex flex-wrap gap-2 mt-4">
+        <SummaryChip label="Queue" value={totalQueue} />
+        <SummaryChip label="Generating" value={totalGenerating} />
+        <SummaryChip label="Ready" value={totalReady} className={totalReady > 0 ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' : ''} />
+        <SummaryChip label="Published" value={totalPublished} className="bg-green-600/15 border-green-600/40 text-green-300" />
+      </div>
 
       {loading ? (
         <div className="text-muted-foreground text-center py-20">Loading flow data…</div>
@@ -354,7 +283,7 @@ export default function Flow() {
         <div className="grid grid-cols-[80px_1fr_1fr_1fr_1fr] gap-px bg-border rounded-lg overflow-hidden mt-6">
 
           {/* Header row */}
-          <div className="bg-secondary/50 p-2" /> {/* empty corner */}
+          <div className="bg-secondary/50 p-2" />
           {channels.map(ch => (
             <div key={ch.key} className="bg-card p-4" style={{ borderTop: `4px solid ${ch.accent}` }}>
               <h3 className="font-bold text-foreground text-sm">{ch.name}</h3>
@@ -402,26 +331,24 @@ export default function Flow() {
             <div className="text-xs text-muted-foreground mt-1">Batch window: 14:00–15:00 UTC daily</div>
           </Cell>
 
-          {/* ROW 3 — READY ⭐ */}
-          <RowLabel label="READY ⭐" />
-          <ReadyCell accent={ACCENTS.seo} count={data.ready.seo.length} publishAllLabel="PUBLISH ALL" onPublishAll={publishAllSeo} emptyMsg="Emily is writing. Articles appear here every 30 minutes on weekdays.">
+          {/* ROW 3 — READY */}
+          <RowLabel label="READY" />
+          <ReadyCell accent={ACCENTS.seo} count={data.ready.seo.length} emptyMsg="Emily is writing. Articles appear here every 30 minutes on weekdays.">
             {data.ready.seo.map((a: any) => (
               <ContentCard key={a.id} title={a.title} category={a.category || a.content_type} stream={a.psyops_stream}
-                preview={a.preview} accent={ACCENTS.seo} onPublish={() => publishSeo(a.id, a.title)}
-                onReject={() => rejectItem('mkt_seo_queue', a.id)} />
+                preview={a.preview} accent={ACCENTS.seo} />
             ))}
           </ReadyCell>
-          <ReadyCell accent={ACCENTS.partslot} count={data.ready.partslot.length} publishAllLabel="PUBLISH ALL" onPublishAll={publishAllPartslot} emptyMsg="Partslot pipeline generates vehicle-specific articles hourly.">
+          <ReadyCell accent={ACCENTS.partslot} count={data.ready.partslot.length} emptyMsg="Partslot pipeline generates vehicle-specific articles hourly.">
             {data.ready.partslot.map((a: any) => (
               <ContentCard key={a.id} title={a.title} category={a.category} stream={a.psyops_stream}
-                preview={a.preview} accent={ACCENTS.partslot} onPublish={() => publishPartslot(a.id, a.title)}
-                onReject={() => rejectItem('mkt_seo_queue', a.id)} />
+                preview={a.preview} accent={ACCENTS.partslot} />
             ))}
           </ReadyCell>
-          <ReadyCell accent={ACCENTS.aeo} count={data.ready.aeo.length} publishAllLabel={`APPROVE ALL (${data.ready.aeo.length})`} onPublishAll={approveAllAeo} emptyMsg="No AEO product records awaiting review.">
+          <ReadyCell accent={ACCENTS.aeo} count={data.ready.aeo.length} emptyMsg="No AEO product records awaiting review.">
             {data.ready.aeo.map((a: any) => (
               <ContentCard key={a.id} title={`${a.sku} — ${a.brand}`} category={a.product_type}
-                preview={a.preview} accent={ACCENTS.aeo} publishLabel="APPROVE" onPublish={() => approveAeo(a.id, a.sku)}
+                preview={a.preview} accent={ACCENTS.aeo}
                 extra={
                   <Badge className={cn('text-[10px] px-1.5 py-0', a.confidencePct >= 85 ? 'bg-green-600 text-white' : a.confidencePct >= 70 ? 'bg-amber-500 text-white' : 'bg-red-600 text-white')}>
                     {a.confidencePct}% confidence
@@ -429,12 +356,12 @@ export default function Flow() {
                 } />
             ))}
           </ReadyCell>
-          <ReadyCell accent={ACCENTS.youtube} count={data.ready.youtube.length} publishAllLabel="RUN RANKING PASS" onPublishAll={runRankingPass} emptyMsg={`All ${data.published.ytVideos} videos ranked.`}>
+          <ReadyCell accent={ACCENTS.youtube} count={data.ready.youtube.length} emptyMsg={`All ${data.published.ytVideos} videos ranked.`}>
             {data.ready.youtube.map((v: any) => {
               const veh = v.youtube_video_vehicles?.[0];
               return (
                 <ContentCard key={v.id} title={v.title} category={veh?.job_type} preview={v.channel_name}
-                  accent={ACCENTS.youtube} publishLabel="EXCLUDE" onPublish={() => excludeVideo(v.id)} />
+                  accent={ACCENTS.youtube} />
               );
             })}
           </ReadyCell>
@@ -498,6 +425,15 @@ export default function Flow() {
 
 // ── Grid helpers ──
 
+function SummaryChip({ label, value, className }: { label: string; value: number; className?: string }) {
+  return (
+    <div className={cn('px-3 py-1.5 rounded-md border border-border bg-card text-sm font-semibold', className)}>
+      <span className="text-muted-foreground font-normal mr-1.5">{label}:</span>
+      {value}
+    </div>
+  );
+}
+
 function RowLabel({ label }: { label: string }) {
   return (
     <div className="bg-secondary/50 flex items-center justify-center p-2">
@@ -510,15 +446,19 @@ function Cell({ children, className }: { children: React.ReactNode; className?: 
   return <div className={cn('bg-card p-4 flex flex-col justify-center', className)}>{children}</div>;
 }
 
-function ReadyCell({ children, accent, count, publishAllLabel, onPublishAll, emptyMsg }: {
-  children: React.ReactNode; accent: string; count: number; publishAllLabel: string; onPublishAll: () => void; emptyMsg: string;
+function ReadyCell({ children, count, emptyMsg }: {
+  children: React.ReactNode; accent: string; count: number; emptyMsg: string;
 }) {
   return (
     <div className="bg-card/80 p-3 flex flex-col" style={{ minHeight: count > 0 ? 300 : 120 }}>
       <div className="flex items-center justify-between mb-2">
         <Badge variant="outline" className="text-xs">{count} ready</Badge>
-        <Button size="sm" className="h-10 w-full ml-2 font-bold text-xs" style={{ backgroundColor: count > 0 ? accent : undefined }}
-          disabled={count === 0} onClick={onPublishAll}>{publishAllLabel} ({count})</Button>
+        <Link
+          to="/approvals"
+          className="text-[11px] font-semibold text-primary hover:underline"
+        >
+          → Approve page
+        </Link>
       </div>
       {count > 0 ? (
         <ScrollArea className="flex-1 max-h-[300px]">{children}</ScrollArea>
