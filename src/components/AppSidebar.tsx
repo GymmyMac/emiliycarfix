@@ -4,27 +4,21 @@ import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutGrid,
   CheckSquare,
-  Cpu,
-  BarChart3,
   Settings,
   LogOut,
   Crosshair,
-  Play,
   Grid3X3,
   Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
-  { label: 'Emily Admin', subtitle: 'Chat, state, insights, actions', icon: Sparkles, path: '/emily-admin' },
-  { label: 'Morning Brief', subtitle: 'What happened overnight', icon: LayoutGrid, path: '/dashboard' },
+  { label: 'Today', subtitle: 'Overnight health and status', icon: LayoutGrid, path: '/dashboard' },
+  { label: 'Approve', subtitle: 'Review, sign off, publish', icon: CheckSquare, path: '/approvals' },
   { label: 'Flow', subtitle: 'All channels, every stage', icon: Grid3X3, path: '/flow' },
-  { label: 'Intelligence', subtitle: 'Competitor keywords and gaps', icon: Crosshair, path: '/competitor-intelligence' },
-  { label: 'Approvals', subtitle: 'Content waiting for your decision', icon: CheckSquare, path: '/approvals' },
-  { label: 'Controls', subtitle: 'Turn things on, adjust the dials', icon: Cpu, path: '/operations' },
-  { label: 'Fitting Guides', subtitle: 'YouTube videos by vehicle', icon: Play, path: '/videos' },
-  { label: 'Pipeline', subtitle: 'Content flow from queue to published', icon: BarChart3, path: '/analytics' },
-  { label: 'Connections', subtitle: 'APIs, integrations, credentials', icon: Settings, path: '/settings' },
+  { label: 'Emily', subtitle: 'Chat, tasks, work board', icon: Sparkles, path: '/emily-admin' },
+  { label: 'Intel', subtitle: 'Competitor keywords and gaps', icon: Crosshair, path: '/competitor-intelligence' },
+  { label: 'System', subtitle: 'Controls, channels, connections', icon: Settings, path: '/system' },
 ];
 
 export default function AppSidebar() {
