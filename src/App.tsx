@@ -9,7 +9,7 @@ import AdminLayout from "./components/AdminLayout";
 import Dashboard from "./pages/Dashboard";
 import Approvals from "./pages/Approvals";
 import Operations from "./pages/Operations";
-import Analytics from "./pages/Analytics";
+
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 import CompetitorIntelligence from "./pages/CompetitorIntelligence";
