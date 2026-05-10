@@ -365,6 +365,7 @@ export default function Approvals() {
                   onOpenReview={handleOpenReview} onOpenChannels={handleOpenChannels}
                   onApprove={handleApproveItem} onReject={handleRejectItem}
                   onCadenceChange={handleCadenceChange} onToggleStatus={handleToggleStatus} onRunOne={handleRunOne}
+                  expandedItems={expandedItems} onToggleExpand={toggleExpand}
                 />
               ))}
             </>
