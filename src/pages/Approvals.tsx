@@ -257,6 +257,27 @@ export default function Approvals() {
     setTimeout(() => setRunningIds(prev => { const n = new Set(prev); n.delete(ct.id); return n; }), 8000);
   };
 
+  const handleCreateContentType = async () => {
+    if (!newName.trim()) return;
+    setSavingNew(true);
+    const maxOrder = contentTypes.length > 0 ? Math.max(...contentTypes.map(ct => ct.sort_order)) : 0;
+    await supabase.from('emily_content_types').insert({
+      name: newName.trim(),
+      slug: slugify(newName.trim()),
+      description: newDescription.trim(),
+      brief: newBrief.trim(),
+      cadence: newCadence,
+      status: 'draft',
+      sort_order: maxOrder + 1,
+      variables: [],
+    });
+    setSavingNew(false);
+    setShowNewForm(false);
+    setNewName(''); setNewDescription(''); setNewBrief(''); setNewCadence('paused');
+    loadContentTypes();
+    showToast('Content type created — it starts in draft until you activate it');
+  };
+
   if (loading) return <div className="flex items-center justify-center h-64 text-sm text-gray-500">Loading pipeline...</div>;
 
   const ranked = [...contentTypes].filter(ct => ct.ga4_sessions > 0).sort((a, b) => b.engagement_score - a.engagement_score);
