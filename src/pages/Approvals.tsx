@@ -65,6 +65,10 @@ function fmtDuration(sec: number): string {
   return `${m}m ${s}s`;
 }
 
+function slugify(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+}
+
 // Which source table and status filter for "to review" per content type
 async function fetchReviewItems(ct: ContentType, platformFilter?: string): Promise<QueueItem[]> {
   if (ct.slug === 'vehicle-wiki') {
