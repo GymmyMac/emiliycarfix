@@ -16,6 +16,7 @@ import CompetitorIntelligence from "./pages/CompetitorIntelligence";
 import Videos from "./pages/Videos";
 import Flow from "./pages/Flow";
 import EmilyAdmin from "./pages/EmilyAdmin";
+import System from "./pages/System";
 
 const queryClient = new QueryClient();
 
@@ -36,8 +37,9 @@ const App = () => (
               <Route path="/approvals" element={<Approvals />} />
               <Route path="/operations" element={<Operations />} />
               <Route path="/videos" element={<Videos />} />
-              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/analytics" element={<Navigate to="/flow" replace />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/system" element={<System />} />
             </Route>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />
