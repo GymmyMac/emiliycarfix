@@ -98,7 +98,7 @@ function buildAtoms(nodes:GNode[]):GAtom[]{
       const shell=Math.floor(i/18),incl=Math.random()*Math.PI*2,ci=Math.cos(incl),si=Math.sin(incl);
       atoms.push({
         nid:node.id,angle:Math.random()*Math.PI*2,
-        speed:(0.004+Math.random()*.007)*(Math.random()>.5?1:-1),
+        speed:(0.002+Math.random()*.0035)*(Math.random()>.5?1:-1),
         orbitR:node.baseR*(1.3+shell*.38+Math.random()*.15),
         b1:{x:b1b.x*ci+b2b.x*si,y:b1b.y*ci+b2b.y*si,z:b1b.z*ci+b2b.z*si},
         b2:{x:-b1b.x*si+b2b.x*ci,y:-b1b.y*si+b2b.y*ci,z:-b1b.z*si+b2b.z*ci},
@@ -113,6 +113,7 @@ function buildAtoms(nodes:GNode[]):GAtom[]{
 export default function Dashboard(){
   const cvs=useRef<HTMLCanvasElement>(null);
   const rot=useRef({x:-0.3,y:0.4});
+  const vel=useRef({x:0,y:0});
   const drag=useRef<{on:boolean;lx:number;ly:number;nid:string|null}>({on:false,lx:0,ly:0,nid:null});
   const nodesR=useRef<GNode[]>([]);
   const atomsR=useRef<GAtom[]>([]);
@@ -159,7 +160,7 @@ export default function Dashboard(){
       supabase.channel(`rtg_${table}`)
         .on('postgres_changes',{event:'INSERT',schema:'public',table},()=>{
           evs.forEach(ev=>{
-            particles.current.push({src:ev.src,tgt:ev.tgt,t:0,speed:0.006+Math.random()*.006});
+            particles.current.push({src:ev.src,tgt:ev.tgt,t:0,speed:0.003+Math.random()*.003});
             const n=nodesR.current.find(x=>x.id===ev.tgt);
             if(n)n.pulse=1;
             setLive(v=>v+1);
@@ -195,7 +196,17 @@ export default function Dashboard(){
       const W=canvas.width/dpr,H=canvas.height/dpr;
       const cx=W/2,cy=H/2,SR=Math.min(W,H)*.32,FOV=3.2;
 
-      if(!drag.current.on)rot.current.y+=.0005*dt;
+      if(!drag.current.on){
+        /* Apply angular velocity with exponential damping (~0.985 per 16ms frame) */
+        rot.current.x+=vel.current.x*dt;
+        rot.current.y+=vel.current.y*dt;
+        const damp=Math.pow(0.985,dt/16.67);
+        vel.current.x*=damp;
+        vel.current.y*=damp;
+        /* Ambient drift only when nearly stopped */
+        const speed=Math.hypot(vel.current.x,vel.current.y);
+        if(speed<0.0002)vel.current.y+=(0.00008-vel.current.y)*0.02;
+      }
       const rx=rot.current.x,ry=rot.current.y;
 
       ctx.save();
@@ -208,7 +219,7 @@ export default function Dashboard(){
       ctx.fillStyle=atm;ctx.beginPath();ctx.arc(cx,cy,SR*1.4,0,Math.PI*2);ctx.fill();
 
       /* Wireframe sphere */
-      ctx.strokeStyle='rgba(99,102,241,0.055)';ctx.lineWidth=.5;
+      ctx.strokeStyle='rgba(99,102,241,0.09)';ctx.lineWidth=.5;
       for(let li=1;li<=5;li++){
         const cp=-1+li/3,sp=Math.sqrt(Math.max(0,1-cp*cp));
         ctx.beginPath();
@@ -233,7 +244,7 @@ export default function Dashboard(){
 
       /* Update state */
       atomsR.current.forEach(a=>{a.angle+=a.speed*dt;});
-      nodesR.current.forEach(n=>{n.pulse=Math.max(0,n.pulse-.018*dt);});
+      nodesR.current.forEach(n=>{n.pulse=Math.max(0,n.pulse-.012*dt);});
       particles.current=particles.current.filter(p=>{p.t+=p.speed*dt;return p.t<1;});
 
       /* Project nodes */
@@ -247,15 +258,33 @@ export default function Dashboard(){
         const sn=proj.find(p=>p.n.id===sid),tn=proj.find(p=>p.n.id===tid);
         if(!sn||!tn)return;
         const avgD=(sn.p.depth+tn.p.depth)/2;
-        ctx.strokeStyle=`rgba(99,102,241,${avgD<0?.03:.11})`;ctx.lineWidth=.8;
-        ctx.beginPath();
+        const front=avgD>=0;
+        const rgb=hexRgb(sn.n.color);
+        /* Build path once */
+        const pts:[number,number][]=[];
         for(let i=0;i<=22;i++){
           const u=slerp3(sn.n.u,tn.n.u,i/22);
           const w=applyRot(u,rx,ry);
           const p=project3(w,cx,cy,SR,FOV);
-          i?ctx.lineTo(p.sx,p.sy):ctx.moveTo(p.sx,p.sy);
+          pts.push([p.sx,p.sy]);
         }
+        /* Main line — coloured by source, clearly visible */
+        ctx.strokeStyle=`rgba(${rgb},${front?0.42:0.14})`;
+        ctx.lineWidth=front?1.2:0.9;
+        ctx.beginPath();
+        pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));
         ctx.stroke();
+        /* Soft additive bloom on front edges */
+        if(front){
+          ctx.save();
+          ctx.globalCompositeOperation='lighter';
+          ctx.strokeStyle=`rgba(${rgb},0.08)`;
+          ctx.lineWidth=2.5;
+          ctx.beginPath();
+          pts.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));
+          ctx.stroke();
+          ctx.restore();
+        }
         particles.current.filter(p=>p.src===sid&&p.tgt===tid).forEach(p=>{
           const u=slerp3(sn.n.u,tn.n.u,p.t);
           const w=applyRot(u,rx,ry);
@@ -361,8 +390,10 @@ export default function Dashboard(){
         const n=nodesR.current.find(x=>x.id===d.nid);
         if(n)n.u=norm3(rotY(rotX(n.u,drx),dry));
       }else{
-        /* Rotate whole globe */
+        /* Rotate whole globe — apply immediately AND store as velocity for inertia */
         rot.current.x+=drx;rot.current.y+=dry;
+        vel.current.x=vel.current.x*0.6+drx*0.4;
+        vel.current.y=vel.current.y*0.6+dry*0.4;
       }
     }
     const h=hitNode(e.clientX,e.clientY);
