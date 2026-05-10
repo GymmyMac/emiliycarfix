@@ -160,7 +160,7 @@ export default function Dashboard(){
       supabase.channel(`rtg_${table}`)
         .on('postgres_changes',{event:'INSERT',schema:'public',table},()=>{
           evs.forEach(ev=>{
-            particles.current.push({src:ev.src,tgt:ev.tgt,t:0,speed:0.006+Math.random()*.006});
+            particles.current.push({src:ev.src,tgt:ev.tgt,t:0,speed:0.003+Math.random()*.003});
             const n=nodesR.current.find(x=>x.id===ev.tgt);
             if(n)n.pulse=1;
             setLive(v=>v+1);
