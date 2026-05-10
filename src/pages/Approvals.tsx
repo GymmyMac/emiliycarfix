@@ -643,8 +643,16 @@ function PipelineRow({
                         {item.title || item.target_keyword || item.platform || item.id}
                       </div>
                       {(item.draft_content || item.draft_copy) && (
-                        <div className="text-xs text-gray-500 mt-1 line-clamp-2">
-                          {(item.draft_content || item.draft_copy || '').slice(0, 200)}…
+                        <div className="mt-1">
+                          <div className={`text-xs text-gray-600 whitespace-pre-wrap leading-relaxed ${expandedItems.has(item.id) ? '' : 'line-clamp-2'}`}>
+                            {item.draft_content || item.draft_copy}
+                          </div>
+                          <button
+                            onClick={() => onToggleExpand(item.id)}
+                            className="text-xs text-blue-500 hover:text-blue-700 mt-1"
+                          >
+                            {expandedItems.has(item.id) ? '▲ collapse' : '▼ read full article'}
+                          </button>
                         </div>
                       )}
                       <div className="text-xs text-gray-400 mt-1">
