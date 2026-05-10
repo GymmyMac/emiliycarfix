@@ -98,11 +98,20 @@ async function fetchReviewItems(ct: ContentType, platformFilter?: string): Promi
       .order('created_at', { ascending: false }).limit(10);
     return (data || []) as QueueItem[];
   }
+  if (ct.slug === 'reddit') {
+    const { data } = await supabase.from('mkt_seo_queue')
+      .select('id, title, target_keyword, draft_content, created_at, status, content_type')
+      .eq('content_type', 'reddit')
+      .in('status', ['pending', 'generated'])
+      .eq('james_approved', false)
+      .order('created_at', { ascending: false }).limit(10);
+    return (data || []) as QueueItem[];
+  }
   return [];
 }
 
 async function approveItem(item: QueueItem, ct: ContentType) {
-  if (ct.slug === 'vehicle-wiki' || ct.slug === 'seo-articles') {
+  if (ct.slug === 'vehicle-wiki' || ct.slug === 'seo-articles' || ct.slug === 'reddit') {
     await supabase.from('mkt_seo_queue')
       .update({ status: 'approved', james_approved: true, approved_at: new Date().toISOString() })
       .eq('id', item.id);
@@ -114,7 +123,7 @@ async function approveItem(item: QueueItem, ct: ContentType) {
 }
 
 async function rejectItem(item: QueueItem, ct: ContentType) {
-  if (ct.slug === 'vehicle-wiki' || ct.slug === 'seo-articles') {
+  if (ct.slug === 'vehicle-wiki' || ct.slug === 'seo-articles' || ct.slug === 'reddit') {
     await supabase.from('mkt_seo_queue').update({ status: 'rejected' }).eq('id', item.id);
   } else {
     await supabase.from('mkt_content_queue').update({ status: 'archived' }).eq('id', item.id);
