@@ -390,8 +390,10 @@ export default function Dashboard(){
         const n=nodesR.current.find(x=>x.id===d.nid);
         if(n)n.u=norm3(rotY(rotX(n.u,drx),dry));
       }else{
-        /* Rotate whole globe */
+        /* Rotate whole globe — apply immediately AND store as velocity for inertia */
         rot.current.x+=drx;rot.current.y+=dry;
+        vel.current.x=vel.current.x*0.6+drx*0.4;
+        vel.current.y=vel.current.y*0.6+dry*0.4;
       }
     }
     const h=hitNode(e.clientX,e.clientY);
