@@ -212,6 +212,8 @@ export default function Dashboard(){
       ctx.save();
       ctx.scale(dpr,dpr);
       ctx.clearRect(0,0,W,H);
+      ctx.fillStyle='#0d0d16';
+      ctx.fillRect(0,0,W,H);
 
       /* Atmosphere */
       const atm=ctx.createRadialGradient(cx,cy,SR*.8,cx,cy,SR*1.4);
@@ -410,7 +412,7 @@ export default function Dashboard(){
   },[]);
 
   return(
-    <div className="relative w-full h-full bg-gray-950 overflow-hidden" style={{minHeight:600}}>
+    <div className="relative w-full h-full bg-background overflow-hidden" style={{minHeight:600}}>
       {/* Header */}
       <div className="absolute top-4 left-6 z-10 pointer-events-none">
         <div className="text-white font-bold text-lg tracking-wide">Knowledge Globe</div>
