@@ -207,7 +207,7 @@ function ChatBar() {
   useEffect(() => { autoGrow(); }, [input]);
 
   return (
-    <div className="border-t border-border/60 bg-gradient-to-b from-background to-card/40 relative">
+    <div className="flex-1 min-h-0 flex flex-col border-t border-border/60 bg-gradient-to-b from-background to-card/40 relative">
       {/* Threads drawer */}
       {threadsOpen && (
         <div className="absolute inset-0 z-30 flex">
