@@ -313,7 +313,7 @@ function ChatBar() {
             </button>
           </div>
           {open && (
-            <div ref={scrollRef} className="max-h-[40vh] overflow-y-auto px-6 pt-8 pb-4 space-y-5">
+            <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-6 pt-8 pb-4 space-y-5">
               {messages.map((m, i) => (
                 <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                   {m.role === 'emily' && (
