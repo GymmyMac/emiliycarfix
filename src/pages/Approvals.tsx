@@ -117,13 +117,14 @@ async function fetchReviewItems(ct: ContentType, platformFilter?: string): Promi
 }
 
 async function approveItem(item: QueueItem, ct: ContentType) {
+  const now = new Date().toISOString();
   if (ct.slug === 'vehicle-wiki' || ct.slug === 'seo-articles' || ct.slug === 'reddit') {
     await supabase.from('mkt_seo_queue')
-      .update({ status: 'approved', james_approved: true, approved_at: new Date().toISOString() })
+      .update({ status: 'published', james_approved: true, approved_at: now, published_at: now })
       .eq('id', item.id);
   } else {
     await supabase.from('mkt_content_queue')
-      .update({ status: 'approved', approved_at: new Date().toISOString() })
+      .update({ status: 'published', approved_at: now, published_at: now })
       .eq('id', item.id);
   }
 }
@@ -782,7 +783,7 @@ function PipelineRow({
                       <button onClick={() => onReject(item, ct)}
                         className="text-xs px-3 py-1 rounded border border-red-200 text-red-600 hover:bg-red-50">reject</button>
                       <button onClick={() => onApprove(item, ct)}
-                        className="text-xs px-3 py-1 rounded border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100">approve</button>
+                        className="text-xs px-3 py-1 rounded border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100">approve & publish</button>
                     </div>
                   </div>
                 </div>
@@ -791,7 +792,7 @@ function PipelineRow({
                 <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-100 flex justify-end">
                   <button onClick={() => queueItems.forEach(item => onApprove(item, ct))}
                     className="text-xs px-4 py-1.5 rounded border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100">
-                    approve all {queueItems.length}
+                    approve & publish all {queueItems.length}
                   </button>
                 </div>
               )}
